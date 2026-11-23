@@ -11,7 +11,7 @@ dependencies = ["numpy>=1.24", "pyyaml>=6"]
 
 [project.optional-dependencies]
 gpu = ["cupy>=13"]
-dev = ["pytest>=7"]
+dev = ["pytest>=7", "sympy>=1.12"]
 
 [tool.setuptools.packages.find]
 include = ["basilisk_cupy*"]

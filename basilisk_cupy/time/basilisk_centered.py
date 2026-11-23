@@ -120,7 +120,7 @@ class CenteredNS:
         self.p.fill_ghosts()
         for ax in range(self.grid.ndim):
             gf = self.a[ax] - self.alpha[ax] * self.ops.grad_f(self.p, ax)
-            self.g[ax].interior = self.ops.face_to_cell(gf, ax)
+            self.g[ax].interior = self.ops.face_to_cell(gf, ax, periodic=self.p.bc.is_periodic(ax))
         self.g.fill_ghosts()
 
     # -- initialisation (Basilisk events "defaults" and "init") --------------------------

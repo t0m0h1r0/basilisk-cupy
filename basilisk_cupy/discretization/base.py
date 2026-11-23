@@ -35,8 +35,12 @@ class FaceComplex(Protocol):
     def div_f(self, flux):
         """Cell-centred divergence of a face field (sum over axes of the face difference)."""
 
-    def face_to_cell(self, face_values, axis: int):
-        """Cell-centred value reconstructed from the faces normal to ``axis``."""
+    def face_to_cell(self, face_values, axis: int, periodic: bool | None = None):
+        """Cell-centred value reconstructed from the faces normal to ``axis``.
+
+        ``periodic`` tells whether ``axis`` is periodic; wide stencils need it
+        to choose between wrapping and a wall closure.
+        """
 
 
 @runtime_checkable

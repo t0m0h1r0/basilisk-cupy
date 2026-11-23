@@ -12,7 +12,7 @@ Design document: see the project's design doc ("Basilisk → CuPy 移植設計�
 | Layer | Implemented |
 | --- | --- |
 | Grid, fields, boundary conditions | uniform cell-centred grid (1D/2D/3D), Dirichlet / Neumann / periodic with automatic homogeneous versions |
-| ① Spatial operators | `fd2` (Basilisk-compatible 2nd order): `FaceComplex`, `CellDerivative` |
+| ① Spatial operators | `fd2` (Basilisk-compatible 2nd order); `ccd` (CCD, Chu & Fan: f′ 6th, f″ 5th order with walls) and `fccd` (FCCD face operators, 4th order) on the cell-centred grid with new wall closures (`tools/derive_ccd_closures.py`) |
 | ② Linear solvers | Basilisk-style multigrid (`mg_solve`, scalar or vector unknowns, red/black Gauss–Seidel, adaptive `nrelax`) with a separate high-order residual hook; implicit viscosity (`viscosity.h`) |
 | ③ Terms | BCG advection and `prediction()` (`bcg.h`), minmod / superbee / sweby limiters |
 | ④ Projection | Basilisk `project()` (approximate projection, variable density) |
@@ -43,6 +43,19 @@ stats = poisson(a, b, tolerance=1e-8)
 python -m cases.taylor_green --nmax 256
 python -m cases.lid_cavity --out results/lid
 ```
+
+## Swapping operators: CCD / FCCD
+
+```python
+from basilisk_cupy.discretization import FCCDFaceComplex
+ns = CenteredNS(grid, periodic=(0, 1), ops=FCCDFaceComplex())   # or operators: {face: fccd} in a scheme file
+```
+
+| Check | fd2 | fccd |
+| --- | --- | --- |
+| Poisson, projection setting (rhs = D_f of face gradients), walls | 2nd order | 4th order (defect correction: FCCD residual, fd2 relaxation) |
+| Poisson, pointwise rhs | 2nd order | 2nd order, error halved (D_f is the conservative difference, as in TwoPhaseFlow) |
+| Taylor–Green t = 2, N = 32 / 64 / 128, rms error | 3.2e-2 / 4.5e-3 / 5.9e-4 | 9.4e-3 / 1.3e-3 / 2.0e-4 (BCG advection unchanged) |
 
 ## Tests
 
