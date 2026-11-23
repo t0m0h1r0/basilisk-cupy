@@ -45,6 +45,10 @@ class FD2FaceComplex:
         left, right = a.grid.face_neighbours(axis)
         return 0.5 * (a.data[right] + a.data[left])
 
+    def wall_free_flux(self, uf: FaceField, periodic=None) -> FaceField:
+        """Face velocities for finite-volume transport: ``uf`` itself (the face difference is exact for it)."""
+        return uf.copy()
+
     def div_f(self, flux: FaceField, periodic=None):
         grid = flux.grid
         out = None

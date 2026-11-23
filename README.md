@@ -124,7 +124,11 @@ wider, and both terms telescope, so the scheme stays conservative: after a
 projection `D_f F̂ = 0` holds exactly in every cell. On a wall, however,
 `F̂ = −(h²/24) ∂ₙₙu_n` is not zero although `u_n = 0` (lid cavity: up to
 0.04, net zero along the walls), so `F̂` is not yet a flux a VOF advection
-can use there (open: `docs/notes/03_face_divergence.md`). On a mapped
+can use there. `wall_free_flux(uf, periodic)` (2-D) gives that flux:
+`F̂ + curl ψ`, with ψ the running sum of the wall fluxes along the boundary,
+Coons-extended inside. It is exactly zero on walls, has the same `D_f`, and
+differs from `F̂` by `O(h²)` inside. A tracer next to a wall, 200 upwind
+steps: mass change 9.9e-5 with `F̂`, 2.2e-16 with it. On a mapped
 axis the difference is divided by `h_ξ/J` at the cell centre. Its sum over
 the cells still telescopes; dividing by the cell width would add an `O(h²)`
 term.
