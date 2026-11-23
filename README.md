@@ -16,7 +16,7 @@ Design document: see the project's design doc ("Basilisk → CuPy 移植設計�
 | ② Linear solvers | Basilisk-style multigrid (`mg_solve`, scalar or vector unknowns, red/black Gauss–Seidel, adaptive `nrelax`) with a separate high-order residual hook; GCR-accelerated defect correction for high-order operators (`poisson(method="dc")`, chosen automatically for non-fd2 `ops`); implicit viscosity (`viscosity.h`) and its CCD defect-correction version (`CCDViscosity`) |
 | ③ Terms | BCG advection and `prediction()` (`bcg.h`), minmod / superbee / sweby limiters |
 | ④ Projection | Basilisk `project()` (approximate projection, variable density) |
-| ⑥ Time stepping | `timestep()` / `dtnext()`; `CenteredNS` (`navier-stokes/centered.h`) with Basilisk's event order exposed as hook stages; `IMEXBDF2NS` (TwoPhaseFlow: EXT2 convection, implicit BDF2 viscosity, incremental pressure correction with projection step 2dt/3) |
+| ⑥ Time stepping | `timestep()` / `dtnext()`; `CenteredNS` (`navier-stokes/centered.h`) with Basilisk's event order exposed as hook stages; `IMEXBDF2NS` (TwoPhaseFlow: EXT2 convection, implicit BDF2 viscosity, incremental pressure correction with projection step 2dt/3); `IMEXRKNS` (ARS(3,4,3) / ARS(4,4,3) IMEX Runge–Kutta, a projection per stage) |
 | ③ Terms | semi-discrete convection for multistep integrators (`tendency(u, uf)`): `CentralFluxConvection` (`D_f(P_f(u) u_f)`), `UCCD6Convection` (skew CCD + `σ|u|h⁷(−D₂)⁴`), `FUCCDConvection` (FUCCD₄ / FUCCD₁ conservative upwind face fluxes) |
 | Scheme | `scheme.py` registry and YAML loader (`operators: face/cell`, `terms: convection`) |
 
@@ -72,6 +72,52 @@ ns = CenteredNS(grid, periodic=(0, 1), ops=FCCDFaceComplex())   # or operators: 
 With the same operators, the incremental (δp) and full-pressure projections are
 identical to round-off (Basilisk starts the Poisson iteration from pⁿ), so IPC
 only changes results together with BDF2 or variable density.
+
+## Time step: IMEX Runge–Kutta (`IMEXRKNS`)
+
+```python
+ns = IMEXRKNS(grid, ..., ops=scheme.face, convection=scheme.convection, viscous=scheme.viscous)  # tableau="ars343"
+```
+
+EXT2 (`IMEXBDF2NS`) has no stable interval on the imaginary axis. The
+non-dissipative FCCD/CCD convection is therefore stable only through
+viscosity, and the high-order operators have larger spectra:
+max |λh| = 1.000 (fd2 flux), 1.378 (FCCD flux) and 2.126 (CCD D1). The
+explicit part of ARS(3,4,3) has the stability region of RK4 (imaginary
+limit 2.83, real limit −2.79). Its implicit part is an L-stable SDIRK with
+one γ on every stage. Each stage is projected with incremental pressure
+correction. ARS(3,4,3) ends with one extra projection, because its explicit
+weights are not its last row. Per step: 4 convection evaluations, 3 viscous
+solves, 4 projections. The adaptive step is capped by the convection term's
+`spectrum()` and the tableau limits.
+
+Inviscid Taylor–Green with noise (N = 32, t = 1), largest CFL tried that stays stable:
+
+| Convection | Basilisk BCG | `IMEXBDF2NS` | `IMEXRKNS` (ARS(3,4,3)) |
+| --- | --- | --- | --- |
+| central, fd2 | ≥ 1.5 | 0.7 | ≥ 2.0 (error 2.6e-2) |
+| central, FCCD | — | 0.3 (0.5: error 1.6e-2) | ≥ 2.0 (error 5.9e-4) |
+| FUCCD4 | — | 0.3 | 0.7 |
+| UCCD6 | — | 0.05 | 0.1 (real-axis bound of the explicit hyperviscosity) |
+
+Viscous Taylor–Green (μ = 0.01, t = 0.5), largest dt meeting a target error
+over N = 8…64 and CFL = 0.025…2:
+
+| Scheme | 1e-2 | 1e-3 | 1e-4 | 1e-5 |
+| --- | --- | --- | --- | --- |
+| Basilisk BCG, fd2 | 6.3e-3 | 7.8e-4 | — | — |
+| BDF2, central fd2 | 3.1e-2 | 1.6e-2 | — | — |
+| BDF2, central FCCD + CCD viscosity | 6.2e-2 | 3.1e-2 | 2.2e-2 | 6.3e-3 |
+| RK343, central FCCD + CCD viscosity | 1.2e-1 | 6.2e-2 | 3.1e-2 | 3.1e-2 |
+| BDF2, UCCD6 | 1.3e-2 | 6.3e-3 | 3.1e-3 | 1.6e-3 |
+| RK343, UCCD6 | 1.3e-2 | 1.3e-2 | 6.3e-3 | 1.6e-3 |
+
+At the same dt RK343 is more accurate (N = 64, CFL 1: 2.6e-6 against
+6.2e-5), but a step costs about 4.5× more. With viscosity the wall time to a
+given error is about the same: N = 64, 5e-6 takes 3 s (RK, CFL 2) and 4 s
+(BDF2, CFL 0.3). RK pays off where stability limits the step, i.e. at low
+viscosity. Both steppers keep the O(dt h^p) error of the approximate
+projection: the RK error grows linearly with dt (Stokes: 3rd order).
 
 ## Convection: UCCD6 / FUCCD
 

@@ -67,6 +67,17 @@ class FUCCDConvection:
                    for k in range(grid.ndim))
         return EXT2_REAL_LIMIT / rate if rate > 0.0 else float("inf")
 
+    def spectrum(self, u: VectorField, uf: FaceField | None = None) -> tuple[float, float]:
+        """``(max |Im lambda|, max |Re lambda|)`` in 1/time: FCCD central flux and the dissipative flux."""
+        from .spectra import advective_rate  # noqa: PLC0415
+
+        grid = u.grid
+        xp = grid.xp
+        speeds = self.face_speeds(u, uf)
+        real = sum(self.sigma * float(xp.max(xp.abs(speeds[k]))) * self.nyquist_symbol() / grid.h[k]
+                   for k in range(grid.ndim))
+        return advective_rate(u, FaceField(grid, list(speeds)), "fccd"), real
+
     def dissipative_gradient(self, comp, axis: int):
         """``G_f (D2)^(r-1) u_j`` on the faces normal to ``axis``."""
         if self.r == 1:

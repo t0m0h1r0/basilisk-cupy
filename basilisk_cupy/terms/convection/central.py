@@ -24,6 +24,12 @@ class CentralFluxConvection:
     def __init__(self, ops) -> None:
         self.ops = ops
 
+    def spectrum(self, u: VectorField, uf: FaceField) -> tuple[float, float]:
+        """``(max |Im lambda|, max |Re lambda|)`` in 1/time (non-dissipative: real part 0)."""
+        from .spectra import advective_rate  # noqa: PLC0415
+
+        return advective_rate(u, uf, "fccd" if getattr(self.ops, "name", "") == "fccd" else "fd2"), 0.0
+
     def tendency(self, u: VectorField, uf: FaceField) -> list:
         """``-C(u)`` for every component (interior arrays)."""
         grid = u.grid
