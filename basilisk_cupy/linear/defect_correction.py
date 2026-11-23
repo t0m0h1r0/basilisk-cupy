@@ -46,11 +46,17 @@ def defect_correction(a: CellField, b, alpha: FaceField | None = None, lam=None,
     """
     grid = a.grid
     xp = grid.xp
-    high = HelmholtzProblem(a, alpha, lam, ops=ops, min_cells=min_cells)
-    work = CellField(grid, bc=a.bc.homogeneous(), name="dc_work")
-    high0 = HelmholtzProblem(work, alpha, lam, ops=ops, min_cells=min_cells)
-    z = CellField(grid, bc=a.bc.homogeneous(), name="dc_z")
-    low_problem = HelmholtzProblem(z, alpha, lam, ops=low or FD2FaceComplex(), min_cells=min_cells)
+    # The work fields stay with ``a`` between calls, so that on the GPU the problems
+    # (and the multigrid cycles recorded as CUDA graphs) are reused; their contents
+    # are overwritten before use.
+    ws = getattr(a, "_dc_workspace", None)
+    if ws is None or ws[0].grid != grid or ws[0].bc != a.bc.homogeneous():
+        ws = a._dc_workspace = (CellField(grid, bc=a.bc.homogeneous(), name="dc_work"),
+                                CellField(grid, bc=a.bc.homogeneous(), name="dc_z"))
+    work, z = ws
+    high = HelmholtzProblem.reuse(a, alpha, lam, ops=ops, min_cells=min_cells)
+    high0 = HelmholtzProblem.reuse(work, alpha, lam, ops=ops, min_cells=min_cells)
+    low_problem = HelmholtzProblem.reuse(z, alpha, lam, ops=low or FD2FaceComplex(), min_cells=min_cells)
     zero = xp.zeros(grid.n, dtype=grid.dtype)
     res = xp.zeros(grid.n, dtype=grid.dtype)
 

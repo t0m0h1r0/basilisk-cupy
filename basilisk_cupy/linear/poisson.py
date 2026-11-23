@@ -29,36 +29,71 @@ class HelmholtzProblem:
         grid = a.grid
         xp = grid.xp
         self.ops = ops or FD2FaceComplex()
+        self.min_cells = min_cells
         self.levels = build_levels(grid, min_cells=min_cells)
         self.correction_bcs: list[BoundaryConditions] = [a.bc.homogeneous()]
+        self.alpha_fine, self.alpha, self.lam, self.has_lambda = self._coefficients(grid, alpha, lam)
+        # GPU: one fused kernel per colour (kernels/relax_gpu.py); otherwise red/black masks.
+        self.fused = xp.__name__ == "cupy" and grid.dtype == "float64"
+        self._masks: list = []
 
+    def _coefficients(self, grid, alpha, lam):
+        """alpha and lambda on every level (Basilisk: ``restriction ({alpha,lambda})``)."""
+        xp = grid.xp
         if alpha is None:
             alpha = FaceField.constant(grid, 1.0, name="unity")
-        self.alpha_fine = alpha
-        # alpha and lambda on every level (Basilisk: ``restriction ({alpha,lambda})``).
         alphas = [list(alpha.components)]
         for _ in range(len(self.levels) - 1):
             alphas.append([restrict_face(c, ax) for ax, c in enumerate(alphas[-1])])
-        self.alpha = alphas[::-1]
-
+        # own copies (also of the finest level): reuse() overwrites them in place
+        alphas = [[xp.array(c, dtype=grid.dtype, order="C", copy=True) for c in lev] for lev in alphas[::-1]]
         if lam is None or (not hasattr(lam, "shape") and float(lam) == 0.0):
-            self.lam = [0.0] * len(self.levels)
-            self.has_lambda = False
-        else:
-            if not hasattr(lam, "shape"):
-                lam = xp.full(grid.n, float(lam), dtype=grid.dtype)
-            lams = [lam]
-            for _ in range(len(self.levels) - 1):
-                lams.append(restrict_cell(lams[-1]))
-            self.lam = lams[::-1]
-            self.has_lambda = True
+            return alpha, alphas, [0.0] * len(self.levels), False
+        if not hasattr(lam, "shape"):
+            lam = xp.full(grid.n, float(lam), dtype=grid.dtype)
+        lams = [lam]
+        for _ in range(len(self.levels) - 1):
+            lams.append(restrict_cell(lams[-1]))
+        return alpha, alphas, [xp.array(v, dtype=grid.dtype, order="C", copy=True) for v in lams[::-1]], True
 
-        # GPU: one fused kernel per colour (kernels/relax_gpu.py); otherwise red/black masks.
-        self.fused = xp.__name__ == "cupy" and grid.dtype == "float64"
-        self.masks = []
-        for g in self.levels:
-            idx = xp.indices(g.n).sum(axis=0)
-            self.masks.append(((idx % 2) == 0, (idx % 2) == 1))
+    @classmethod
+    def reuse(cls, a: CellField, alpha, lam=None, *, ops=None, min_cells: int = 2) -> "HelmholtzProblem":
+        """The problem built earlier for the unknown ``a`` with new coefficients, or a new one.
+
+        On the GPU the coefficients are copied into the earlier problem's
+        arrays, so the multigrid cycles it recorded as CUDA graphs
+        (:mod:`.cycle_graph`) stay valid. Elsewhere a new problem is built.
+        """
+        old = getattr(a, "_helmholtz_problem", None)
+        if (old is None or not old.fused or old.min_cells != min_cells or old.levels[-1] != a.grid
+                or old.correction_bcs != [a.bc.homogeneous()]):
+            problem = cls(a, alpha, lam, ops=ops, min_cells=min_cells)
+            if problem.fused:
+                a._helmholtz_problem = problem
+            return problem
+        alpha_fine, alphas, lams, has_lambda = old._coefficients(a.grid, alpha, lam)
+        if has_lambda != old.has_lambda:
+            problem = cls(a, alpha, lam, ops=ops, min_cells=min_cells)
+            a._helmholtz_problem = problem
+            return problem
+        for dst_lev, src_lev in zip(old.alpha, alphas):
+            for dst, src in zip(dst_lev, src_lev):
+                dst[...] = src
+        if has_lambda:
+            for dst, src in zip(old.lam, lams):
+                dst[...] = src
+        old.alpha_fine = alpha_fine
+        old.ops = ops or FD2FaceComplex()
+        return old
+
+    @property
+    def masks(self) -> list:
+        """Red/black masks per level (array path only; built on first use)."""
+        if not self._masks:
+            for g in self.levels:
+                idx = g.xp.indices(g.n).sum(axis=0)
+                self._masks.append(((idx % 2) == 0, (idx % 2) == 1))
+        return self._masks
 
     # L_high residual on the finest level -------------------------------------------
     def residual(self, al: list[CellField], bl: list, resl: list) -> float:
@@ -127,6 +162,6 @@ def poisson(a: CellField, b, alpha: FaceField | None = None, lam=None, *,
         return stats
     if method != "mg":
         raise ValueError(f"unknown method {method!r}")
-    problem = HelmholtzProblem(a, alpha, lam, ops=ops, min_cells=min_cells)
+    problem = HelmholtzProblem.reuse(a, alpha, lam, ops=ops, min_cells=min_cells)
     return mg_solve(a, b, problem, nrelax=nrelax, tolerance=tolerance,
                     nitermax=nitermax, nitermin=nitermin)

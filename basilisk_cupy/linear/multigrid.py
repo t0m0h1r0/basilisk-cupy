@@ -21,6 +21,8 @@ added to the solution.
 
 from __future__ import annotations
 
+import itertools
+
 import warnings
 from dataclasses import dataclass
 from typing import Callable, Protocol
@@ -63,13 +65,26 @@ class MultigridProblem(Protocol):
 
 
 # -- transfer operators --------------------------------------------------------
-def restrict_cell(fine):
-    """Average of the 2^d children (interior arrays)."""
-    shape = []
-    for v in fine.shape:
-        shape += [v // 2, 2]
-    reduced = fine.reshape(shape)
-    return reduced.mean(axis=tuple(range(1, 2 * fine.ndim, 2)))
+def restrict_cell(fine, out=None):
+    """Average of the 2^d children (interior arrays).
+
+    Summed one child after another in C order and divided by 2^d, as Basilisk's
+    ``restriction_average`` (``foreach_child() sum += s[]; s[] = sum/(1 << dimension)``),
+    so the result does not depend on the reduction order of the array library.
+    """
+    if type(fine).__module__.startswith("cupy") and fine.dtype.name == "float64":
+        from ..kernels.transfer_gpu import restrict  # noqa: PLC0415
+
+        return restrict(fine, out)
+    total = None
+    for child in itertools.product((0, 1), repeat=fine.ndim):
+        part = fine[tuple(slice(c, None, 2) for c in child)]
+        total = part.copy() if total is None else total + part
+    total = total / float(2 ** fine.ndim)
+    if out is None:
+        return total
+    out[...] = total
+    return out
 
 
 def restrict_face(fine, axis: int):
@@ -170,9 +185,19 @@ def mg_solve(a, b, problem: MultigridProblem, *, nrelax: int = 4,
     xp = grid.xp
     levels = problem.levels
     bcs = problem.correction_bcs
-    da_levels = [[CellField(g, bc=bc, name="da") for bc in bcs] for g in levels]
-    res_levels: list = [None] * len(levels)
-    res_levels[-1] = [xp.zeros(grid.n, dtype=grid.dtype) for _ in a]
+    graphs = None
+    if xp.__name__ == "cupy":
+        from . import cycle_graph  # noqa: PLC0415
+
+        graphs = cycle_graph.cached(problem, a)  # same problem and unknowns: reuse buffers and graphs
+    if graphs is not None:
+        da_levels, res_levels = graphs.da_levels, graphs.res_levels
+    else:
+        da_levels = [[CellField(g, bc=bc, name="da") for bc in bcs] for g in levels]
+        res_levels: list = [None] * len(levels)
+        res_levels[-1] = [xp.zeros(grid.n, dtype=grid.dtype) for _ in a]
+        if xp.__name__ == "cupy" and cycle_graph.supported(a, problem, da_levels):
+            graphs = cycle_graph.CycleGraphs(a, problem, da_levels, res_levels)
 
     stats = MGStats(sum=to_float(xp.sum(b[0])), nrelax=nrelax if nrelax > 0 else 4,
                     minlevel=levels[0].n[0], tolerance=tolerance)
@@ -182,7 +207,10 @@ def mg_solve(a, b, problem: MultigridProblem, *, nrelax: int = 4,
 
     stats.i = 0
     while stats.i < nitermax and (stats.i < nitermin or stats.resa > tolerance):
-        mg_cycle(a, res_levels, da_levels, problem, stats.nrelax)
+        if graphs is not None:
+            graphs.run(stats.nrelax)
+        else:
+            mg_cycle(a, res_levels, da_levels, problem, stats.nrelax)
         for s in a:
             s.fill_ghosts()
         stats.resa = problem.residual(a, b, res_levels[-1])

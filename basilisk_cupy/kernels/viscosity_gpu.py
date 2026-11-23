@@ -20,16 +20,16 @@ def _source(ndim: int, rho_array: bool) -> str:
               + [f"const double* __restrict__ v{i}" for i in range(ndim)]
               + [f"const double* __restrict__ res{i}" for i in range(ndim)]
               + [f"const double* __restrict__ mu{j}" for j in range(ndim)]
-              + (["const double* __restrict__ rho"] if rho_array else ["const double rho"])
+              + (["const double* __restrict__ rho"] if rho_array else [])
+              + ["const double* __restrict__ prm"]  # prm[0] = dt, prm[1] = constant rho
               + [f"const long long n{a}" for a in range(ndim)]
-              + ["const double h2", "const double dt", "const long long g", "const int colour",
-                 "const long long total"])
+              + ["const double h2", "const long long g", "const int colour", "const long long total"])
     body = []
     for j in range(ndim):
         fs = face_strides(ndim, j)
         flo = " + ".join(f"i{b} * ({fs[b]})" for b in range(ndim))
         body.append(f"const double mlo{j} = mu{j}[{flo}], mhi{j} = mu{j}[{flo} + ({fs[j]})];")
-    body.append(f"const double dtr = dt / {'rho[t]' if rho_array else 'rho'};")
+    body.append(f"const double dtr = prm[0] / {'rho[t]' if rho_array else 'prm[1]'};")
     for i in range(ndim):
         si = f"({ps[i]})"
         body.append(f"double num{i} = 0.0, den{i} = 0.0;")
@@ -69,18 +69,29 @@ def _kernel(ndim: int, rho_array: bool):
     return cp.RawKernel(_source(ndim, rho_array), "relax_viscosity", options=("--fmad=false",))
 
 
-def relax_viscosity_redblack(us, res, mu, rho, n, h2: float, dt: float, ghosts: int) -> None:
-    """Both colours on the padded component arrays ``us`` in place."""
+def relax_viscosity_redblack(us, res, mu, rho, n, h2: float, params, ghosts: int, frozen=None) -> None:
+    """Both colours on the padded component arrays ``us`` in place.
+
+    ``params``: device array ``[dt, rho]`` (``rho`` used when it is a constant),
+    read by the kernel so that a recorded CUDA graph follows a changing dt.
+    ``frozen``: preallocated arrays like ``us`` for Basilisk's frozen copy
+    (allocated here when not given).
+    """
     import cupy as cp  # noqa: PLC0415
 
     ndim = len(n)
     for u in us:
         if u.dtype != cp.float64 or not u.flags.c_contiguous:
             raise TypeError("viscosity kernel needs C-contiguous float64 arrays")
-    ua = [u.copy() for u in us]  # Basilisk's frozen copy for the corner terms
+    if frozen is None:
+        ua = [u.copy() for u in us]  # Basilisk's frozen copy for the corner terms
+    else:
+        ua = frozen
+        for dst, u in zip(ua, us):
+            cp.copyto(dst, u)
     rho_array = hasattr(rho, "shape")
     args = (list(us) + ua + [cp.ascontiguousarray(r, dtype=cp.float64) for r in res]
             + [cp.ascontiguousarray(m, dtype=cp.float64) for m in mu]
-            + [cp.ascontiguousarray(rho, dtype=cp.float64) if rho_array else cp.float64(rho)]
-            + [cp.int64(v) for v in n] + [cp.float64(h2), cp.float64(dt), cp.int64(ghosts)])
+            + ([cp.ascontiguousarray(rho, dtype=cp.float64)] if rho_array else []) + [params]
+            + [cp.int64(v) for v in n] + [cp.float64(h2), cp.int64(ghosts)])
     launch_args(_kernel(ndim, rho_array), n, args)
