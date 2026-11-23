@@ -12,7 +12,7 @@ With ``ops = fd2`` this is exactly Basilisk's solver; with a higher-order
 from __future__ import annotations
 
 from ..backend import to_float
-from ..boundary import BoundaryConditions
+from ..boundary import BoundaryConditions, Dirichlet
 from ..discretization.base import FaceComplex
 from ..discretization.fd2 import FD2FaceComplex
 from ..fields import CellField, FaceField
@@ -35,7 +35,8 @@ class HelmholtzProblem:
         self.correction_bcs: list[BoundaryConditions] = [a.bc.homogeneous()]
         self.alpha_fine, self.alpha, self.lam, self.has_lambda = self._coefficients(grid, alpha, lam)
         # GPU: one fused kernel per colour (kernels/relax_gpu.py); otherwise red/black masks.
-        self.fused = xp.__name__ == "cupy" and grid.dtype == "float64"
+        # Mapped (non-uniform) grids use the array path with finite-volume coefficients.
+        self.fused = xp.__name__ == "cupy" and grid.dtype == "float64" and grid.is_uniform
         self._masks: list = []
 
     def _coefficients(self, grid, alpha, lam):
@@ -132,11 +133,13 @@ class HelmholtzProblem:
         if self.fused:
             relax_redblack(da.data, res, alpha, lam if self.has_lambda else None, grid.n, grid.h, grid.ghosts)
             return
+        if not grid.is_uniform:
+            self._relax_lines(da, res, level)
+            return
         for mask in self.masks[level]:
             num = -res
             den = -lam if self.has_lambda else 0.0
             for ax in range(grid.ndim):
-                h2 = grid.h[ax] ** 2
                 n = grid.n[ax]
                 sl_lo = [slice(None)] * grid.ndim
                 sl_hi = [slice(None)] * grid.ndim
@@ -144,11 +147,105 @@ class HelmholtzProblem:
                 sl_hi[ax] = slice(1, n + 1)
                 a_lo = alpha[ax][tuple(sl_lo)]
                 a_hi = alpha[ax][tuple(sl_hi)]
+                h2 = grid.h[ax] ** 2
                 num = num + (a_hi * da.data[grid.shifted(ax, 1)] + a_lo * da.data[grid.shifted(ax, -1)]) / h2
                 den = den + (a_hi + a_lo) / h2
             interior = da.data[grid.interior()]
             new = xp.where(den != 0, num / xp.where(den != 0, den, 1.0), 0.0)
             da.data[grid.interior()] = xp.where(mask, new, interior)
+
+
+    # mapped grids: finite-volume coefficients and zebra line relaxation ----------------------
+    def _fv_coefficients(self, level: int):
+        """``(c_lo, c_hi)`` per axis with ``L a = sum c_hi (a_+ - a) - c_lo (a - a_-)``:
+        ``alpha_face / (centre distance * cell width)`` (``alpha / h^2`` on a uniform axis)."""
+        grid = self.levels[level]
+        alpha = self.alpha[level]
+        out = []
+        for ax in range(grid.ndim):
+            n = grid.n[ax]
+            lo = [slice(None)] * grid.ndim
+            hi = [slice(None)] * grid.ndim
+            lo[ax] = slice(0, n)
+            hi[ax] = slice(1, n + 1)
+            a_lo, a_hi = alpha[ax][tuple(lo)], alpha[ax][tuple(hi)]
+            if grid.axis_uniform(ax):
+                h2 = grid.h[ax] ** 2
+                out.append((a_lo / h2, a_hi / h2))
+            else:
+                m = grid.metric(ax)
+                width = m.along(m.width)
+                out.append((a_lo / (m.along(m.spacing[:n]) * width), a_hi / (m.along(m.spacing[1:]) * width)))
+        return out
+
+    def _relax_lines(self, da: CellField, res, level: int) -> None:
+        """Alternating zebra line Gauss--Seidel (lines along every wall axis, one tridiagonal solve per line).
+
+        Stretched cells are anisotropic (aspect ratio > 3 near clustered walls), where the
+        point red/black smoother of Basilisk stalls (measured: 11 cycles on a uniform 64^2
+        grid, 52 with tanh(beta=2) on both axes); solving whole lines restores it. The
+        correction's homogeneous conditions enter the end rows (ghost = -a for Dirichlet,
+        +a for Neumann). Lines of one colour do not touch each other, so they are solved together.
+        """
+        grid = self.levels[level]
+        xp = grid.xp
+        ndim = grid.ndim
+        coef = self._fv_coefficients(level)
+        den = sum(c_lo + c_hi for c_lo, c_hi in coef)
+        if self.has_lambda:
+            den = den - self.lam[level]
+        bc = self.correction_bcs[0]
+        line_axes = [ax for ax in range(ndim) if not bc.is_periodic(ax)] or [None]
+        interior = grid.interior()
+        for ax in line_axes:
+            others = [b for b in range(ndim) if b != ax]
+            if others:
+                idx = xp.indices(grid.n)
+                parity = sum(idx[b] for b in others) % 2
+            for colour in (0, 1):
+                da.fill_ghosts()
+                rhs = -res
+                for b in (others if ax is not None else range(ndim)):
+                    c_lo, c_hi = coef[b]
+                    rhs = rhs + c_hi * da.data[grid.shifted(b, 1)] + c_lo * da.data[grid.shifted(b, -1)]
+                if ax is None:  # fully periodic: point relaxation (Jacobi on one colour)
+                    idx = xp.indices(grid.n)
+                    mask = (sum(idx) % 2) == colour
+                    new = xp.where(den != 0, rhs / xp.where(den != 0, den, 1.0), 0.0)
+                    da.data[interior] = xp.where(mask, new, da.data[interior])
+                    continue
+                c_lo, c_hi = coef[ax]
+                s_lo = -1.0 if isinstance(bc.get(ax, 0), Dirichlet) else 1.0
+                s_hi = -1.0 if isinstance(bc.get(ax, 1), Dirichlet) else 1.0
+                new = _solve_lines(xp, ax, -c_lo, den, -c_hi, rhs, s_lo, s_hi)
+                if others:
+                    da.data[interior] = xp.where(parity == colour, new, da.data[interior])
+                else:
+                    da.data[interior] = new
+                    break
+
+
+def _solve_lines(xp, axis: int, lower, diag, upper, rhs, s_lo: float, s_hi: float):
+    """Thomas algorithm along ``axis`` for every line at once; the end rows fold the ghost
+    reflection ``a_ghost = s a_first`` into the diagonal."""
+    mv = lambda v: xp.moveaxis(xp.broadcast_to(v, rhs.shape), axis, 0)  # noqa: E731
+    lo, d, up, r = mv(lower), mv(diag).copy(), mv(upper), mv(rhs)
+    n = r.shape[0]
+    d[0] = d[0] + lo[0] * s_lo
+    d[n - 1] = d[n - 1] + up[n - 1] * s_hi
+    cp = xp.empty_like(r)
+    rp = xp.empty_like(r)
+    cp[0] = up[0] / d[0]
+    rp[0] = r[0] / d[0]
+    for i in range(1, n):
+        m = d[i] - lo[i] * cp[i - 1]
+        cp[i] = up[i] / m
+        rp[i] = (r[i] - lo[i] * rp[i - 1]) / m
+    x = xp.empty_like(r)
+    x[n - 1] = rp[n - 1]
+    for i in range(n - 2, -1, -1):
+        x[i] = rp[i] - cp[i] * x[i + 1]
+    return xp.moveaxis(x, 0, axis)
 
 
 def poisson(a: CellField, b, alpha: FaceField | None = None, lam=None, *,

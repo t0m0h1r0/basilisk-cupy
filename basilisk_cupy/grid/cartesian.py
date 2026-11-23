@@ -253,21 +253,14 @@ class AxisMetric:
 
     def __init__(self, grid: CartesianGrid, axis: int) -> None:
         self.grid, self.axis = grid, axis
-        n, h, L = grid.n[axis], grid.h[axis], grid.length[axis]
+        n, h = grid.n[axis], grid.h[axis]
         xp = grid.xp
         self.uniform = grid.axis_uniform(axis)
         xc = grid._coordinates(axis, (np.arange(n) + 0.5) * h)
         xf = grid._coordinates(axis, np.arange(n + 1) * h)
         xg = grid._coordinates(axis, (np.arange(-1, n + 1) + 0.5) * h)  # one ghost centre per side
-        if self.uniform:
-            x_xi, x_xixi, x_xi_face = np.ones(n), np.zeros(n), np.ones(n + 1)
-        else:
-            x_xi, x_xixi, x_xi_face = _coordinate_derivatives(grid, axis, xc, xf)
-        dev = lambda a: xp.asarray(a, dtype=grid.dtype)  # noqa: E731
+        dev = self._dev = lambda a: xp.asarray(a, dtype=grid.dtype)  # noqa: E731
         self.x, self.x_face = dev(xc), dev(xf)
-        self.J = dev(1.0 / x_xi)
-        self.dJ = dev(-x_xixi / x_xi ** 2)
-        self.J_face = dev(1.0 / x_xi_face)
         self.width = dev(np.diff(xf))
         self.spacing = dev(np.diff(xg))
         # 3-point first/second derivative weights (left, centre, right) with the neighbour distances
@@ -275,10 +268,40 @@ class AxisMetric:
         self.d1_weights = tuple(dev(w) for w in (-hr / (hl * (hl + hr)), (hr - hl) / (hl * hr), hl / (hr * (hl + hr))))
         self.d2_weights = tuple(dev(w) for w in (2 / (hl * (hl + hr)), -2 / (hl * hr), 2 / (hr * (hl + hr))))
         self._host = {"x": xc, "x_face": xf, "x_ghost": xg}
-        self._host_J_face = 1.0 / x_xi_face
         # exact dx/dxi at the two walls (from the map), for Neumann data in the CCD/FCCD wall closures
         self.wall_x_xi = (1.0, 1.0) if self.uniform else tuple(
             float(v) for v in grid.mapping[axis].derivative(np.array([0.0, 1.0])))
+
+    @cached_property
+    def _derivatives(self):
+        """Host ``dx/dxi``, ``d2x/dxi2`` (centres) and ``dx/dxi`` (faces), computed on first use."""
+        grid, axis = self.grid, self.axis
+        n = grid.n[axis]
+        if self.uniform:
+            return np.ones(n), np.zeros(n), np.ones(n + 1)
+        periodic = grid.mapping[axis].periodic
+        if n >= (3 if periodic else 6):
+            return _coordinate_derivatives(grid, axis, self._host["x"], self._host["x_face"])
+        # too few cells for a CCD stencil (coarse multigrid levels): the map's exact derivatives
+        mp, L, h = grid.mapping[axis], grid.length[axis], grid.h[axis]
+        sc, sf = (np.arange(n) + 0.5) * h / L, np.arange(n + 1) * h / L
+        eps = 1e-5
+        x_xi = mp.derivative(sc)
+        x_xixi = (mp.derivative(np.clip(sc + eps, 0, 1)) - mp.derivative(np.clip(sc - eps, 0, 1))) / (2 * eps * L)
+        return x_xi, x_xixi, mp.derivative(sf)
+
+    @cached_property
+    def J(self):
+        return self._dev(1.0 / self._derivatives[0])
+
+    @cached_property
+    def dJ(self):
+        x_xi, x_xixi, _ = self._derivatives
+        return self._dev(-x_xixi / x_xi ** 2)
+
+    @cached_property
+    def J_face(self):
+        return self._dev(1.0 / self._derivatives[2])
 
     def along(self, arr, ndim: int | None = None):
         """``arr`` reshaped to broadcast along this axis of an ``ndim``-d array."""

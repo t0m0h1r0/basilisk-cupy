@@ -121,26 +121,106 @@ class CCDStress:
         return out
 
 
+class FD2Stress:
+    """2nd-order full-stress divergence with Basilisk's structure (finite volume on mapped grids).
+
+    Same-axis terms ``d_b (mu d_b u_a)`` and ``d_a (2 mu d_a u_a)`` as compact face fluxes
+    ``D_f (mu_f G_f u)`` (Basilisk ``2 mu (u[1] - u[]) / Delta``); cross terms
+    ``d_b (mu d_a u_b)`` with centred cell differences. The high-order operator of
+    :class:`FD2Viscosity`, a 2nd-order baseline wherever Basilisk's own multigrid does
+    not apply (mapped grids).
+    """
+
+    def __init__(self) -> None:
+        from ..discretization.fd2 import FD2CellDerivative, FD2FaceComplex  # noqa: PLC0415
+
+        self.face = FD2FaceComplex()
+        self.cell = FD2CellDerivative()
+
+    def __call__(self, u: VectorField, mu_cell, mu: FaceField | None = None) -> list:
+        grid = u.grid
+        ndim = grid.ndim
+        if mu is None:
+            mu = FaceField.constant(grid, float(mu_cell), name="mu")
+        u.fill_ghosts()
+        out = []
+        for a in range(ndim):
+            fluxes = [(2.0 if b == a else 1.0) * mu[b] * self.face.grad_f(u[a], b) for b in range(ndim)]
+            acc = self.face.div_f(FaceField(grid, fluxes))
+            for b in range(ndim):
+                if b != a:  # d_b (mu d_a u_b): centred differences through the velocity ghosts (corners included)
+                    acc = acc + _cross_term(grid, u[b].data, mu_cell, a, b)
+            out.append(acc)
+        return out
+
+
+def _centred(grid, data, axis: int, extend: int):
+    """Centred first derivative along ``axis`` of a padded array, interior along ``axis`` and
+    along every other axis except ``extend``, which keeps one ghost layer per side."""
+    g = grid.ghosts
+    sl = []
+    for b in range(grid.ndim):
+        n = grid.n[b]
+        sl.append(slice(g - 1, g + n + 1) if b == extend else slice(g, g + n))
+    def shifted(off):
+        s = list(sl)
+        s[axis] = slice(g + off, g + off + grid.n[axis])
+        return data[tuple(s)]
+    if grid.axis_uniform(axis):
+        return (shifted(1) - shifted(-1)) / (2.0 * grid.h[axis])
+    m = grid.metric(axis)
+    wl, wc, wr = (m.along(w) for w in m.d1_weights)
+    return wl * shifted(-1) + wc * shifted(0) + wr * shifted(1)
+
+
+def _cross_term(grid, ub_data, mu_cell, a: int, b: int):
+    """``d_b (mu d_a u_b)`` (Basilisk's cross term: corner values of ``u_b``)."""
+    xp = grid.xp
+    t = _centred(grid, ub_data, a, extend=b)  # d_a u_b on the interior plus one ghost layer along b
+    if hasattr(mu_cell, "shape") and mu_cell.ndim > 0:
+        pad = [(1, 1) if ax == b else (0, 0) for ax in range(grid.ndim)]
+        t = xp.pad(mu_cell, pad, mode="edge") * t
+    else:
+        t = mu_cell * t
+    n = grid.n[b]
+    lo = [slice(None)] * grid.ndim
+    mid = [slice(None)] * grid.ndim
+    hi = [slice(None)] * grid.ndim
+    lo[b], mid[b], hi[b] = slice(0, n), slice(1, n + 1), slice(2, n + 2)
+    if grid.axis_uniform(b):
+        return (t[tuple(hi)] - t[tuple(lo)]) / (2.0 * grid.h[b])
+    m = grid.metric(b)
+    wl, wc, wr = (m.along(w) for w in m.d1_weights)
+    return wl * t[tuple(lo)] + wc * t[tuple(mid)] + wr * t[tuple(hi)]
+
+
 def _dot(xp, x: list, y: list) -> float:
     return to_float(sum(xp.sum(a * b) for a, b in zip(x, y)))
 
 
-class CCDViscosity:
-    """High-order implicit viscosity by defect correction (``A_H`` = CCD full stress, ``A_L`` = Basilisk)."""
+class DCViscosity:
+    """Implicit viscosity by defect correction: residual with ``A_H = I - dt/rho L_H`` (``stress``),
+    correction with the fd2 operator ``A_L`` (GCR-accelerated).
 
-    name = "ccd"
+    ``A_L``: Basilisk's coupled viscosity multigrid on a uniform grid; on a mapped grid,
+    where that stencil does not exist (single Delta), the componentwise scalar Helmholtz
+    ``(I - dt/rho div(mu grad)) z_a = r_a`` (fd2 finite volume, line-relaxed multigrid):
+    the paper allows a scalar approximation for ``A_L``, which only sets the convergence
+    rate, not the solution.
+    """
 
-    def __init__(self, ccd: CCDCellDerivative | None = None, *, form: str = "split", memory: int = 10,
-                 inner_cycles: int = 2, maxiter: int = NITERMAX) -> None:
-        self.stress = CCDStress(ccd, form)
+    name = "dc"
+
+    def __init__(self, stress, *, memory: int = 10, inner_cycles: int = 2, maxiter: int = NITERMAX) -> None:
+        self.stress = stress
         self.memory = memory
         self.inner_cycles = inner_cycles
         self.maxiter = maxiter
 
-    def high(self, u: VectorField, mu_cell, rho, dt: float) -> list:
+    def high(self, u: VectorField, mu_cell, rho, dt: float, mu: FaceField | None = None) -> list:
         """``A_H u = u - dt/rho L_H u``."""
         u.fill_ghosts()
-        lap = self.stress(u, mu_cell)
+        lap = self.stress(u, mu_cell, mu) if isinstance(self.stress, FD2Stress) else self.stress(u, mu_cell)
         return [c.interior - dt / rho * l for c, l in zip(u, lap)]
 
     def _workspace(self, u: VectorField):
@@ -161,23 +241,36 @@ class CCDViscosity:
         mu_cell = cell_viscosity(mu)
         b = [c.interior.copy() for c in u]
         work, z = self._workspace(u)
-        low = ViscosityProblem.reuse(z, mu, rho, dt)
+        if grid.is_uniform:
+            low = ViscosityProblem.reuse(z, mu, rho, dt)
+            lows = None
+        else:
+            from ..linear.poisson import HelmholtzProblem  # noqa: PLC0415
+
+            lam = -rho / dt  # div(mu grad z) - rho/dt z = -rho/dt r
+            lows = [HelmholtzProblem.reuse(c, mu, lam if hasattr(lam, "shape") else xp.full(grid.n, lam)) for c in z]
+            low = lows[0]
 
         def true_residual():
-            ah = self.high(u, mu_cell, rho, dt)
+            ah = self.high(u, mu_cell, rho, dt, mu)
             r = [bi - ai for bi, ai in zip(b, ah)]
             return max(to_float(xp.max(xp.abs(ri))) for ri in r), r
 
         def apply_high0(v):
             for c, vi in zip(work, v):
                 c.interior = vi
-            return self.high(work, mu_cell, rho, dt)
+            return self.high(work, mu_cell, rho, dt, mu)
 
         def precondition(r):
             for c in z:
                 c.data[...] = 0.0
-            mg_solve(list(z), r, low, nrelax=nrelax, tolerance=0.0, nitermax=self.inner_cycles,
-                     nitermin=self.inner_cycles, warn=False)
+            if lows is None:
+                mg_solve(list(z), r, low, nrelax=nrelax, tolerance=0.0, nitermax=self.inner_cycles,
+                         nitermin=self.inner_cycles, warn=False)
+            else:
+                for c, ri, problem in zip(z, r, lows):
+                    mg_solve(c, -rho / dt * ri, problem, nrelax=nrelax, tolerance=0.0, nitermax=self.inner_cycles,
+                             nitermin=self.inner_cycles, warn=False)
             return [c.interior.copy() for c in z]
 
         stats = MGStats(nrelax=0, minlevel=low.levels[0].n[0], tolerance=tolerance)
@@ -214,6 +307,26 @@ class CCDViscosity:
         if stats.resa > tolerance:
             import warnings  # noqa: PLC0415
 
-            warnings.warn(f"CCD viscosity: residual {stats.resa:g} > tolerance {tolerance:g} after {stats.i} "
-                          f"corrections", RuntimeWarning, stacklevel=2)
+            warnings.warn(f"{self.name} viscosity: residual {stats.resa:g} > tolerance {tolerance:g} after "
+                          f"{stats.i} corrections", RuntimeWarning, stacklevel=2)
         return stats
+
+
+class CCDViscosity(DCViscosity):
+    """High-order implicit viscosity: ``A_H`` = CCD full stress (``split`` or ``layered``)."""
+
+    name = "ccd"
+
+    def __init__(self, ccd: CCDCellDerivative | None = None, *, form: str = "split", **kw) -> None:
+        super().__init__(CCDStress(ccd, form), **kw)
+
+
+class FD2Viscosity(DCViscosity):
+    """2nd-order implicit viscosity with Basilisk's stencil structure (:class:`FD2Stress`),
+    for mapped grids (on a uniform grid it converges in one or two corrections, ``A_L``
+    being Basilisk's own operator)."""
+
+    name = "fd2"
+
+    def __init__(self, **kw) -> None:
+        super().__init__(FD2Stress(), **kw)
