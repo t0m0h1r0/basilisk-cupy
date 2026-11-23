@@ -67,6 +67,8 @@ class UCCD6Convection:
         """``-C(u)`` for every component (interior arrays); ``uf`` is not used."""
         grid = u.grid
         xp = grid.xp
+        if not grid.is_uniform:
+            raise NotImplementedError(f"{self.name} on a non-uniform grid is not implemented yet (step 4f-3)")
         u.fill_ghosts()
         vel = [c.interior for c in u]
         out = []

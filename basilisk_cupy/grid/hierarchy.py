@@ -13,12 +13,14 @@ def build_levels(grid: CartesianGrid, min_cells: int = 2) -> list[CartesianGrid]
     ``minlevel = 1`` (two cells per axis); ``min_cells=2`` matches that for
     power-of-two grids.
     """
+    if not grid.is_uniform:
+        raise NotImplementedError("multigrid on a non-uniform grid is not implemented yet (step 4f-2)")
     levels = [grid]
     g = grid
     while all(v % 2 == 0 and v // 2 >= min_cells for v in g.n):
         g = CartesianGrid(
             n=tuple(v // 2 for v in g.n), length=g.length, origin=g.origin,
-            ghosts=g.ghosts, backend=g.backend, dtype=g.dtype,
+            ghosts=g.ghosts, backend=g.backend, dtype=g.dtype, mapping=g.mapping,
         )
         levels.append(g)
     return levels[::-1]

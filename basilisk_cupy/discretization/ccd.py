@@ -130,8 +130,9 @@ def _kind(cond) -> str:
 def _wall_datum(f: CellField, axis: int, side: int):
     """Wall datum on the boundary plane (other axes interior, axis dropped).
 
-    Dirichlet: the value. Neumann: ``df/dx`` along +axis (the condition stores
-    the outward gradient).
+    Dirichlet: the value. Neumann: ``df/dxi`` along +axis (the condition stores
+    the outward physical gradient; on a non-uniform axis it is multiplied by
+    ``dx/dxi`` at the wall face, so that the closures work in ``xi``).
     """
     grid = f.grid
     cond = f.bc.get(axis, side)
@@ -144,7 +145,20 @@ def _wall_datum(f: CellField, axis: int, side: int):
         val = raw[tuple(sl)]
     if isinstance(cond, Neumann) and side == LOWER:
         val = -val
+    if isinstance(cond, Neumann) and not grid.axis_uniform(axis):
+        val = val * grid.metric(axis).wall_x_xi[0 if side == LOWER else 1]
     return val
+
+
+def _to_physical(grid, axis: int, g1, g2):
+    """Chain rule ``f_x = J f_xi``, ``f_xx = J^2 f_xixi + J J_xi f_xi`` (paper eqs. transform_1st/2nd)."""
+    if grid.axis_uniform(axis):
+        return g1, g2
+    m = grid.metric(axis)
+    J = m.along(m.J, g1.ndim if g1 is not None else g2.ndim)
+    d1 = None if g1 is None else J * g1
+    d2 = None if g2 is None else J * J * g2 + J * m.along(m.dJ, g2.ndim) * g1
+    return d1, d2
 
 
 def _moved(arr, axis):
@@ -192,7 +206,12 @@ class CCDCellDerivative:
         return out
 
     def derivatives(self, f: CellField, axis: int):
-        """``(f', f'')`` along ``axis`` from one CCD solve."""
+        """``(f', f'')`` along ``axis`` (physical; chain rule on a non-uniform axis)."""
+        g1, g2 = self.derivatives_xi(f, axis)
+        return _to_physical(f.grid, axis, g1, g2)
+
+    def derivatives_xi(self, f: CellField, axis: int):
+        """``(f_xi, f_xixi)`` along ``axis`` from one CCD solve in the computational coordinate."""
         grid = f.grid
         lo, hi = self._kinds(f, axis)
         mats = ccd_matrices(grid.n[axis], float(grid.h[axis]), lo, hi)
@@ -222,9 +241,15 @@ class CCDCellDerivative:
         products (the conservative part of the skew convection form) and the
         repeated second derivatives of the UCCD6/FUCCD hyperviscosity.
         """
+        g1, g2 = self.derivatives_array_xi(values, grid, axis, periodic)
+        d = _to_physical(grid, axis, g1, g2)
+        return tuple(d[w] for w in which)
+
+    def derivatives_array_xi(self, values, grid, axis: int, periodic: bool):
+        """``(f_xi, f_xixi)`` of an interior array without wall data."""
         kind = PERIODIC if periodic else EXTRAPOLATE
         mats = ccd_matrices(grid.n[axis], float(grid.h[axis]), kind, kind)
-        return tuple(self._apply(grid.xp, values, axis, mats, w) for w in which)
+        return tuple(self._apply(grid.xp, values, axis, mats, w) for w in (0, 1))
 
     def d1_product(self, a: CellField, b: CellField, axis: int):
         """CCD first derivative of the product ``a b`` along ``axis``.
@@ -245,7 +270,7 @@ class CCDCellDerivative:
             else:
                 kinds.append(EXTRAPOLATE)
         mats = ccd_matrices(grid.n[axis], float(grid.h[axis]), kinds[0], kinds[1])
-        return self._apply(grid.xp, values, axis, mats, 0, data)
+        return _to_physical(grid, axis, self._apply(grid.xp, values, axis, mats, 0, data), None)[0]
 
     def d11(self, a: CellField, axis0: int, axis1: int):
         if axis0 == axis1:
@@ -277,7 +302,15 @@ class FCCDFaceComplex:
         self._f2c = [float(v) for v in c["face_to_cell"]["coeffs"]]
 
     def _q(self, a: CellField, axis: int):
-        return self.ccd.d2(a, axis)
+        return self.ccd.derivatives_xi(a, axis)[1]
+
+    @staticmethod
+    def _physical_gradient(grid, axis: int, g_xi):
+        """Face gradient in ``xi`` times ``J`` at the faces (non-uniform axis)."""
+        if grid.axis_uniform(axis):
+            return g_xi
+        m = grid.metric(axis)
+        return m.along(m.J_face, g_xi.ndim) * g_xi
 
     def _faces(self, a: CellField, axis: int, interior_formula, wall):
         grid = a.grid
@@ -318,7 +351,7 @@ class FCCDFaceComplex:
             s = 1.0 if side == LOWER else -1.0
             return s * (c[0] * datum + sum(ck * uk for ck, uk in zip(c[1:], cells))) / h
 
-        return self._faces(a, axis, interior, wall)
+        return self._physical_gradient(a.grid, axis, self._faces(a, axis, interior, wall))
 
     def grad_f_array(self, values, grid, axis: int, periodic: bool):
         """FCCD face gradient of an interior array that has no boundary condition.
@@ -330,18 +363,20 @@ class FCCDFaceComplex:
         """
         xp = grid.xp
         n, h = grid.n[axis], float(grid.h[axis])
-        q = self.ccd.d2_array(values, grid, axis, periodic)
+        q = self.ccd.derivatives_array_xi(values, grid, axis, periodic)[1]
 
         def formula(ul, ur, ql, qr):
             return (ur - ul) / h - (h / 24.0) * (qr - ql)
 
         if periodic:
             inner = formula(xp.roll(values, 1, axis=axis), values, xp.roll(q, 1, axis=axis), q)
-            return xp.concatenate([inner, _take(inner, axis, slice(0, 1))], axis=axis)
-        inner = formula(_take(values, axis, slice(0, n - 1)), _take(values, axis, slice(1, n)),
-                        _take(q, axis, slice(0, n - 1)), _take(q, axis, slice(1, n)))
-        zero = xp.zeros_like(_take(values, axis, slice(0, 1)))
-        return xp.concatenate([zero, inner, zero], axis=axis)
+            out = xp.concatenate([inner, _take(inner, axis, slice(0, 1))], axis=axis)
+        else:
+            inner = formula(_take(values, axis, slice(0, n - 1)), _take(values, axis, slice(1, n)),
+                            _take(q, axis, slice(0, n - 1)), _take(q, axis, slice(1, n)))
+            zero = xp.zeros_like(_take(values, axis, slice(0, 1)))
+            out = xp.concatenate([zero, inner, zero], axis=axis)
+        return self._physical_gradient(grid, axis, out)
 
     def interp_f(self, a: CellField, axis: int):
         def interior(ul, ur, ql, qr, h):
