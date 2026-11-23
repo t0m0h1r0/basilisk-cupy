@@ -425,8 +425,9 @@ class FCCDFaceComplex:
         are a nodal line; :func:`~.reconstruction.face_ccd_matrices`, compact wall rows), in
         the computational coordinate. ``D_f`` of this flux is ``dF/dx`` at the cell centre to
         4th order, the dual of :meth:`grad_f`; ``D_f`` of the point values themselves is only
-        2nd order (``+ h^2/24 F_xxx``). Fluxes that must be divergence-free in the finite-volume
-        sense (VOF, tracers) are these.
+        2nd order (``+ h^2/24 F_xxx``). After a projection ``D_f`` of these fluxes is zero in every
+        cell, but on a wall the corrected flux is ``-h^2/24 d_nn u_n``, not zero (net zero along
+        the walls): not yet a VOF flux there (docs/notes/03_face_divergence.md).
         """
         if periodic is None:
             raise ValueError("FCCD face_flux needs periodic=True/False for the axis")
