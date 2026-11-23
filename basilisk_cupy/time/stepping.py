@@ -28,6 +28,8 @@ def timestep(uf: FaceField, dtmax: float, cfl: float, clock: Clock) -> float:
     previous value is damped: ``dt = (previous + 0.1 dt)/1.1``.
     """
     xp = uf.grid.xp
+    if not uf.grid.is_uniform:
+        raise NotImplementedError("CFL time step on a non-uniform grid is not implemented yet (step 4f-3)")
     if clock.t == 0.0:
         clock.previous = 0.0
     dtmax /= cfl

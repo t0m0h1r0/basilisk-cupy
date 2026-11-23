@@ -89,12 +89,15 @@ class Neumann(Condition):
     def fill(self, grid, data, axis, side):
         g, n, h = grid.ghosts, grid.n[axis], grid.h[axis]
         q = _boundary_value(grid, self.gradient, axis, side)
+        uniform = grid.axis_uniform(axis)
         for k in range(1, g + 1):
             if side == LOWER:
                 ghost, inner = g - k, g + k - 1
             else:
                 ghost, inner = g + n + k - 1, g + n - k
-            data[_side_slice(grid, axis, ghost)] = data[_side_slice(grid, axis, inner)] + (2 * k - 1) * h * q
+            # distance between the ghost and its mirror centre (physical on a mapped axis)
+            dist = (2 * k - 1) * h if uniform else grid.metric(axis).wall_distance(side, k)
+            data[_side_slice(grid, axis, ghost)] = data[_side_slice(grid, axis, inner)] + dist * q
 
     def homogeneous(self):
         return Neumann(0.0)
@@ -153,7 +156,7 @@ class BoundaryConditions:
         """Fill the ghost layers of ``data`` (a padded cell array) in place."""
         for axis in range(grid.ndim):
             self.is_periodic(axis)
-        if grid.xp.__name__ == "cupy":
+        if grid.xp.__name__ == "cupy" and grid.is_uniform:
             sides = self._kernel_sides(grid.ndim)
             if sides is not None and data.dtype == grid.xp.float64 and data.flags.c_contiguous:
                 from .kernels.ghosts_gpu import fill_ghosts  # noqa: PLC0415

@@ -90,6 +90,8 @@ class FUCCDConvection:
         """``-C(u)`` for every component (interior arrays)."""
         grid = u.grid
         xp = grid.xp
+        if not grid.is_uniform:
+            raise NotImplementedError(f"{self.name} on a non-uniform grid is not implemented yet (step 4f-3)")
         u.fill_ghosts()
         speeds = self.face_speeds(u, uf)
         sign = (-1.0) ** self.r

@@ -132,6 +132,8 @@ def tracer_fluxes(f: CellField, uf: FaceField, dt: float, src: CellField | None 
                   grad: VectorField | None = None, limiter: Limiter | None = None) -> FaceField:
     """Advective fluxes ``f_face * uf`` (Basilisk ``tracer_fluxes()``, fm = 1)."""
     grid = f.grid
+    if not grid.is_uniform:
+        raise NotImplementedError("BCG on a non-uniform grid is not implemented yet")
     f.fill_ghosts()
     grad = grad or gradients(f, limiter)
     flux = FaceField(grid, name=f"flux({f.name})")
@@ -171,6 +173,8 @@ def advection(tracers: list[CellField], uf: FaceField, dt: float, src: list[Cell
 def prediction(u: VectorField, g: VectorField, dt: float, limiter: Limiter | None = None) -> FaceField:
     """Face velocity at t + dt/2 from the centred velocity (Basilisk ``prediction()``)."""
     grid = u.grid
+    if not grid.is_uniform:
+        raise NotImplementedError("BCG on a non-uniform grid is not implemented yet")
     u.fill_ghosts()
     uf = FaceField(grid, name="uf")
     for ax in range(grid.ndim):

@@ -35,6 +35,13 @@ walls: 24 / 77 corrections at kappa = 0.1 / 1, no convergence in 300 at
 kappa >= 10), whereas ``D2`` damps that mode like ``A_L`` (15-26 corrections for
 kappa = 0.1 ... 1000). ``form="layered"`` keeps the paper's literal composition
 for comparison.
+
+Relation to Basilisk: ``viscosity.h`` has the same structure as ``split`` with
+2nd-order differences, a compact face-flux difference ``2 mu (u[1] - u[])/Delta``
+for the same-axis term and corner averages for the cross terms; ``split``
+replaces each difference by its CCD counterpart. It is a choice made here,
+not a scheme of Basilisk or of the TwoPhaseFlow paper (whose literal
+composition is ``layered``).
 """
 
 from __future__ import annotations

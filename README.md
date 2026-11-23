@@ -11,7 +11,7 @@ Design document: see the project's design doc ("Basilisk → CuPy 移植設計�
 
 | Layer | Implemented |
 | --- | --- |
-| Grid, fields, boundary conditions | uniform cell-centred grid (1D/2D/3D), Dirichlet / Neumann / periodic with automatic homogeneous versions |
+| Grid, fields, boundary conditions | cell-centred grid (1D/2D/3D), uniform or mapped per axis (`grid/mapping.py`: tanh wall clustering, periodic sine stretching, monitor-function equidistribution); Dirichlet / Neumann / periodic with automatic homogeneous versions |
 | ① Spatial operators | `fd2` (Basilisk-compatible 2nd order); `ccd` (CCD, Chu & Fan: f′ 6th, f″ 5th order with walls) and `fccd` (FCCD face operators, 4th order) on the cell-centred grid with new wall closures (`tools/derive_ccd_closures.py`) |
 | ② Linear solvers | Basilisk-style multigrid (`mg_solve`, scalar or vector unknowns, red/black Gauss–Seidel, adaptive `nrelax`) with a separate high-order residual hook; GCR-accelerated defect correction for high-order operators (`poisson(method="dc")`, chosen automatically for non-fd2 `ops`); implicit viscosity (`viscosity.h`) and its CCD defect-correction version (`CCDViscosity`) |
 | ③ Terms | BCG advection and `prediction()` (`bcg.h`), minmod / superbee / sweby limiters |
@@ -146,6 +146,41 @@ dt = 0.25/N): fd2 ops + fd2 viscosity 0.007304 / 0.008872 / 0.009486 / 0.009694;
 FCCD ops + CCD viscosity 0.008223 / 0.009131 / 0.009613 / 0.009673. The
 corner singularity of the lid limits both to about order 1.5; `lid.ref`
 (Basilisk, N = 64: 0.008904) is itself under-resolved at t = 1.1.
+
+## Non-uniform (mapped) grids — step 4f-1: operators
+
+```python
+from basilisk_cupy.grid.mapping import TanhMapping, MonitorMapping
+grid = CartesianGrid((64, 64), mapping=(TanhMapping(2.0), MonitorMapping(lambda x: 1 + 3 * np.exp(-((x - 0.3) / 0.08) ** 2))))
+```
+
+An axis is the image `x(ξ)` of the uniform computational axis (TwoPhaseFlow
+paper §10). CCD and FCCD work in ξ and convert with `J = dξ/dx`:
+`f_x = J f_ξ`, `f_xx = J² f_ξξ + J J_ξ f_ξ` (CCD), `G_x = J_face G_ξ` (FCCD).
+The metric comes from the CCD/FCCD derivatives of the coordinates
+themselves (Dirichlet closure with the wall coordinates), so that `d x/d x = 1`
+holds to round-off. Neumann data are converted with the exact `dx/dξ` of the
+map at the wall. FCCD faces stay centred in ξ, so the paper's `O(H³)`
+off-centre faces (§10c) do not occur. fd2 is finite volume: the gradient
+divides by the physical centre distance and the divergence by the cell width.
+Ghost centres are mirrored about walls. `MonitorMapping` integrates the
+monitor with the Boole rule and inverts it by Hermite interpolation; the
+paper's trapezoidal construction would cap the map at O(Δξ²).
+
+| Check (N = 16…128) | tanh × tanh, Dirichlet | tanh × tanh, Neumann | sine × sine, periodic |
+| --- | --- | --- | --- |
+| CCD `f′` / `f″` | 6.2–6.6 / 5.2–5.6 | 6.2–6.5 / 5.2–5.3 | 6.1 / 6.0 |
+| FCCD face gradient / value / face→cell | 4.2–4.8 / 4.0 / 4.0 | 4.0 / 4.0 / 4.0 | 4.0 / 4.0 / 4.0 |
+| fd2 face gradient / divergence | 2.0 / 2.0 | 2.0 / 2.0 | 2.0 / 2.0 |
+| GCL `d x/d x − 1` (CCD / FCCD / fd2) | 9e-14 / 1e-14 / 0 | | |
+
+CCD full stress (`CCDStress`, split) on tanh × monitor: 5th order.
+Boundary layer `exp(−x/0.02)` at N = 32: the CCD derivative error drops from
+5.6e-3 (uniform) to 8.6e-7 (tanh, β = 3, first cell 0.001).
+
+Multigrid, Poisson/projection, the viscous solvers, BCG, UCCD6/FUCCD and
+the CFL step raise `NotImplementedError` on a mapped grid until steps 4f-2
+(solvers) and 4f-3 (Navier–Stokes).
 
 ## GPU (cupy)
 
