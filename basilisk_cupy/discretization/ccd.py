@@ -18,7 +18,11 @@ nodal grid with the wall on a node). The first-cell CCD rows and the
 wall-face FCCD values are new closures that take the wall datum from the
 field's boundary condition (Dirichlet value or Neumann gradient), derived in
 ``tools/derive_ccd_closures.py`` (coefficients in :mod:`.ccd_coefficients`).
-Measured orders with walls: CCD ``f'`` 6, ``f''`` 5; FCCD 4.
+The closures are compact: they read the wall datum and the first two cells only
+(the width of the interior three-cell stencil) and take their accuracy from the
+implicit derivatives, as the interior rows do. The CCD wall-cell ``f'`` is 4th
+and ``f''`` 3rd order (6th inside); the wall-face FCCD values read the CCD jet
+``(f, f', f'')`` of the first cells and are 4th order like the interior faces.
 
 Because the grid is fixed, the operator along each axis is a dense matrix
 ``[f'; f''] = D f + b_lo datum_lo + b_hi datum_hi`` built once (block solve on
@@ -255,8 +259,8 @@ class CCDCellDerivative:
         """CCD first derivative of the product ``a b`` along ``axis``.
 
         A wall where both factors have Dirichlet conditions gets the Dirichlet
-        closure with the product of the wall values (6th order); other walls
-        use the extrapolating closure (5th order).
+        closure with the product of the wall values (4th order at the wall
+        cell); other walls use the extrapolating closure (3rd order there).
         """
         grid = a.grid
         values = a.interior * b.interior
@@ -297,7 +301,9 @@ class FCCDFaceComplex:
         self._fd2 = FD2FaceComplex()
         c = FCCD_WALL
         self._grad_w = [float(v) for v in c["gradient"]["coeffs"]]
+        self._grad_t = c["gradient"]["terms"]
         self._val_w = [float(v) for v in c["value"]["coeffs"]]
+        self._val_t = c["value"]["terms"]
         self._f2c_w = [float(v) for v in c["face_to_cell_wall"]["coeffs"]]
         self._f2c = [float(v) for v in c["face_to_cell"]["coeffs"]]
 
@@ -317,21 +323,26 @@ class FCCDFaceComplex:
         xp = grid.xp
         n, h = grid.n[axis], float(grid.h[axis])
         u = a.interior
-        q = self._q(a, axis)
         if a.bc.is_periodic(axis):
+            q = self._q(a, axis)
             um, qm = xp.roll(u, 1, axis=axis), xp.roll(q, 1, axis=axis)
             inner = interior_formula(um, u, qm, q, h)  # face k between k-1 and k, k = 0..n-1
             return xp.concatenate([inner, _take(inner, axis, slice(0, 1))], axis=axis)
+        p, q = self.ccd.derivatives_xi(a, axis)
         inner = interior_formula(_take(u, axis, slice(0, n - 1)), _take(u, axis, slice(1, n)),
                                  _take(q, axis, slice(0, n - 1)), _take(q, axis, slice(1, n)), h)
-        lo = xp.expand_dims(wall(a, axis, LOWER, u, h), axis)
-        hi = xp.expand_dims(wall(a, axis, UPPER, u, h), axis)
+        jet = (u, p, q)
+        lo = xp.expand_dims(wall(a, axis, LOWER, jet, h), axis)
+        hi = xp.expand_dims(wall(a, axis, UPPER, jet, h), axis)
         return xp.concatenate([lo, inner, hi], axis=axis)
 
     @staticmethod
-    def _cells_from_wall(u, axis, side, count):
-        n = u.shape[axis]
-        return [_take(u, axis, k if side == LOWER else n - 1 - k) for k in range(count)]
+    def _jet_sum(coeffs, terms, jet, axis, side, h):
+        """``sum c h^d (s^d f^(d))_k`` over the wall cells ``k`` (``s = -1`` reflects the upper wall)."""
+        s = 1.0 if side == LOWER else -1.0
+        n = jet[0].shape[axis]
+        return sum(c * (s * h) ** d * _take(jet[d], axis, k if side == LOWER else n - 1 - k)
+                   for c, (d, k) in zip(coeffs, terms))
 
     @staticmethod
     def _broadcast(val, like):
@@ -341,9 +352,8 @@ class FCCDFaceComplex:
         def interior(ul, ur, ql, qr, h):
             return (ur - ul) / h - (h / 24.0) * (qr - ql)
 
-        def wall(f, ax, side, u, h):
+        def wall(f, ax, side, jet, h):
             cond = f.bc.get(ax, side)
-            cells = self._cells_from_wall(u, ax, side, 4)
             datum = _wall_datum(f, ax, side)
             if isinstance(cond, Neumann):
                 if not f.grid.axis_uniform(ax):
@@ -352,10 +362,10 @@ class FCCDFaceComplex:
                     m = f.grid.metric(ax)
                     k = 0 if side == LOWER else 1
                     datum = datum / (m.wall_x_xi[k] * float(m.J_face[0 if side == LOWER else -1]))
-                return self._broadcast(datum, cells[0])
+                return self._broadcast(datum, _take(jet[0], ax, 0))
             c = self._grad_w
             s = 1.0 if side == LOWER else -1.0
-            return s * (c[0] * datum + sum(ck * uk for ck, uk in zip(c[1:], cells))) / h
+            return s * (c[0] * datum + self._jet_sum(c[1:], self._grad_t, jet, ax, side, h)) / h
 
         return self._physical_gradient(a.grid, axis, self._faces(a, axis, interior, wall))
 
@@ -388,15 +398,14 @@ class FCCDFaceComplex:
         def interior(ul, ur, ql, qr, h):
             return 0.5 * (ul + ur) - (h * h / 16.0) * (ql + qr)
 
-        def wall(f, ax, side, u, h):
+        def wall(f, ax, side, jet, h):
             cond = f.bc.get(ax, side)
-            cells = self._cells_from_wall(u, ax, side, 4)
             datum = _wall_datum(f, ax, side)
             if isinstance(cond, Dirichlet):
-                return self._broadcast(datum, cells[0])
+                return self._broadcast(datum, _take(jet[0], ax, 0))
             c = self._val_w
             s = 1.0 if side == LOWER else -1.0  # gradient in the reflected coordinate: s df/dx
-            return c[0] * h * s * datum + sum(ck * uk for ck, uk in zip(c[1:], cells))
+            return c[0] * h * s * datum + self._jet_sum(c[1:], self._val_t, jet, ax, side, h)
 
         return self._faces(a, axis, interior, wall)
 

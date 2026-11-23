@@ -66,9 +66,9 @@ def test_much_faster_than_plain_defect_correction_on_dirichlet_walls(backend):
     grid, a2, b = problem(64, "dirichlet", ops, backend)
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
-        plain = poisson(a2, b, ops=ops, tolerance=1e-10, method="mg", nitermax=400)
+        plain = poisson(a2, b, ops=ops, tolerance=1e-10, method="mg", nitermax=1000)
     assert gcr.converged and plain.converged
-    assert gcr.nrelax < plain.i / 3  # multigrid cycles: ~34 against ~164
+    assert gcr.nrelax < plain.i / 3  # multigrid cycles: 36 against 461
     assert error(grid, a, "dirichlet") == pytest.approx(error(grid, a2, "dirichlet"), rel=1e-3)
 
 

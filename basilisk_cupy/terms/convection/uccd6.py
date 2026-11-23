@@ -113,10 +113,14 @@ class ImplicitHyperviscosity:
     ``(I - tau V + tau H) u = r``.
 
     Every 1-D factor ``(D2)^4`` (first ``D2`` with the component's closure, the others
-    extrapolating) has real, non-negative eigenvalues (measured: up to ``omega_2(pi)^8 = 8493.5``
-    over ``h^8``; walls 5931 at n = 16 to 8487 at n = 256), so the implicit hyperviscosity is
-    unconditionally stable. The axes commute, and :meth:`precondition` solves
-    ``(I + tau H) z = r`` by fast diagonalization (per-axis eigenvectors). With walls the
+    extrapolating) has a real spectrum, up to ``omega_2(pi)^8 = 8493.5`` over ``h^8``. With the
+    compact wall closures one wall eigenvalue is slightly negative (measured ``-1.66 / h^8``
+    Dirichlet, ``-0.020 / h^8`` Neumann, independent of n): a growth rate ``1.7 sigma |u| / h``,
+    2e-4 of the Nyquist damping (the previous wide closures gave the advection ``-D1`` itself
+    ``Re lambda = 0.096 |u| / h`` on Dirichlet walls; compact: 1e-15). Making the factor
+    non-negative needs either the field's closure in all four factors (1st order at the wall,
+    measured) or ``(E B)^T (E B)`` (3rd order); neither was adopted. The axes commute, and
+    :meth:`precondition` solves ``(I + tau H) z = r`` by fast diagonalization (per-axis eigenvectors). With walls the
     eigenvector matrices are non-normal (condition ~5e5), so this is used as a preconditioner
     of the GCR solve in :class:`~basilisk_cupy.terms.viscous.DCViscosity`, whose residual applies
     ``H`` exactly.

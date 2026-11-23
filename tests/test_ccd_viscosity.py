@@ -45,7 +45,8 @@ def _stress_errors(form, periodic, mu_expr, backend):
 
 
 @pytest.mark.parametrize("form", ["split", "layered"])
-@pytest.mark.parametrize("periodic,min_order", [(True, 5.9), (False, 4.7)])
+# walls: the stress differentiates derivatives (extrapolating closure): 3rd order at the wall cells (measured 2.79-3.28)
+@pytest.mark.parametrize("periodic,min_order", [(True, 5.9), (False, 2.7)])
 @pytest.mark.parametrize("variable_mu", [False, True])
 def test_full_stress_orders(backend, form, periodic, min_order, variable_mu):
     mu = sp.Rational(7, 10) + (sp.Rational(1, 5) * sp.sin(X - Y) if variable_mu else 0)

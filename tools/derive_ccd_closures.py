@@ -59,16 +59,23 @@ DATUM = {"dirichlet": (0, 0), "neumann": (1, 0)}
 
 
 #: Implicit terms (derivative order, cell) of the Eq-I and Eq-II rows, and the number of cell values.
+#: All rows stay on the first two cells and the wall, the width of the interior
+#: three-cell stencil; the accuracy comes from the implicit derivatives (CCD's
+#: principle), not from a wider one-sided stencil. A boundary closure one order
+#: below the interior (two for a second derivative) keeps the global order
+#: (Gustafsson 1975). The earlier wide closures (datum + 4..6 cells, 6th/5th
+#: order at the wall) were no more accurate on any Navier--Stokes run and lost
+#: digits to round-off at N = 256 (max |D2| h^2 rows of ~20).
 STENCILS = {
-    # Wall datum + f_0..f_3. The two rows need different implicit terms: with
-    # the same four implicit unknowns the order-7 relation is unique and the
-    # rows coincide (singular system).
-    "dirichlet": {"I": ([(1, 1), (2, 0)], 4), "II": ([(2, 1), (1, 0)], 4)},
-    "neumann": {"I": ([(1, 1), (2, 0)], 4), "II": ([(2, 1), (1, 0)], 4)},
-    # No datum (derivatives of derivatives, whose wall data are unknown).
-    # Decoupled rows: the coupled 6/5-order variant loses ~3 digits to
-    # round-off at N >= 128 (large Eq-II weights); this one stays at 1e-12.
-    "extrapolate": {"I": ([(1, 1)], 5), "II": ([(2, 1)], 6)},
+    # Row I through f''_0, f'_1, f''_1 (5th order f'); row II through f'_0, f''_1
+    # (3rd order f''). Row II cannot also take f'_1: with the same implicit
+    # unknowns as row I the system is singular.
+    "dirichlet": {"I": ([(2, 0), (1, 1), (2, 1)], 2), "II": ([(1, 0), (2, 1)], 2)},
+    # Row II through f'_1, f''_1 (the datum is already a first derivative).
+    "neumann": {"I": ([(2, 0), (1, 1), (2, 1)], 2), "II": ([(1, 1), (2, 1)], 2)},
+    # No datum (derivatives of derivatives, whose wall data are unknown): one
+    # explicit term fewer, f' 4th and f'' 2nd order at the wall.
+    "extrapolate": {"I": ([(2, 0), (1, 1), (2, 1)], 2), "II": ([(1, 0), (2, 1)], 2)},
 }
 
 
@@ -89,26 +96,33 @@ def ccd_rows(kind: str):
     return rows
 
 
+#: Wall-face FCCD closures: terms (derivative order, cell) of the CCD jet of the
+#: first cells (``h^d f^(d)``), after the wall datum.
+FCCD_TERMS = {"gradient": ((0, 0), (1, 0), (0, 1), (1, 1)), "value": ((0, 0), (1, 0), (2, 0))}
+
+
 def fccd_wall_rows():
     """Wall-face FCCD closures and the face-to-cell reconstruction.
 
-    gradient (Dirichlet wall):  h u'(0) = c_w u_w + sum_{k<4} c_k u_k
-    value    (Neumann wall):    u(0)    = c_g h g + sum_{k<4} c_k u_k
+    gradient (Dirichlet wall):  h u'(0) = c_w u_w + sum c h^d u^(d)_k   (u_0, h u'_0, u_1, h u'_1)
+    value    (Neumann wall):    u(0)    = c_g h g + sum c h^d u^(d)_0   (u_0, h u'_0, h^2 u''_0)
     face_to_cell, first cell:   F(h/2)  = sum_{j<4} c_j F(j h)        (faces 0..3)
     face_to_cell, interior:     F(c_k)  = sum c_j F(faces k-1..k+2)
 
-    All are 4th order like the interior FCCD face operators. Explicit
-    stencils are used at the wall: the compact alternative that also reads
-    the CCD second derivatives q_0, q_1 has coefficients up to 49 (sum |c| =
-    112) against 4.4 here, and gains nothing over the 4th-order interior.
+    The wall faces read the CCD jet of the cells next to the wall, as the
+    interior faces read ``u`` and ``u''`` of their two cells: the same width,
+    4th order like the interior. (The earlier explicit rows read 4 cells.)
+    The face-to-cell rows span 4 faces, the width of the interior row.
     """
-    u = [(0, centre(k)) for k in range(4)]
-    grad, og = closure((1, 0), [(0, 0)] + u)
-    val, ov = closure((0, 0), [(1, 0)] + u)
+    g_terms = [(d, centre(k)) for d, k in FCCD_TERMS["gradient"]]
+    v_terms = [(d, centre(k)) for d, k in FCCD_TERMS["value"]]
+    grad, og = closure((1, 0), [(0, 0)] + g_terms)
+    val, ov = closure((0, 0), [(1, 0)] + v_terms)
     first, of = closure((0, HALF), [(0, j) for j in range(4)])
     inner, oi = closure((0, HALF), [(0, j) for j in range(-1, 3)])
-    return {"gradient": ([-c for c in grad], og - 1), "value": ([-c for c in val], ov),
-            "face_to_cell_wall": ([-c for c in first], of), "face_to_cell": ([-c for c in inner], oi)}
+    return {"gradient": ([-c for c in grad], og - 1, FCCD_TERMS["gradient"]),
+            "value": ([-c for c in val], ov, FCCD_TERMS["value"]),
+            "face_to_cell_wall": ([-c for c in first], of, None), "face_to_cell": ([-c for c in inner], oi, None)}
 
 
 def _fmt(values):
@@ -131,8 +145,9 @@ def main() -> None:
     lines.append("")
     w = fccd_wall_rows()
     lines.append("FCCD_WALL = {")
-    for name, (c, o) in w.items():
-        lines.append(f'    "{name}": {{"coeffs": {_fmt(c)}, "order": {o}}},')
+    for name, (c, o, terms) in w.items():
+        extra = "" if terms is None else f', "terms": {terms}'
+        lines.append(f'    "{name}": {{"coeffs": {_fmt(c)}, "order": {o}{extra}}},')
     lines.append("}")
     out = Path(__file__).resolve().parents[1] / "basilisk_cupy" / "discretization" / "ccd_coefficients.py"
     out.write_text("\n".join(lines) + "\n")
