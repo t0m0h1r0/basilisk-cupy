@@ -13,8 +13,10 @@ Design document: see the project's design doc ("Basilisk → CuPy 移植設計�
 | --- | --- |
 | Grid, fields, boundary conditions | uniform cell-centred grid (1D/2D/3D), Dirichlet / Neumann / periodic with automatic homogeneous versions |
 | ① Spatial operators | `fd2` (Basilisk-compatible 2nd order): `FaceComplex`, `CellDerivative` |
-| ② Linear solvers | Basilisk-style multigrid (`mg_solve`, red/black Gauss–Seidel, adaptive `nrelax`) with a separate high-order residual hook |
+| ② Linear solvers | Basilisk-style multigrid (`mg_solve`, scalar or vector unknowns, red/black Gauss–Seidel, adaptive `nrelax`) with a separate high-order residual hook; implicit viscosity (`viscosity.h`) |
+| ③ Terms | BCG advection and `prediction()` (`bcg.h`), minmod / superbee / sweby limiters |
 | ④ Projection | Basilisk `project()` (approximate projection, variable density) |
+| ⑥ Time stepping | `timestep()` / `dtnext()`; `CenteredNS` (`navier-stokes/centered.h`) with Basilisk's event order exposed as hook stages |
 | Scheme | `scheme.py` registry and YAML loader |
 
 ## Usage
@@ -30,11 +32,24 @@ a = CellField(grid, bc=BoundaryConditions.uniform(2, Dirichlet(0.0)))
 stats = poisson(a, b, tolerance=1e-8)
 ```
 
+## Validation against Basilisk
+
+| Case | Basilisk test | Result |
+| --- | --- | --- |
+| Taylor–Green vortices, t = 2 | `src/test/taylor-green.c` / `.ref` | avg and rms errors within 0.5 % and 1.5 % of the reference at N = 32…256, third-order convergence |
+| Lid-driven cavity, Re = 1000, N = 64 | `src/test/lid.c` / `lid.ref` | all 440 logged energies within 0.07 % (4-digit rounding); steady state reached at t = 44.0 as in Basilisk; centreline profiles within 0.015 of Ghia et al. |
+
+```bash
+python -m cases.taylor_green --nmax 256
+python -m cases.lid_cavity --out results/lid
+```
+
 ## Tests
 
 ```bash
 pip install -e ".[dev]"      # add ",gpu" for cupy
-pytest
+pytest              # fast suite
+pytest -m slow      # full lid-cavity run to steady state (~1 min)
 ```
 
 Tests run on numpy; when cupy is importable every backend-parametrised test

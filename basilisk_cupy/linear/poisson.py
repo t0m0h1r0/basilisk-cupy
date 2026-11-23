@@ -29,7 +29,7 @@ class HelmholtzProblem:
         xp = grid.xp
         self.ops = ops or FD2FaceComplex()
         self.levels = build_levels(grid, min_cells=min_cells)
-        self.correction_bc: BoundaryConditions = a.bc.homogeneous()
+        self.correction_bcs: list[BoundaryConditions] = [a.bc.homogeneous()]
 
         if alpha is None:
             alpha = FaceField.constant(grid, 1.0, name="unity")
@@ -59,7 +59,8 @@ class HelmholtzProblem:
             self.masks.append(((idx % 2) == 0, (idx % 2) == 1))
 
     # L_high residual on the finest level -------------------------------------------
-    def residual(self, a: CellField, b, res) -> float:
+    def residual(self, al: list[CellField], bl: list, resl: list) -> float:
+        a, b, res = al[0], bl[0], resl[0]
         xp = a.grid.xp
         flux = FaceField(a.grid, [self.alpha_fine[ax] * self.ops.grad_f(a, ax) for ax in range(a.grid.ndim)])
         res[...] = b - self.ops.div_f(flux)
@@ -68,7 +69,8 @@ class HelmholtzProblem:
         return to_float(xp.max(xp.abs(res)))
 
     # L_low relaxation (5/7-point stencil, red/black Gauss--Seidel) -------------------
-    def relax(self, da: CellField, res, level: int) -> None:
+    def relax(self, dal: list[CellField], resl: list, level: int) -> None:
+        da, res = dal[0], resl[0]
         grid = self.levels[level]
         xp = grid.xp
         alpha = self.alpha[level]

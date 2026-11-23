@@ -148,6 +148,15 @@ class CartesianGrid:
         out[axis] = slice(g + offset, g + offset + self.n[axis])
         return tuple(out)
 
+    def at(self, offsets: dict[int, int] | None = None) -> tuple[slice, ...]:
+        """Interior slice shifted by ``offsets`` (axis -> cells), e.g. Basilisk ``a[1,-1]`` is
+        ``at({0: 1, 1: -1})``."""
+        g = self.ghosts
+        out = list(self.interior())
+        for axis, off in (offsets or {}).items():
+            out[axis] = slice(g + off, g + off + self.n[axis])
+        return tuple(out)
+
     def face_neighbours(self, axis: int) -> tuple[tuple[slice, ...], tuple[slice, ...]]:
         """Slices of the cells left and right of every face normal to ``axis``.
 
