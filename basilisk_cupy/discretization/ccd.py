@@ -298,7 +298,10 @@ class FCCDFaceComplex:
     name = "fccd"
     stencil_ghosts = 1
 
-    def __init__(self, ccd: CCDCellDerivative | None = None) -> None:
+    def __init__(self, ccd: CCDCellDerivative | None = None, order: int = 4) -> None:
+        if order not in (4, 6):
+            raise ValueError(f"FCCD face order must be 4 or 6, got {order}")
+        self.order = int(order)
         self.ccd = ccd or CCDCellDerivative()
         self._fd2 = FD2FaceComplex()
         self._dev: dict = {}
@@ -313,27 +316,26 @@ class FCCDFaceComplex:
     def _q(self, a: CellField, axis: int):
         return self.ccd.derivatives_xi(a, axis)[1]
 
-    @staticmethod
-    def _physical_gradient(grid, axis: int, g_xi):
+    def _physical_gradient(self, grid, axis: int, g_xi):
         """Face gradient in ``xi`` times ``J`` at the faces (non-uniform axis)."""
         if grid.axis_uniform(axis):
             return g_xi
         m = grid.metric(axis)
-        return m.along(m.J_face, g_xi.ndim) * g_xi
+        return m.along(m.J_face_for(self.order), g_xi.ndim) * g_xi
 
     def _faces(self, a: CellField, axis: int, interior_formula, wall):
         grid = a.grid
         xp = grid.xp
         n, h = grid.n[axis], float(grid.h[axis])
         u = a.interior
-        if a.bc.is_periodic(axis):
-            q = self._q(a, axis)
-            um, qm = xp.roll(u, 1, axis=axis), xp.roll(q, 1, axis=axis)
-            inner = interior_formula(um, u, qm, q, h)  # face k between k-1 and k, k = 0..n-1
-            return xp.concatenate([inner, _take(inner, axis, slice(0, 1))], axis=axis)
         p, q = self.ccd.derivatives_xi(a, axis)
-        inner = interior_formula(_take(u, axis, slice(0, n - 1)), _take(u, axis, slice(1, n)),
-                                 _take(q, axis, slice(0, n - 1)), _take(q, axis, slice(1, n)), h)
+        if a.bc.is_periodic(axis):
+            roll = lambda v: xp.roll(v, 1, axis=axis)  # noqa: E731
+            inner = interior_formula(roll(u), u, roll(p), p, roll(q), q, h)  # face k between k-1 and k
+            return xp.concatenate([inner, _take(inner, axis, slice(0, 1))], axis=axis)
+        lo_, hi_ = slice(0, n - 1), slice(1, n)
+        inner = interior_formula(_take(u, axis, lo_), _take(u, axis, hi_), _take(p, axis, lo_), _take(p, axis, hi_),
+                                 _take(q, axis, lo_), _take(q, axis, hi_), h)
         jet = (u, p, q)
         lo = xp.expand_dims(wall(a, axis, LOWER, jet, h), axis)
         hi = xp.expand_dims(wall(a, axis, UPPER, jet, h), axis)
@@ -352,7 +354,9 @@ class FCCDFaceComplex:
         return val + 0.0 * like
 
     def grad_f(self, a: CellField, axis: int):
-        def interior(ul, ur, ql, qr, h):
+        def interior(ul, ur, pl, pr, ql, qr, h):
+            if self.order == 6:  # derivative of the quintic Hermite interpolant of the two cell jets
+                return (15.0 / 8.0) * (ur - ul) / h - (7.0 / 16.0) * (pl + pr) + (h / 32.0) * (qr - ql)
             return (ur - ul) / h - (h / 24.0) * (qr - ql)
 
         def wall(f, ax, side, jet, h):
@@ -364,7 +368,7 @@ class FCCDFaceComplex:
                     # face carries the physical datum exactly (Neumann compatibility of the projection)
                     m = f.grid.metric(ax)
                     k = 0 if side == LOWER else 1
-                    datum = datum / (m.wall_x_xi[k] * float(m.J_face[0 if side == LOWER else -1]))
+                    datum = datum / (m.wall_x_xi[k] * float(m.J_face_for(self.order)[0 if side == LOWER else -1]))
                 return self._broadcast(datum, _take(jet[0], ax, 0))
             c = self._grad_w
             s = 1.0 if side == LOWER else -1.0
@@ -398,7 +402,9 @@ class FCCDFaceComplex:
         return self._physical_gradient(grid, axis, out)
 
     def interp_f(self, a: CellField, axis: int):
-        def interior(ul, ur, ql, qr, h):
+        def interior(ul, ur, pl, pr, ql, qr, h):
+            if self.order == 6:  # quintic Hermite midpoint of the two cell jets
+                return 0.5 * (ul + ur) + (5.0 * h / 32.0) * (pl - pr) + (h * h / 64.0) * (ql + qr)
             return 0.5 * (ul + ur) - (h * h / 16.0) * (ql + qr)
 
         def wall(f, ax, side, jet, h):

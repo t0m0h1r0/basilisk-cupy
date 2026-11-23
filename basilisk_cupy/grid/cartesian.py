@@ -303,6 +303,23 @@ class AxisMetric:
     def J_face(self):
         return self._dev(1.0 / self._derivatives[2])
 
+    def J_face_for(self, order: int):
+        """``J`` at the faces from the FCCD face gradient of order ``order`` (4: :attr:`J_face`, or 6),
+        so that each operator differentiates the coordinates exactly (geometric conservation)."""
+        if order == 4:
+            return self.J_face
+        cache = self.__dict__.setdefault("_J_face_by_order", {})
+        if order not in cache:
+            grid, axis = self.grid, self.axis
+            if self.uniform:
+                cache[order] = self.J_face
+            elif grid.n[axis] >= (3 if grid.mapping[axis].periodic else 6):
+                face = _coordinate_derivatives(grid, axis, self._host["x"], self._host["x_face"], face_order=order)[2]
+                cache[order] = self._dev(1.0 / face)
+            else:
+                cache[order] = self.J_face  # coarse levels: the map's exact derivative (as J_face)
+        return cache[order]
+
     def along(self, arr, ndim: int | None = None):
         """``arr`` reshaped to broadcast along this axis of an ``ndim``-d array."""
         ndim = self.grid.ndim if ndim is None else ndim
@@ -321,7 +338,7 @@ class AxisMetric:
         return 2.0 * abs(x_in - x_wall)
 
 
-def _coordinate_derivatives(grid: CartesianGrid, axis: int, xc, xf):
+def _coordinate_derivatives(grid: CartesianGrid, axis: int, xc, xf, face_order: int = 4):
     """``dx/dxi``, ``d2x/dxi2`` at the centres (CCD) and ``dx/dxi`` at the faces (FCCD), host arrays."""
     from ..boundary import BoundaryConditions, Dirichlet, Periodic  # noqa: PLC0415
     from ..discretization.ccd import CCDCellDerivative, FCCDFaceComplex  # noqa: PLC0415
@@ -340,7 +357,7 @@ def _coordinate_derivatives(grid: CartesianGrid, axis: int, xc, xf):
               .set((0, 1), Dirichlet(xf[-1] - grid.origin[axis])))
     f = CellField.from_interior(line, values, bc)
     d1, d2 = CCDCellDerivative().derivatives(f, 0)
-    face = FCCDFaceComplex().grad_f(f, 0)
+    face = FCCDFaceComplex(order=face_order).grad_f(f, 0)
     if periodic:
         d1, face = d1 + 1.0, face + 1.0
     if np.any(d1 <= 0.0) or np.any(face <= 0.0):
