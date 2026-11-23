@@ -17,8 +17,8 @@ Design document: see the project's design doc ("Basilisk → CuPy 移植設計�
 | ③ Terms | BCG advection and `prediction()` (`bcg.h`), minmod / superbee / sweby limiters |
 | ④ Projection | Basilisk `project()` (approximate projection, variable density) |
 | ⑥ Time stepping | `timestep()` / `dtnext()`; `CenteredNS` (`navier-stokes/centered.h`) with Basilisk's event order exposed as hook stages; `IMEXBDF2NS` (TwoPhaseFlow: EXT2 convection, implicit BDF2 viscosity, incremental pressure correction with projection step 2dt/3) |
-| ③ Terms | `CentralFluxConvection` (semi-discrete `D_f(P_f(u) u_f)` for multistep integrators) |
-| Scheme | `scheme.py` registry and YAML loader |
+| ③ Terms | semi-discrete convection for multistep integrators (`tendency(u, uf)`): `CentralFluxConvection` (`D_f(P_f(u) u_f)`), `UCCD6Convection` (skew CCD + `σ|u|h⁷(−D₂)⁴`), `FUCCDConvection` (FUCCD₄ / FUCCD₁ conservative upwind face fluxes) |
+| Scheme | `scheme.py` registry and YAML loader (`operators: face/cell`, `terms: convection`) |
 
 ## Usage
 
@@ -72,6 +72,39 @@ ns = CenteredNS(grid, periodic=(0, 1), ops=FCCDFaceComplex())   # or operators: 
 With the same operators, the incremental (δp) and full-pressure projections are
 identical to round-off (Basilisk starts the Poisson iteration from pⁿ), so IPC
 only changes results together with BDF2 or variable density.
+
+## Convection: UCCD6 / FUCCD
+
+```python
+scheme = build_scheme({"operators": {"face": "fccd", "cell": "ccd"}, "terms": {"convection": "uccd6"}})
+ns = IMEXBDF2NS(grid, periodic=(0, 1), ops=scheme.face, convection=scheme.convection)
+```
+
+From TwoPhaseFlow paper §4.5 (`04d_uccd6.tex`) and §4.7 (`04e1_fuccd.tex`), with
+σ = 1e-3 as there. FUCCD takes the projected face velocity `uf` as the face
+speed (the paper's choice; `face_velocity="interpolated"` gives TwoPhaseFlow's
+`P_f u` sampling).
+
+| Check | central (FCCD flux) | UCCD6 | FUCCD₄ |
+| --- | --- | --- | --- |
+| Tendency vs exact, periodic, N = 16…128 | 2nd order (`D_f`) | 6.4–7.1 | 2nd order (`D_f`); face fluxes 4th |
+| Tendency vs exact, Dirichlet walls | 2nd order | 5.6–6.3 (product `u_k u_j` with Dirichlet wall data) | 2nd order |
+| Explicit (EXT2/BDF2) stability bound, σ = 1e-3 | — | CFL ≤ 0.157 per axis (`σ ω₂(π)⁸ CFL ≤ 4/3`, sharp: 0.9× stable, 1.1× blows up) | CFL ≤ 0.27 (`μ₄(π) = 4954`, matches the operator's eigenvalues) |
+| Inviscid Taylor–Green, IMEX-BDF2, FCCD ops, N = 64 | 1.90e-7 (5th order) | 3.55e-7 (5th) | 1.90e-7 (5th) |
+| Lid cavity Re = 1000, N = 64, t = 1.1 energy vs lid.ref | 0.21 % | 0.92 % (543 steps) | 0.25 % (315 steps) |
+| Inviscid double shear layer, N = 64, t ≤ 1.5 | energy +13 %, max\|u\| 3.8 | energy decreases, max\|u\| 1.67 | energy decreases, max\|u\| 1.63 |
+
+The point-value order of the conservative forms is that of the face difference
+`D_f F = (F_{i+1/2} − F_{i−1/2})/h` (2nd order), the same structure as
+TwoPhaseFlow's `face_divergence`; the paper's 4th-order claim is for the face
+values. The adaptive step of `IMEXBDF2NS` is capped by the term's
+`max_stable_dt`; a fixed step above it warns.
+
+With viscosity the Taylor–Green error is limited by the fd2 implicit viscosity
+(Basilisk `viscosity()`), whatever the convection and the face operators:
+μ = 0.01, N = 64, |u − exact| = 8.1e-5 (fd2 ops) and 6.45e-5 (FCCD ops, all three
+convection terms), 2nd order; without viscosity FCCD gives 1.9e-7 against 3.4e-5
+for fd2.
 
 ## GPU (cupy)
 

@@ -209,8 +209,43 @@ class CCDCellDerivative:
 
     def d1_array(self, values, grid, axis: int, periodic: bool):
         """CCD first derivative of an interior array without wall data (``extrapolate`` closure)."""
+        return self.derivatives_array(values, grid, axis, periodic, which=(0,))[0]
+
+    def d2_array(self, values, grid, axis: int, periodic: bool):
+        """CCD second derivative of an interior array without wall data (``extrapolate`` closure)."""
+        return self.derivatives_array(values, grid, axis, periodic, which=(1,))[0]
+
+    def derivatives_array(self, values, grid, axis: int, periodic: bool, which=(0, 1)):
+        """``(f', f'')`` (or the subset ``which``) of an interior array without wall data.
+
+        Used where no boundary condition exists for the differentiated quantity:
+        products (the conservative part of the skew convection form) and the
+        repeated second derivatives of the UCCD6/FUCCD hyperviscosity.
+        """
         kind = PERIODIC if periodic else EXTRAPOLATE
-        return self._apply(grid.xp, values, axis, ccd_matrices(grid.n[axis], float(grid.h[axis]), kind, kind), 0)
+        mats = ccd_matrices(grid.n[axis], float(grid.h[axis]), kind, kind)
+        return tuple(self._apply(grid.xp, values, axis, mats, w) for w in which)
+
+    def d1_product(self, a: CellField, b: CellField, axis: int):
+        """CCD first derivative of the product ``a b`` along ``axis``.
+
+        A wall where both factors have Dirichlet conditions gets the Dirichlet
+        closure with the product of the wall values (6th order); other walls
+        use the extrapolating closure (5th order).
+        """
+        grid = a.grid
+        values = a.interior * b.interior
+        if a.bc.is_periodic(axis):
+            return self.d1_array(values, grid, axis, True)
+        kinds, data = [], []
+        for side in (LOWER, UPPER):
+            if isinstance(a.bc.get(axis, side), Dirichlet) and isinstance(b.bc.get(axis, side), Dirichlet):
+                kinds.append(DIRICHLET)
+                data.append((side, _wall_datum(a, axis, side) * _wall_datum(b, axis, side)))
+            else:
+                kinds.append(EXTRAPOLATE)
+        mats = ccd_matrices(grid.n[axis], float(grid.h[axis]), kinds[0], kinds[1])
+        return self._apply(grid.xp, values, axis, mats, 0, data)
 
     def d11(self, a: CellField, axis0: int, axis1: int):
         if axis0 == axis1:
@@ -284,6 +319,29 @@ class FCCDFaceComplex:
             return s * (c[0] * datum + sum(ck * uk for ck, uk in zip(c[1:], cells))) / h
 
         return self._faces(a, axis, interior, wall)
+
+    def grad_f_array(self, values, grid, axis: int, periodic: bool):
+        """FCCD face gradient of an interior array that has no boundary condition.
+
+        Interior faces use the FCCD formula with ``q`` from the extrapolating CCD
+        closure; on a wall axis the two wall faces are set to zero (there is no
+        wall datum). Used for the FUCCD dissipation flux, which is multiplied by
+        the wall-normal face speed and therefore vanishes on impermeable walls.
+        """
+        xp = grid.xp
+        n, h = grid.n[axis], float(grid.h[axis])
+        q = self.ccd.d2_array(values, grid, axis, periodic)
+
+        def formula(ul, ur, ql, qr):
+            return (ur - ul) / h - (h / 24.0) * (qr - ql)
+
+        if periodic:
+            inner = formula(xp.roll(values, 1, axis=axis), values, xp.roll(q, 1, axis=axis), q)
+            return xp.concatenate([inner, _take(inner, axis, slice(0, 1))], axis=axis)
+        inner = formula(_take(values, axis, slice(0, n - 1)), _take(values, axis, slice(1, n)),
+                        _take(q, axis, slice(0, n - 1)), _take(q, axis, slice(1, n)))
+        zero = xp.zeros_like(_take(values, axis, slice(0, 1)))
+        return xp.concatenate([zero, inner, zero], axis=axis)
 
     def interp_f(self, a: CellField, axis: int):
         def interior(ul, ur, ql, qr, h):
