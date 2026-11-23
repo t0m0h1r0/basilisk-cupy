@@ -32,8 +32,9 @@ only its increment moves the faces, ``u_f* = A_f + P_f(u* - R_h A_f - gamma dt g
 + gamma dt (a - alpha G_f p^n)`` with ``A_f = c_n u_f^n - c_m u_f^{n-1}``, so the
 non-invertible ``R_h``/``P_f`` round trip never acts on the state itself. The
 cell correction ``u* + gamma dt (g^{n+1} - g^n)`` and its ``O(dt h^p)`` error
-disappear; the cell values carry the error of ``R_h`` (4th order for FCCD,
-2nd for fd2) instead. (TwoPhaseFlow's code has the option behind
+disappear; the cell values carry the error of ``R_h`` instead: 4th order with
+FCCD's ``face_to_cell`` (2nd with fd2), or the order given by ``reconstruction``
+(``FaceToCell``: 6 or 8). (TwoPhaseFlow's code has the option behind
 ``face_native_predictor_state``, off by default; §11b1 stage 7 still writes the
 nodal correction.)
 
@@ -60,10 +61,22 @@ class IMEXBDF2NS(CenteredNS):
     """Same fields, boundary conditions and hook stages as :class:`CenteredNS`."""
 
     def __init__(self, grid, *, convection=None, viscous=None, fixed_dt: float | None = None,
-                 face_native: bool = False, **kwargs) -> None:
+                 face_native: bool = False, reconstruction=None, **kwargs) -> None:
         super().__init__(grid, **kwargs)
         #: carry the projected face velocity as the state, cells reconstructed from it (see module doc)
         self.face_native = face_native
+        #: R_h of the face-native state: None (the operators' face_to_cell), "ccd" (compact face-line CCD
+        #: + Hermite, 6th order), an even order (Lagrange stencil, discretization/reconstruction.py) or a
+        #: callable ``(faces, axis, periodic=) -> cells``
+        if reconstruction == "ccd":
+            from ..discretization.reconstruction import CompactFaceToCell  # noqa: PLC0415
+
+            reconstruction = CompactFaceToCell()
+        elif isinstance(reconstruction, int):
+            from ..discretization.reconstruction import FaceToCell  # noqa: PLC0415
+
+            reconstruction = FaceToCell(reconstruction)
+        self.reconstruction = reconstruction
         self._uf_prev = None
         self.convection = convection or CentralFluxConvection(self.ops)
         #: implicit viscous solver (``solve(u, mu, rho, dt)``): Basilisk's fd2 multigrid or ``CCDViscosity``
@@ -135,8 +148,8 @@ class IMEXBDF2NS(CenteredNS):
     # -- face-native state helpers ------------------------------------------------------
     def _cells_from_faces(self, faces) -> list:
         """``R_h``: cell velocity from face-normal velocities (``face_to_cell`` of the shared operators)."""
-        return [self.ops.face_to_cell(faces[ax], ax, periodic=self.u[ax].bc.is_periodic(ax))
-                for ax in range(self.grid.ndim)]
+        rec = self.reconstruction or self.ops.face_to_cell
+        return [rec(faces[ax], ax, periodic=self.u[ax].bc.is_periodic(ax)) for ax in range(self.grid.ndim)]
 
     def _reconstruct_cells(self) -> None:
         for ax, v in enumerate(self._cells_from_faces(self.uf)):

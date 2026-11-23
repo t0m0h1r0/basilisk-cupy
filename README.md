@@ -145,9 +145,32 @@ This removes the `O(dt h^p)` error of the approximate projection.
 * Viscous Taylor–Green, N = 64, t = 0.5, wall time on the GPU:
   - IMEX-BDF2, cell state, CFL 0.2: 2.1e-6 in 160 steps, 6.9 s;
   - IMEX-RK, face state, CFL 2: 1.5e-6 in 16 steps, 3.3 s.
-* What it costs: the cell values carry the `R_h` error, so at a small step
-  the cell state is more accurate on cells (5th against 4th order). A
-  higher-order `R_h` would lower that floor.
+* What it costs: the cell values carry the `R_h` error. With FCCD's 4th-order
+  `face_to_cell` the cell state is more accurate on cells at a small step
+  (5th against 4th order).
+* `reconstruction="ccd"` is a CCD-type `R_h`: no wider stencil, derivatives
+  instead. The faces along an axis form a nodal line with the walls on its end
+  nodes. A CCD solve on that line gives the face jet `(f, f′, f″)`. Its
+  interior rows are Chu & Fan's; its wall rows stay on nodes 0–2, the interior
+  stencil width (`tools/derive_face_ccd.py`): `f″` is 3rd order there and,
+  coupled through an implicit `f″₀`, `f′` 4th order. The cell value is the
+  quintic Hermite midpoint of its two faces,
+  `(f_L + f_R)/2 + 5h/32 (f′_L − f′_R) + h²/64 (f″_L + f″_R)`. That is 6th order
+  inside and 5th at walls. On its own at N = 128 it is 3.0e-13 periodic
+  (6-point Lagrange stencil, `reconstruction=6`: 6.8e-11) and 2.5e-10 with
+  walls.
+* Wall rows through node 3 would make `R_h` 6th order at walls too, but they
+  changed no Navier–Stokes result. Taylor–Green in a free-slip box, face
+  state, N = 16 / 32 / 64, cell error: 1.8e-5 / 1.1e-6 / 6.8e-8 (wide) and
+  1.7e-5 / 1.1e-6 / 6.8e-8 (compact); FCCD's `face_to_cell` gives 1.9e-7 at
+  N = 64. Wider one-sided rows have larger coefficients (largest row sum 4.6
+  against 3.3), so they were dropped: wall rows keep the interior width and
+  give up an order.
+* In the face-state (periodic) Taylor–Green (N = 64, CFL 1) both `R_h` take
+  the cells from 2.2e-6 to 8.0e-7, the level of the faces. The floor is now
+  the 4th-order face operators (FCCD). The faces themselves go from 4.5e-7 to
+  8.0e-7, because the cell values feed back into the terms; the largest error
+  still falls by 2.75×.
 * Lid cavity Re = 1000, N = 64, CFL 1: E(1.1) = 0.009257 (IMEX-RK, face
   state); every variant lies within 0.00913–0.00926.
 
