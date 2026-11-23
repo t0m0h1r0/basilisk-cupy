@@ -24,10 +24,13 @@ no separate dissipative wall stencil). ``r = 1`` uses ``G_f`` of the component
 itself, with its boundary condition.
 
 Explicit time stepping: the dissipative part has the symbol
-``-sigma_r |a| mu_r(theta) / h``, ``mu_r = 4 sin^2(theta/2) (1 + omega_2^2/24) omega_2^(2(r-1))``
-(paper eq. ``fuccd_periodic_symbol``), largest at ``theta = pi``:
-``mu_4(pi) = 4954``, so CFL ``<= 0.27`` with ``sigma_4 = 1e-3`` under EXT2/BDF2
-(:meth:`max_stable_dt`).
+``-sigma_r |a| mu_r(theta) / h``, ``mu_r = 4 sin^2(theta/2) (1 + omega_2^2/24)^2 omega_2^(2(r-1))``,
+largest at ``theta = pi``: ``mu_4(pi) = 6936.3``, so CFL ``<= 0.19`` with ``sigma_4 = 1e-3``
+under EXT2/BDF2 (:meth:`max_stable_dt`). The paper's eq. ``fuccd_periodic_symbol`` has the
+factor ``(1 + omega_2^2/24)`` once (``mu_4(pi) = 4954.5``): that is ``G_f`` followed by the
+plain face difference, which is 2nd order on point values; ``D_f`` here is FCCD's
+conservative 4th-order divergence (:meth:`FCCDFaceComplex.div_f`), whose flux correction
+``1 - h^2/24 d_nn`` contributes the second factor.
 """
 
 from __future__ import annotations
@@ -55,8 +58,8 @@ class FUCCDConvection:
         self.name = f"fuccd{self.r}"
 
     def nyquist_symbol(self) -> float:
-        """``mu_r(pi)`` of the dissipative flux."""
-        return 4.0 * (1.0 + OMEGA2_SQ_NYQUIST / 24.0) * OMEGA2_SQ_NYQUIST ** (self.r - 1)
+        """``mu_r(pi)`` of the dissipative flux (``G_f`` and the 4th-order ``D_f`` each give ``1 + omega_2^2/24``)."""
+        return 4.0 * (1.0 + OMEGA2_SQ_NYQUIST / 24.0) ** 2 * OMEGA2_SQ_NYQUIST ** (self.r - 1)
 
     def max_stable_dt(self, u: VectorField, uf: FaceField | None = None) -> float:
         """Largest step for which the explicit (EXT2) dissipative flux stays stable."""
@@ -114,5 +117,5 @@ class FUCCDConvection:
                 coeff = self.sigma * sign * grid.h[k] ** (2 * self.r - 1)
                 fluxes.append(a * self.fccd.interp_f(comp, k)
                               + xp.abs(a) * (coeff * self.dissipative_gradient(comp, k)))
-            out.append(-self.fccd.div_f(FaceField(grid, fluxes)))
+            out.append(-self.fccd.div_f(FaceField(grid, fluxes), periodic=comp.bc.periodic_axes(grid.ndim)))
         return out

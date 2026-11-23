@@ -11,7 +11,9 @@ Interior equations are those of TwoPhaseFlow (``src/twophase/ccd``):
 
       grad_f   = (u_i - u_{i-1})/h - (h/24)(q_i - q_{i-1})
       interp_f = (u_{i-1} + u_i)/2 - (h^2/16)(q_{i-1} + q_i)
-      div_f    = conservative face difference (as fd2 and TwoPhaseFlow's ``face_divergence``)
+      div_f    = D_f(F - (h^2/24) d_nn F): face difference of the corrected flux (4th order,
+                 conservative; d_nn F from the face-line CCD). TwoPhaseFlow's ``face_divergence``
+                 is the plain face difference, 2nd order on point values.
 
 Walls are on faces, half a cell from the first centre (TwoPhaseFlow uses a
 nodal grid with the wall on a node). The first-cell CCD rows and the
@@ -299,6 +301,7 @@ class FCCDFaceComplex:
     def __init__(self, ccd: CCDCellDerivative | None = None) -> None:
         self.ccd = ccd or CCDCellDerivative()
         self._fd2 = FD2FaceComplex()
+        self._dev: dict = {}
         c = FCCD_WALL
         self._grad_w = [float(v) for v in c["gradient"]["coeffs"]]
         self._grad_t = c["gradient"]["terms"]
@@ -409,8 +412,55 @@ class FCCDFaceComplex:
 
         return self._faces(a, axis, interior, wall)
 
-    def div_f(self, flux: FaceField):
-        return self._fd2.div_f(flux)
+    def face_flux(self, values, axis: int, periodic: bool | None = None):
+        """Conservative face flux ``F - (h^2/24) d_nn F`` of face point values ``F`` (normal to ``axis``).
+
+        The second normal derivative comes from the face-line CCD (the faces along an axis
+        are a nodal line; :func:`~.reconstruction.face_ccd_matrices`, compact wall rows), in
+        the computational coordinate. ``D_f`` of this flux is ``dF/dx`` at the cell centre to
+        4th order, the dual of :meth:`grad_f`; ``D_f`` of the point values themselves is only
+        2nd order (``+ h^2/24 F_xxx``). Fluxes that must be divergence-free in the finite-volume
+        sense (VOF, tracers) are these.
+        """
+        if periodic is None:
+            raise ValueError("FCCD face_flux needs periodic=True/False for the axis")
+        from .reconstruction import face_ccd_matrices  # noqa: PLC0415
+
+        xp = array_module(values)
+        n = values.shape[axis] - 1
+        key = ("d2", xp.__name__, n, bool(periodic), str(values.dtype))
+        D2 = self._dev.get(key)
+        if D2 is None:  # unit spacing: h^2 d_nn
+            D2 = self._dev[key] = xp.asarray(face_ccd_matrices(n, 1.0, bool(periodic))[1].T / 24.0,
+                                             dtype=values.dtype)
+        moved = xp.moveaxis(values, axis, -1)
+        if periodic:
+            q = moved[..., :n] @ D2
+            q = xp.concatenate([q, q[..., :1]], axis=-1)
+        else:
+            q = moved @ D2
+        return xp.moveaxis(moved - q, -1, axis)
+
+    def div_f(self, flux: FaceField, periodic=None):
+        """``sum_a D_f`` of :meth:`face_flux` (4th order on point values, conservative).
+
+        ``periodic``: one flag per axis (wall rows of the face-line CCD). On a mapped axis the
+        difference is divided by ``h_xi / J`` at the cell centre (4th order; the cell width would
+        add ``h^2 x_xixixi / 24``); its sum over the cells still telescopes.
+        """
+        if periodic is None:
+            raise ValueError("FCCD div_f needs periodic=(flag per axis)")
+        grid = flux.grid
+        out = None
+        for axis in range(grid.ndim):
+            fl = self.face_flux(flux[axis], axis, periodic[axis])
+            n = grid.n[axis]
+            d = (_take(fl, axis, slice(1, n + 1)) - _take(fl, axis, slice(0, n))) / float(grid.h[axis])
+            if not grid.axis_uniform(axis):
+                m = grid.metric(axis)
+                d = m.along(m.J, d.ndim) * d
+            out = d if out is None else out + d
+        return out
 
     def face_to_cell(self, face_values, axis: int, periodic: bool | None = None):
         """4th-order face-to-centre interpolation.

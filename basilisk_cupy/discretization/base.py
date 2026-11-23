@@ -32,8 +32,11 @@ class FaceComplex(Protocol):
     def interp_f(self, a, axis: int):
         """Value of cell field ``a`` interpolated to the faces normal to ``axis``."""
 
-    def div_f(self, flux):
-        """Cell-centred divergence of a face field (sum over axes of the face difference)."""
+    def div_f(self, flux, periodic=None):
+        """Cell-centred divergence of a face field (sum over axes of the face difference).
+
+        ``periodic`` (one flag per axis) is needed by operators whose wall rows differ (FCCD).
+        """
 
     def face_to_cell(self, face_values, axis: int, periodic: bool | None = None):
         """Cell-centred value reconstructed from the faces normal to ``axis``.

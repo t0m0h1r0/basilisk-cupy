@@ -19,7 +19,7 @@ from ..linear.poisson import poisson
 def project(uf: FaceField, p: CellField, alpha: FaceField | None = None, dt: float = 1.0, *,
             ops: FaceComplex | None = None, nrelax: int = 4, tolerance: float = TOLERANCE) -> MGStats:
     ops = ops or FD2FaceComplex()
-    div = ops.div_f(uf) / dt
+    div = ops.div_f(uf, periodic=p.bc.periodic_axes(uf.grid.ndim)) / dt
     stats = poisson(p, div, alpha, ops=ops, tolerance=tolerance, nrelax=nrelax)
     p.fill_ghosts()
     for ax in range(uf.grid.ndim):

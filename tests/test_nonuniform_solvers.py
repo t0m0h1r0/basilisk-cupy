@@ -42,7 +42,8 @@ def _poisson(kind, maps, ops, n, backend):
     else:
         bc = (BoundaryConditions().set("left", Neumann(lambda x, y: -gx(x, y))).set("right", Neumann(gx))
               .set("bottom", Neumann(lambda x, y: -gy(x, y))).set("top", Neumann(gy)))
-    b = ops.div_f(FaceField(grid, [gx(*grid.face_meshgrid(0)), gy(*grid.face_meshgrid(1))]))  # projection setting
+    b = ops.div_f(FaceField(grid, [gx(*grid.face_meshgrid(0)), gy(*grid.face_meshgrid(1))]),
+                  periodic=bc.periodic_axes(2))  # projection setting
     a = CellField(grid, bc=bc)
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
@@ -115,7 +116,7 @@ def test_projection_on_a_mapped_grid(backend, opsname):
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
         project(uf, p, None, 1.0, ops=ops, tolerance=1e-10)
-    assert float(abs(to_numpy(ops.div_f(uf))).max()) < 1e-8
+    assert float(abs(to_numpy(ops.div_f(uf, periodic=(False, False)))).max()) < 1e-8
 
 
 def test_fd2_stress_interior_second_order_on_a_mapped_grid(backend):
