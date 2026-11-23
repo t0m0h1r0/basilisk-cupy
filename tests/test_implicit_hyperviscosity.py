@@ -120,6 +120,7 @@ def test_lid_cavity_with_walls(backend):
                   convection=scheme.convection, viscous=scheme.viscous, fixed_dt=2.0 / 64, face_native=True)
     ns.start(events=[1.1])
     ns.run(1.1)
-    # explicit hyperviscosity at CFL 0.07 (1006 steps): 0.009221
-    assert ns.kinetic_energy() == pytest.approx(0.009221, rel=0.01)
-    assert ns.max_divergence() < 1e-5
+    # 4th-order D_f: 0.009341 (plain face difference: 0.009247; explicit hyperviscosity at CFL 0.07 then gave 0.009221)
+    assert ns.kinetic_energy() == pytest.approx(0.009341, rel=0.01)
+    # Poisson tolerance 1e-3 on div/dt: div <= 1e-3 dt = 3.1e-5 (measured 3.0e-5; plain face difference 3.5e-6)
+    assert ns.max_divergence() < 1e-3 * 2.0 / 64

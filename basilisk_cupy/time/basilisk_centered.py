@@ -203,4 +203,4 @@ class CenteredNS:
 
     def max_divergence(self) -> float:
         xp = self.grid.xp
-        return float(xp.max(xp.abs(self.ops.div_f(self.uf))))
+        return float(xp.max(xp.abs(self.ops.div_f(self.uf, periodic=self.p.bc.periodic_axes(self.grid.ndim)))))

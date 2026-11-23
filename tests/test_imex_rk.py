@@ -111,6 +111,7 @@ def test_lid_cavity_with_walls(backend):
                   convection=scheme.convection, viscous=scheme.viscous, fixed_dt=1.0 / 64)  # CFL 1
     ns.start(events=[1.1])
     ns.run(1.1)
-    # fine-grid value E(1.1) ~ 0.00969 (fd2 IMEX-BDF2, 256^2); CCD viscosity + BDF2 at CFL 0.25 gave 0.009131
-    assert ns.kinetic_energy() == pytest.approx(0.009131, rel=0.02)
+    # fine-grid value E(1.1) ~ 0.00969 (fd2 IMEX-BDF2, 256^2); FCCD + CCD viscosity + BDF2 at CFL 0.25: 0.009211
+    # (4th-order D_f; N = 128 / 256: 0.009651 / 0.009688)
+    assert ns.kinetic_energy() == pytest.approx(0.009326, rel=0.01)
     assert ns.max_divergence() < 2e-5  # measured 1.16e-5 (cell state)

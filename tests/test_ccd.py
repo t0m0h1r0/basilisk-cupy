@@ -124,7 +124,7 @@ def _consistent_poisson(ops, n, kind, backend="numpy"):
     else:
         bc = (BoundaryConditions().set("left", Neumann(lambda x, y: -gx(x, y))).set("right", Neumann(gx))
               .set("bottom", Neumann(lambda x, y: -gy(x, y))).set("top", Neumann(gy)))
-    b = ops.div_f(FaceField(grid, [gx(*grid.face_meshgrid(0)), gy(*grid.face_meshgrid(1))]))
+    b = ops.div_f(FaceField(grid, [gx(*grid.face_meshgrid(0)), gy(*grid.face_meshgrid(1))]), periodic=(False, False))
     a = CellField(grid, bc=bc)
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")

@@ -118,7 +118,7 @@ class HelmholtzProblem:
             self.device_residual(al, [xp.ascontiguousarray(b, dtype=xp.float64)], resl, norm)
             return to_float(norm.view(xp.float64)[0])
         flux = FaceField(a.grid, [self.alpha_fine[ax] * self.ops.grad_f(a, ax) for ax in range(a.grid.ndim)])
-        res[...] = b - self.ops.div_f(flux)
+        res[...] = b - self.ops.div_f(flux, periodic=tuple(a.bc.is_periodic(k) for k in range(a.grid.ndim)))
         if self.has_lambda:
             res -= self.lam[-1] * a.interior
         return to_float(xp.max(xp.abs(res)))

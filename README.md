@@ -107,6 +107,44 @@ advection had the eigenvalue above, 56 times larger (0.096 against 1.7e-3 at σ 
 needs the field's closure in all four factors (1st order at the wall,
 measured) or a symmetrised form (3rd order); neither was adopted.
 
+## Face divergence: 4th order and conservative
+
+FCCD's `div_f` was the plain face difference `D_f` (as fd2 and TwoPhaseFlow's
+`face_divergence`). On point values that is `F_x + (h²/24) F_xxx`, 2nd order.
+The standard Taylor–Green vortex (`kx = ky`) hides it, because there
+`u_xxx + v_yyy = 0`. `ψ = sin(ax) sin(by)` with `a ≠ b` is also an exact
+decaying Navier–Stokes solution, and it shows the 2nd order: the projection
+forces `D_f u_f = 0` and so moves the exact faces by `O(h²)`.
+
+The fix is the dual of FCCD's face gradient
+`(u_R − u_L)/h − (h/24)(q_R − q_L)`. `div_f` differences the flux
+`F̂ = F − (h²/24) ∂ₙₙF` (`face_flux`). `∂ₙₙF` comes from the face-line CCD,
+the same compact solve as `R_h`. The result is 4th order, the stencil is not
+wider, and both terms telescope, so the scheme stays conservative:
+`D_f F̂ = 0` holds exactly. Fluxes that must be divergence-free in the
+finite-volume sense (VOF, tracers) are therefore `F̂`, not `u_f`. On a mapped
+axis the difference is divided by `h_ξ/J` at the cell centre. Its sum over
+the cells still telescopes; dividing by the cell width would add an `O(h²)`
+term.
+
+| Check | plain `D_f` | 4th-order `D_f` |
+| --- | --- | --- |
+| Divergence of an exact flux, N = 128: walls / tanh × monitor / periodic / sine × sine | 5.1e-5 / 4.0e-4 / 2.0e-4 / 4.2e-4 (2nd) | 1.2e-8 / 3.8e-6 / 1.4e-8 / 1.6e-7 (4th) |
+| Projection of the exact `a ≠ b` faces, change, N = 16 / 32 / 64 | 7.7e-3 / 1.9e-3 / 4.8e-4 | 1.7e-4 / 1.1e-5 / 6.8e-7 |
+| Central FCCD convection, `a ≠ b`, N = 16 … 128 | 2nd (5.0e-3 at 128) | 4th (9.4e-6) |
+| FUCCD4 tendency, periodic / walls | 2nd | 3.9–4.0 / 3.3–3.9 |
+| Taylor–Green `a ≠ b` (1, 2), face state, IMEX-RK, CFL 1, N = 16 / 32 / 64 | 1.14e-2 / 3.08e-3 / 7.84e-4 (2nd) | 1.39e-3 / 1.25e-4 / 8.49e-6 (3.9) |
+| Same, cell state | 1.13e-2 / 2.86e-3 / 7.81e-4 (2nd) | 7.61e-3 / 3.26e-4 / 1.28e-5 (4.7) |
+| Taylor–Green `a = b`, face state, N = 64 | 8.01e-7 | 8.01e-7 |
+| Lid cavity E(1.1), IMEX-BDF2, N = 32 / 64 / 128 / 256 | 0.008250 / 0.009134 / 0.009614 / 0.009676 | 0.008293 / 0.009211 / 0.009651 / 0.009688 |
+| Lid cavity E(1.1), face state + CCD `R_h`, N = 32 / 64 / 128 / 256 | 0.008318 / 0.009251 / 0.009628 / 0.009745 | 0.008364 / 0.009324 / 0.009665 / 0.009740 |
+| max \|λh\| FCCD central flux; FUCCD4 `μ₄(π)` | 1.378; 4954.5 | 1.608; 6936.3 (CFL ≤ 0.19 under EXT2) |
+
+Every "4th order" elsewhere in this README that comes from a Taylor–Green
+vortex with `kx = ky` was measured with the plain `D_f`, on a flow that hides
+its 2nd-order term. With the 4th-order `D_f` those `a = b` values do not
+change (the `a = b` row above).
+
 ## Time integration: IMEX-BDF2 + IPC
 
 | Check (Taylor–Green, self-convergence in dt) | Basilisk `CenteredNS` | `IMEXBDF2NS` |
@@ -129,7 +167,8 @@ ns = IMEXRKNS(grid, ..., ops=scheme.face, convection=scheme.convection, viscous=
 EXT2 (`IMEXBDF2NS`) has no stable interval on the imaginary axis. The
 non-dissipative FCCD/CCD convection is therefore stable only through
 viscosity, and the high-order operators have larger spectra:
-max |λh| = 1.000 (fd2 flux), 1.378 (FCCD flux) and 2.126 (CCD D1). The
+max |λh| = 1.000 (fd2 flux), 1.608 (FCCD flux; 1.378 with the plain face
+difference, see *Face divergence* below) and 2.126 (CCD D1). The
 explicit part of ARS(3,4,3) has the stability region of RK4 (imaginary
 limit 2.83, real limit −2.79). Its implicit part is an L-stable SDIRK with
 one γ on every stage. Each stage is projected with incremental pressure
@@ -187,7 +226,8 @@ This removes the `O(dt h^p)` error of the approximate projection.
 
 * Inviscid, noisy Taylor–Green, N = 32, t = 1, IMEX-RK + FCCD: the error is
   5.5e-5 for every CFL from 0.1 to 2.0, against 3.1e-5 … 5.9e-4 with the
-  cell state. CFL 3 fails, close to the imaginary limit 2.83 / 1.378.
+  cell state. CFL 2.5 fails (measured again with the 4th-order `D_f`: 5.5e-5
+  up to CFL 2.0; with the plain face difference CFL 3 failed).
 * IMEX-BDF2 + fd2: self-convergence in dt goes from 1st order back to 2nd.
 * Viscous Taylor–Green, N = 64, t = 0.5, wall time on the GPU:
   - IMEX-BDF2, cell state, CFL 0.2: 2.1e-6 in 160 steps, 6.9 s;
@@ -235,8 +275,9 @@ an implicit treatment (§4.5), but integrates it explicitly in the NS.
 
 With `implicit=True` the term `H u = Σ_k c_k D2_k⁴ u` is solved with the
 viscous step, `(I − τV + τH)u = r`. The coefficients `c_k = σ max|u_k| h⁷`
-are frozen at `uⁿ`. Every 1-D factor has a real, non-negative spectrum (also
-with walls), so the implicit term is unconditionally stable. The viscous
+are frozen at `uⁿ`. Every 1-D factor has a real spectrum; with walls one
+eigenvalue is slightly negative (−1.66/h⁸ Dirichlet, see *Wall closures*),
+a growth rate 1.7σ|u|/h, so the implicit term is stable up to that. The viscous
 defect correction applies `H` exactly in its residual. Its preconditioner is
 the viscous multigrid followed by `(I + τH)⁻¹` by fast diagonalization
 (per-axis eigenvectors; condition ≈ 5e5 with walls, hence only as a
@@ -269,7 +310,7 @@ speed (the paper's choice; `face_velocity="interpolated"` gives TwoPhaseFlow's
 | --- | --- | --- | --- |
 | Tendency vs exact, periodic, N = 16…128 | 2nd order (`D_f`) | 6.4–7.1 | 2nd order (`D_f`); face fluxes 4th |
 | Tendency vs exact, Dirichlet walls | 2nd order | 5.6–6.3 (product `u_k u_j` with Dirichlet wall data) | 2nd order |
-| Explicit (EXT2/BDF2) stability bound, σ = 1e-3 | — | CFL ≤ 0.157 per axis (`σ ω₂(π)⁸ CFL ≤ 4/3`, sharp: 0.9× stable, 1.1× blows up) | CFL ≤ 0.27 (`μ₄(π) = 4954`, matches the operator's eigenvalues) |
+| Explicit (EXT2/BDF2) stability bound, σ = 1e-3 | — | CFL ≤ 0.157 per axis (`σ ω₂(π)⁸ CFL ≤ 4/3`, sharp: 0.9× stable, 1.1× blows up) | CFL ≤ 0.19 (`μ₄(π) = 6936.3`, matches the operator's eigenvalues; 0.27 and 4954.5 with the plain face difference) |
 | Inviscid Taylor–Green, IMEX-BDF2, FCCD ops, N = 64 | 1.90e-7 (5th order) | 3.55e-7 (5th) | 1.90e-7 (5th) |
 | Lid cavity Re = 1000, N = 64, t = 1.1 energy vs lid.ref | 0.21 % | 0.92 % (543 steps) | 0.25 % (315 steps) |
 | Inviscid double shear layer, N = 64, t ≤ 1.5 | energy +13 % (t = 1.0), max\|u\| 3.95 | energy decreases, max\|u\| 1.65 | energy decreases, max\|u\| 1.63 |

@@ -9,10 +9,10 @@ The extents are computed once from the operators themselves (1-D periodic matric
 64 cells), so they stay consistent with the implementation:
 
 * fd2 central flux ``D_f(P_f q)``: imag 1.000 (``sin theta``);
-* FCCD central flux: imag 1.378 (``sin theta (1 + omega_2^2/8)``);
+* FCCD central flux: imag 1.608 (4th-order conservative ``D_f``; with the plain face difference 1.378);
 * CCD ``D1`` (UCCD6 advective part): imag 2.126 (at ``theta = 0.75 pi``);
 * UCCD6 hyperviscosity ``sigma h^7 D2^4``: real ``sigma omega_2(pi)^8 = 8493.5 sigma``;
-* FUCCD_r dissipation: real ``sigma mu_r(pi)`` (``mu_4(pi) = 4954.5``).
+* FUCCD_r dissipation: real ``sigma mu_r(pi)`` (``mu_4(pi) = 6936.3``).
 """
 
 from __future__ import annotations
@@ -50,7 +50,7 @@ def imag_extent(kind: str) -> float:
         apply = lambda g, f: -ccd.d1(f, 0)  # noqa: E731
     else:
         ops = FD2FaceComplex() if kind == "fd2" else FCCDFaceComplex()
-        apply = lambda g, f: -ops.div_f(FaceField(g, [ops.interp_f(f, 0)]))  # noqa: E731
+        apply = lambda g, f: -ops.div_f(FaceField(g, [ops.interp_f(f, 0)]), periodic=(True,))  # noqa: E731
     return float(np.abs(np.linalg.eigvals(_matrix(apply)).imag).max())
 
 

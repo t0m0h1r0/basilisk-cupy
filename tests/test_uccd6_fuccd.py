@@ -61,9 +61,10 @@ def test_uccd6_sixth_order(backend, periodic, min_order):
 
 
 @pytest.mark.parametrize("periodic", [True, False])
-def test_fuccd_face_flux_fourth_order_divergence_second(backend, periodic):
-    """FUCCD4 face fluxes are 4th order; the conservative face difference D_f makes the
-    point-value tendency 2nd order (same structure as TwoPhaseFlow's face_divergence)."""
+def test_fuccd_face_flux_and_divergence_fourth_order(backend, periodic):
+    """FUCCD4 face fluxes are 4th order, and so is the tendency: FCCD's D_f differences the flux
+    corrected by -h^2/24 d_nn (the plain face difference, TwoPhaseFlow's face_divergence, made
+    it 2nd order). Measured: periodic 3.94, 3.99; walls 3.34, 3.90."""
     term = FUCCDConvection()
     flux_errs = []
     for n in (16, 32, 64):
@@ -83,7 +84,7 @@ def test_fuccd_face_flux_fourth_order_divergence_second(backend, periodic):
             flux_errs[-1] = max(flux_errs[-1], float(abs(to_numpy(flux - exact)).max()))
     assert min(order(flux_errs, [16, 32, 64])) > 3.8
     errs, ns = _tendency_errors(term, CONS, periodic, backend, ns=(16, 32, 64))
-    assert 1.95 < min(order(errs, ns)) and max(order(errs, ns)) < 2.2
+    assert min(order(errs, ns)) > 3.3
 
 
 def test_fuccd_differs_from_central_fccd_by_an_h7_dissipation(backend):
@@ -124,11 +125,11 @@ def test_fuccd_dissipation_symbol_matches_operator():
         e[i] = 1.0
         f = CellField.from_interior(grid, e, BoundaryConditions.periodic(1))
         g = term.dissipative_gradient(f, 0) * grid.h[0] ** 7
-        cols.append(-term.fccd.div_f(FaceField(grid, [g])))
+        cols.append(-term.fccd.div_f(FaceField(grid, [g]), periodic=(True,)))
     ev = np.linalg.eigvals(np.array(cols).T)
     assert abs(ev.imag).max() < 1e-9
     assert abs(ev.real).max() * grid.h[0] == pytest.approx(term.nyquist_symbol(), rel=1e-12)
-    assert term.nyquist_symbol() == pytest.approx(4 * (1 + 9.6 / 24) * 9.6 ** 3)
+    assert term.nyquist_symbol() == pytest.approx(4 * (1 + 9.6 / 24) ** 2 * 9.6 ** 3)  # 6936.3
 
 
 def _noisy_taylor_green(backend, term, n=32):

@@ -37,5 +37,5 @@ class CentralFluxConvection:
         out = []
         for comp in u:
             flux = FaceField(grid, [self.ops.interp_f(comp, ax) * uf[ax] for ax in range(grid.ndim)])
-            out.append(-self.ops.div_f(flux))
+            out.append(-self.ops.div_f(flux, periodic=comp.bc.periodic_axes(grid.ndim)))
         return out

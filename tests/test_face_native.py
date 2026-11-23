@@ -98,5 +98,6 @@ def test_lid_cavity_with_walls(backend):
                   convection=scheme.convection, viscous=scheme.viscous, fixed_dt=1.0 / 64, face_native=True)
     ns.start(events=[1.1])
     ns.run(1.1)
-    assert ns.kinetic_energy() == pytest.approx(0.009131, rel=0.02)  # IMEX-BDF2, cell state, CFL 0.25
+    # 4th-order D_f: 0.009330 (plain face difference: 0.009251); N = 128 / 256 give 0.009665 / 0.009740
+    assert ns.kinetic_energy() == pytest.approx(0.009330, rel=0.01)
     assert ns.max_divergence() < 1e-5
