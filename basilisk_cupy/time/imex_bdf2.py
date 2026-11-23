@@ -23,6 +23,9 @@ velocity is not discretely divergence-free); it vanishes for Stokes flow,
 where the scheme is exactly 2nd order. TwoPhaseFlow avoids it by carrying
 the projected face velocity as the state, which is a later step here.
 
+Convection terms with an explicit stability bound (UCCD6, FUCCD:
+``max_stable_dt``) cap the adaptive step; a fixed step above the bound warns.
+
 Basilisk's own scheme (:class:`CenteredNS`) is kept as the reference. With
 the same operators the incremental and the full-pressure projection are
 algebraically identical (Basilisk starts its Poisson iteration from p^n), so
@@ -52,12 +55,28 @@ class IMEXBDF2NS(CenteredNS):
         self._u_prev = None      # u^{n-1}
         self._c_prev = None      # -C(u^{n-1})
         self._dt_prev = None
+        self._warned_dt = False
 
     # -- helpers ---------------------------------------------------------------------
+    def _convection_dt_limit(self) -> float:
+        """Stability bound of the explicit convection term (``max_stable_dt``, if it has one)."""
+        limit = getattr(self.convection, "max_stable_dt", None)
+        if self.stokes or limit is None:
+            return float("inf")
+        return limit(self.u, self.uf)
+
     def _stability(self) -> None:
+        limit = self._convection_dt_limit()
         if self.fixed_dt is None:
+            self.dtmax = min(self.dtmax, limit)
             super()._stability()
             return
+        if self.fixed_dt > limit and not self._warned_dt:
+            import warnings  # noqa: PLC0415
+
+            warnings.warn(f"fixed_dt {self.fixed_dt:g} exceeds the explicit stability bound {limit:g} of "
+                          f"the {getattr(self.convection, 'name', 'convection')} term", RuntimeWarning, stacklevel=3)
+            self._warned_dt = True
         self.clock.dt = dtnext(self.fixed_dt, self.clock)
         # explicit convection: record the CFL number of the step taken
         xp = self.grid.xp
