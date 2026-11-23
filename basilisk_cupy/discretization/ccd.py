@@ -427,7 +427,7 @@ class FCCDFaceComplex:
         4th order, the dual of :meth:`grad_f`; ``D_f`` of the point values themselves is only
         2nd order (``+ h^2/24 F_xxx``). After a projection ``D_f`` of these fluxes is zero in every
         cell, but on a wall the corrected flux is ``-h^2/24 d_nn u_n``, not zero (net zero along
-        the walls): not yet a VOF flux there (docs/notes/03_face_divergence.md).
+        the walls). Finite-volume transport (VOF, tracers) uses :meth:`wall_free_flux`.
         """
         if periodic is None:
             raise ValueError("FCCD face_flux needs periodic=True/False for the axis")
@@ -447,6 +447,58 @@ class FCCDFaceComplex:
         else:
             q = moved @ D2
         return xp.moveaxis(moved - q, -1, axis)
+
+    def wall_free_flux(self, uf: FaceField, periodic) -> FaceField:
+        """Face velocities ``Phi`` for finite-volume transport (VOF, tracers), 2-D.
+
+        ``Phi = face_flux(uf) + curl psi``: ``D_f Phi = D_f face_flux(uf)`` (the curl of a node
+        stream function has no discrete divergence), and ``Phi`` is exactly zero on walls. The
+        corrected flux alone is not: on a wall ``face_flux = -(h^2/24) d_nn u_n``, a tangential
+        derivative that sums to zero along the walls but not face by face. ``psi`` on the boundary
+        nodes is the running sum of those wall fluxes; it is extended into the domain by
+        transfinite (Coons) interpolation in the computational coordinates, so ``Phi - face_flux``
+        is ``O(h^2)`` and smooth. Volume fluxes (face velocity times the transverse cell size
+        ``h/J``) are used, so this also holds on mapped grids.
+        """
+        grid = uf.grid
+        if grid.ndim != 2:
+            raise NotImplementedError("wall_free_flux is implemented for 2-D grids")
+        xp = grid.xp
+        nx, ny = grid.n
+        size = [xp.full(grid.n[a], float(grid.h[a])) if grid.axis_uniform(a)
+                else float(grid.h[a]) / grid.metric(a).J for a in range(2)]
+        qx = self.face_flux(uf[0], 0, periodic[0]) * size[1][None, :]
+        qy = self.face_flux(uf[1], 1, periodic[1]) * size[0][:, None]
+        if periodic[0] and periodic[1]:
+            return FaceField(grid, [qx / size[1][None, :], qy / size[0][:, None]])
+        psi = xp.zeros((nx + 1, ny + 1), dtype=qx.dtype)
+        xi = xp.linspace(0.0, 1.0, nx + 1, dtype=qx.dtype)[:, None]
+        eta = xp.linspace(0.0, 1.0, ny + 1, dtype=qx.dtype)[None, :]
+        if periodic[0]:  # walls at y = 0, 1: each wall's net flux is zero (to round-off) after a projection
+            qy = qy - qy[:, :1].mean()
+            psi[1:, 0] = xp.cumsum(qy[:, 0])
+            psi[1:, ny] = xp.cumsum(qy[:, ny])
+            psi = (1 - eta) * psi[:, :1] + eta * psi[:, ny:]
+        elif periodic[1]:
+            qx = qx - qx[:1, :].mean()
+            psi[0, 1:] = -xp.cumsum(qx[0, :])
+            psi[nx, 1:] = -xp.cumsum(qx[nx, :])
+            psi = (1 - xi) * psi[:1, :] + xi * psi[nx:, :]
+        else:  # around the box; the last corner closes up to the net wall flux (zero after a projection)
+            psi[1:, 0] = xp.cumsum(qy[:, 0])
+            psi[nx, 1:] = psi[nx, 0] - xp.cumsum(qx[nx, :])
+            psi[0, 1:] = -xp.cumsum(qx[0, :])
+            psi[1:, ny] = psi[0, ny] + xp.cumsum(qy[:, ny])
+            corners = ((1 - xi) * (1 - eta) * psi[0, 0] + xi * (1 - eta) * psi[nx, 0]
+                       + (1 - xi) * eta * psi[0, ny] + xi * eta * psi[nx, ny])
+            psi = ((1 - eta) * psi[:, :1] + eta * psi[:, ny:] + (1 - xi) * psi[:1, :] + xi * psi[nx:, :]) - corners
+        qx = qx + (psi[:, 1:] - psi[:, :-1])
+        qy = qy - (psi[1:, :] - psi[:-1, :])
+        if not periodic[0]:
+            qx[0], qx[-1] = 0.0, 0.0
+        if not periodic[1]:
+            qy[:, 0], qy[:, -1] = 0.0, 0.0
+        return FaceField(grid, [qx / size[1][None, :], qy / size[0][:, None]])
 
     def div_f(self, flux: FaceField, periodic=None):
         """``sum_a D_f`` of :meth:`face_flux` (4th order on point values, conservative).
