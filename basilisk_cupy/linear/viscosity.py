@@ -17,6 +17,8 @@ from __future__ import annotations
 from ..backend import to_float
 from ..fields import CellField, FaceField, VectorField
 from ..grid.hierarchy import build_levels
+from ..kernels.residual_gpu import viscosity_residual
+from ..kernels.viscosity_gpu import relax_viscosity_redblack
 from .multigrid import NITERMAX, NITERMIN, TOLERANCE, MGStats, mg_solve, restrict_cell, restrict_face
 
 
@@ -34,29 +36,94 @@ class ViscosityProblem:
         if len(set(round(h, 14) for h in grid.h)) != 1:
             raise ValueError("viscosity(): square cells are required (Basilisk uses a single Delta)")
         xp = grid.xp
-        self.dt = dt
+        self.min_cells = min_cells
         self.levels = build_levels(grid, min_cells=min_cells)
         self.correction_bcs = [c.bc.homogeneous() for c in u]
+        # GPU: one fused kernel per colour (kernels/viscosity_gpu.py); otherwise red/black masks.
+        self.fused = xp.__name__ == "cupy" and grid.dtype == "float64"
+        self.dt = dt
+        self.mu, self.rho = self._coefficients(mu, rho)
+        self._masks: list = []
+        if self.fused:  # the frozen copies and [dt, rho] live on the device once (CUDA graphs)
+            self.frozen = [[g.zeros_cell() for _ in range(grid.ndim)] for g in self.levels]
+            self.params = xp.zeros(2, dtype=xp.float64)
+            self._set_params()
+
+    def _coefficients(self, mu: FaceField, rho):
+        xp = self.levels[-1].xp
         mus = [list(mu.components)]
         for _ in range(len(self.levels) - 1):
             mus.append([restrict_face(c, ax) for ax, c in enumerate(mus[-1])])
-        self.mu = mus[::-1]
+        # own copies (also of the finest level): reuse() overwrites them in place
+        mus = [[xp.array(c, dtype=xp.float64, order="C", copy=True) for c in lev] for lev in mus[::-1]]
         if hasattr(rho, "shape"):
             rhos = [rho]
             for _ in range(len(self.levels) - 1):
                 rhos.append(restrict_cell(rhos[-1]))
-            self.rho = rhos[::-1]
+            return mus, [xp.array(r, dtype=xp.float64, order="C", copy=True) for r in rhos[::-1]]
+        return mus, [float(rho)] * len(self.levels)
+
+    def _set_params(self) -> None:
+        xp = self.levels[-1].xp
+        rho = self.rho[-1] if not hasattr(self.rho[-1], "shape") else 0.0
+        self.params[...] = xp.asarray([self.dt, rho], dtype=xp.float64)
+
+    @classmethod
+    def reuse(cls, u: VectorField, mu: FaceField, rho, dt: float, min_cells: int = 2) -> "ViscosityProblem":
+        """The problem built earlier for ``u`` with new ``mu``, ``rho``, ``dt``, or a new one.
+
+        On the GPU the coefficients are copied into the earlier problem's
+        arrays (and dt, rho into its device parameters), so its recorded CUDA
+        graphs stay valid. Elsewhere a new problem is built.
+        """
+        old = getattr(u, "_viscosity_problem", None)
+        if (old is None or not old.fused or old.min_cells != min_cells or old.levels[-1] != u.grid
+                or old.correction_bcs != [c.bc.homogeneous() for c in u]
+                or hasattr(rho, "shape") != hasattr(old.rho[-1], "shape")):
+            problem = cls(u, mu, rho, dt, min_cells=min_cells)
+            if problem.fused:
+                u._viscosity_problem = problem
+            return problem
+        mus, rhos = old._coefficients(mu, rho)
+        for dst_lev, src_lev in zip(old.mu, mus):
+            for dst, src in zip(dst_lev, src_lev):
+                dst[...] = src
+        if hasattr(rho, "shape"):
+            for dst, src in zip(old.rho, rhos):
+                dst[...] = src
         else:
-            self.rho = [float(rho)] * len(self.levels)
-        self.masks = []
-        for g in self.levels:
-            idx = xp.indices(g.n).sum(axis=0)
-            self.masks.append(((idx % 2) == 0, (idx % 2) == 1))
+            old.rho = rhos
+        old.dt = dt
+        old._set_params()
+        return old
+
+    @property
+    def masks(self) -> list:
+        """Red/black masks per level (array path only; built on first use)."""
+        if not self._masks:
+            for g in self.levels:
+                idx = g.xp.indices(g.n).sum(axis=0)
+                self._masks.append(((idx % 2) == 0, (idx % 2) == 1))
+        return self._masks
 
     # Basilisk residual_viscosity ("naive" Cartesian version) ------------------------
+    def device_residual_supported(self) -> bool:
+        return self.fused
+
+    def device_residual(self, a: list[CellField], b: list, res: list, norm) -> None:
+        """Residual into ``res`` and ``max |res|`` into the device scalar ``norm`` (no sync,
+        no allocation: kernels/residual_gpu.py). ``b`` must be contiguous float64."""
+        grid = a[0].grid
+        viscosity_residual([c.data for c in a], b, res, self.mu[-1], self.rho[-1], self.params, grid.n,
+                           grid.h[0] ** 2, grid.ghosts, norm)
+
     def residual(self, a: list[CellField], b: list, res: list) -> float:
         grid = a[0].grid
         xp = grid.xp
+        if self.device_residual_supported() and all(r.flags.c_contiguous for r in res):
+            norm = xp.zeros(1, dtype=xp.uint64)
+            self.device_residual(a, [xp.ascontiguousarray(v, dtype=xp.float64) for v in b], res, norm)
+            return to_float(norm.view(xp.float64)[0])
         ndim = grid.ndim
         h2 = grid.h[0] ** 2
         mu = self.mu[-1]
@@ -90,6 +157,10 @@ class ViscosityProblem:
         mu = self.mu[level]
         rho = self.rho[level]
         dt = self.dt
+        if self.fused:
+            relax_viscosity_redblack([c.data for c in da], res, mu, rho, grid.n, h2, self.params, grid.ghosts,
+                                     frozen=self.frozen[level])
+            return
         ua = [c.data.copy() for c in da]  # frozen copy with filled ghosts
         for mask in self.masks[level]:
             new = []
@@ -121,6 +192,6 @@ def viscosity(u: VectorField, mu: FaceField, rho=1.0, dt: float = 1.0, *, nrelax
               tolerance: float = TOLERANCE, nitermax: int = NITERMAX, nitermin: int = NITERMIN) -> MGStats:
     """Advance ``u`` by one implicit viscous step in place (Basilisk ``viscosity()``)."""
     r = [c.interior.copy() for c in u]
-    problem = ViscosityProblem(u, mu, rho, dt)
+    problem = ViscosityProblem.reuse(u, mu, rho, dt)
     return mg_solve(list(u), r, problem, nrelax=nrelax, tolerance=tolerance,
                     nitermax=nitermax, nitermin=nitermin)

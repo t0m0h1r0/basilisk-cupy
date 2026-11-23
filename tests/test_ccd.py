@@ -73,15 +73,16 @@ def test_ccd_orders(backend, kind, min_d1, min_d2):
     assert min(order(e11, NS)) > 4.7
 
 
-def test_ccd_along_second_axis_and_3d():
+def test_ccd_along_second_axis_and_3d(backend):
     ccd = CCDCellDerivative()
     errs = []
     for n in (8, 16, 32):
-        grid = CartesianGrid((n, n, n))
+        grid = CartesianGrid((n, n, n), backend=backend)
+        xp = grid.xp
         x, y, z = grid.meshgrid()
-        f = CellField.from_interior(grid, np.sin(x + 2 * y + 3 * z),
-                                    BoundaryConditions.uniform(3, Dirichlet(lambda x, y, z: np.sin(x + 2 * y + 3 * z))))
-        errs.append(float(abs(ccd.d1(f, 2) - 3 * np.cos(x + 2 * y + 3 * z)).max()))
+        f = CellField.from_interior(grid, xp.sin(x + 2 * y + 3 * z),
+                                    BoundaryConditions.uniform(3, Dirichlet(lambda x, y, z: xp.sin(x + 2 * y + 3 * z))))
+        errs.append(float(abs(ccd.d1(f, 2) - 3 * xp.cos(x + 2 * y + 3 * z)).max()))
     assert min(order(errs, [8, 16, 32])) > 5.5
 
 
@@ -108,13 +109,14 @@ def test_fccd_face_to_cell_requires_periodicity():
         FCCDFaceComplex().face_to_cell(np.zeros(grid.face_shape(0)), 0)
 
 
-def _consistent_poisson(ops, n, kind):
+def _consistent_poisson(ops, n, kind, backend="numpy"):
     """div(grad a) = D_f(exact face gradient): the setting of a projection."""
     pi = math.pi
-    grid = CartesianGrid((n, n))
-    ex = lambda x, y: np.sin(pi * x) * np.sin(2 * pi * y) + x * x * y  # noqa: E731
-    gx = lambda x, y: pi * np.cos(pi * x) * np.sin(2 * pi * y) + 2 * x * y  # noqa: E731
-    gy = lambda x, y: 2 * pi * np.sin(pi * x) * np.cos(2 * pi * y) + x * x  # noqa: E731
+    grid = CartesianGrid((n, n), backend=backend)
+    xp = grid.xp
+    ex = lambda x, y: xp.sin(pi * x) * xp.sin(2 * pi * y) + x * x * y  # noqa: E731
+    gx = lambda x, y: pi * xp.cos(pi * x) * xp.sin(2 * pi * y) + 2 * x * y  # noqa: E731
+    gy = lambda x, y: 2 * pi * xp.sin(pi * x) * xp.cos(2 * pi * y) + x * x  # noqa: E731
     if kind == "dirichlet":
         bc = BoundaryConditions.uniform(2, Dirichlet(ex))
     else:
@@ -133,23 +135,23 @@ def _consistent_poisson(ops, n, kind):
 
 
 @pytest.mark.parametrize("kind", ["dirichlet", "neumann"])
-def test_fccd_poisson_defect_correction_fourth_order(kind):
+def test_fccd_poisson_defect_correction_fourth_order(backend, kind):
     """Residual with FCCD, relaxation with fd2: the projection Poisson problem converges at 4th order."""
     ns_ = [16, 32, 64]
-    fccd = [_consistent_poisson(FCCDFaceComplex(), n, kind) for n in ns_]
-    fd2 = [_consistent_poisson(FD2FaceComplex(), n, kind) for n in ns_]
+    fccd = [_consistent_poisson(FCCDFaceComplex(), n, kind, backend) for n in ns_]
+    fd2 = [_consistent_poisson(FD2FaceComplex(), n, kind, backend) for n in ns_]
     assert all(s.converged for _, s in fccd)
     assert min(order([e for e, _ in fccd], ns_)) > 3.9
     assert max(order([e for e, _ in fd2], ns_)) < 2.1
 
 
-def test_fccd_swaps_into_centered_ns():
+def test_fccd_swaps_into_centered_ns(backend):
     """Taylor--Green with FCCD face operators (projection, centred gradient, face velocity)."""
     from cases import taylor_green
 
     errs = {}
     for name, ops in (("fd2", FD2FaceComplex()), ("fccd", FCCDFaceComplex())):
-        ns = taylor_green.setup(32)
+        ns = taylor_green.setup(32, backend)
         ns.ops = ops
         ns.start(events=[2.0])
         ns.run(2.0)

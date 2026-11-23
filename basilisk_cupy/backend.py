@@ -33,6 +33,15 @@ def cupy_available() -> bool:
     return True
 
 
+def array_module(array):
+    """Array namespace (numpy or cupy) that owns ``array``; numpy for scalars and host arrays."""
+    if type(array).__module__.startswith("cupy"):
+        import cupy as cp  # noqa: PLC0415
+
+        return cp
+    return np
+
+
 def to_numpy(array):
     """Copy an array (numpy or cupy) to host memory as a numpy array."""
     if hasattr(array, "get"):

@@ -73,6 +73,56 @@ With the same operators, the incremental (δp) and full-pressure projections are
 identical to round-off (Basilisk starts the Poisson iteration from pⁿ), so IPC
 only changes results together with BDF2 or variable density.
 
+## GPU (cupy)
+
+On the GPU the multigrid hot loops run as fused `cupy.RawKernel`s
+(`basilisk_cupy/kernels/`): red/black relaxation of the Poisson–Helmholtz and
+viscosity problems, ghost-layer filling for constant Dirichlet/Neumann/periodic
+conditions, restriction and prolongation. They reproduce the array path bitwise
+(`--fmad=false`, same operation order; checked in `tests/test_gpu_kernels.py`).
+Other conditions (callable values) fall back to the array path.
+
+Each multigrid cycle is then recorded once as a CUDA graph and replayed
+(`linear/cycle_graph.py`), which removes the ~10–20 µs host cost of every
+launch. The cycle writes only into buffers allocated beforehand (allocation
+is switched off while recording), and the Poisson, viscosity and
+defect-correction problems are kept with their unknown field and reused with
+refreshed coefficients, so the recorded graphs survive from one time step to
+the next (dt and a constant ρ are read from device memory). For fd2
+Poisson–Helmholtz and viscosity problems the graph also contains the residual
+and its maximum norm (`kernels/residual_gpu.py`, warp-reduced `atomicMax` on
+the bit pattern, exact), so one `mg_solve` iteration is one graph launch and
+one 8-byte read; the nrelax heuristic and the stopping test stay on the host,
+as in Basilisk. Results are bitwise those without graphs;
+`BASILISK_CUPY_GRAPHS=0` turns them off.
+
+Relaxation kernels launch threads for the cells of one colour only and use
+32-bit indices when the arrays allow it. On a GeForce card the remaining cost
+is double-precision arithmetic (FP64 runs at 1/64 of FP32): the divisions by
+h and h² are kept, as in Basilisk, rather than replaced by multiplications
+that would change the rounding.
+
+Cell restriction sums the 2^d children in C order and divides by 2^d, as
+Basilisk's `restriction_average`, on every backend.
+
+Taylor–Green, ms per time step (RTX 3080 Ti vs one core of a Ryzen 9 5950X):
+
+| Solver | N | numpy | cupy | speed-up |
+| --- | --- | --- | --- | --- |
+| `CenteredNS` (fd2) | 64 | 89.1 | 29.1 | 3.1 |
+| `CenteredNS` (fd2) | 256 | 404.4 | 37.6 | 10.7 |
+| `CenteredNS` (fd2) | 512 | 1332.7 | 51.7 | 25.8 |
+| `IMEXBDF2NS` (FCCD) | 64 | 98.3 | 41.3 | 2.4 |
+| `IMEXBDF2NS` (FCCD) | 256 | 567.4 | 51.4 | 11.0 |
+
+3D Poisson (Dirichlet, tolerance 1e-8, 12 cycles), one solve:
+
+| N | numpy | cupy | speed-up |
+| --- | --- | --- | --- |
+| 32³ | 75.0 ms | 7.6 ms | 9.9 |
+| 64³ | 366.2 ms | 13.8 ms | 26.5 |
+| 128³ | 4905.2 ms | 59.3 ms | 82.7 |
+
 ## Tests
 
 ```bash
@@ -82,4 +132,5 @@ pytest -m slow      # full lid-cavity run to steady state (~1 min)
 ```
 
 Tests run on numpy; when cupy is importable every backend-parametrised test
-also runs on cupy and a numpy/cupy agreement test is enabled.
+(all solver, Poisson, CCD/FCCD, defect-correction and IMEX-BDF2 tests, and the
+slow lid-cavity run) also runs on cupy, together with the kernel tests.
