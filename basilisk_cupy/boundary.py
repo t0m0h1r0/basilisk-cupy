@@ -155,3 +155,42 @@ class BoundaryConditions:
             self.is_periodic(axis)
             for side in (LOWER, UPPER):
                 self.get(axis, side).fill(grid, data, axis, side)
+
+
+def vector_bcs(ndim: int, periodic_axes=(), normal: dict | None = None,
+               tangential: dict | None = None) -> list["BoundaryConditions"]:
+    """Boundary conditions for the components of a cell-centred vector.
+
+    Basilisk's defaults for a vector are ``antisymmetry`` for the normal
+    component (Dirichlet 0 on the wall face: no penetration) and ``symmetry``
+    for the tangential ones (Neumann 0: free slip). ``normal`` and
+    ``tangential`` override them per side name, e.g.
+    ``tangential={"top": Dirichlet(1.0)}`` for a moving lid (Basilisk
+    ``u.t[top] = dirichlet(1)``). In 3D a tangential override applies to both
+    tangential components.
+    """
+    normal = normal or {}
+    tangential = tangential or {}
+    out = []
+    for comp in range(ndim):
+        bc = BoundaryConditions()
+        for axis in range(ndim):
+            for side in (LOWER, UPPER):
+                if axis in periodic_axes:
+                    cond: Condition = Periodic()
+                else:
+                    name = next(k for k, v in SIDE_NAMES.items() if v == (axis, side))
+                    if comp == axis:
+                        cond = normal.get(name, Dirichlet(0.0))
+                    else:
+                        cond = tangential.get(name, Neumann(0.0))
+                bc.set((axis, side), cond)
+        out.append(bc)
+    return out
+
+
+def gradient_bcs(field_bc: "BoundaryConditions", ndim: int) -> list["BoundaryConditions"]:
+    """Conditions Basilisk gives a gradient vector computed from a scalar:
+    periodic where the scalar is periodic, otherwise the vector defaults."""
+    periodic_axes = [a for a in range(ndim) if field_bc.is_periodic(a)]
+    return vector_bcs(ndim, periodic_axes)

@@ -79,3 +79,36 @@ class FaceField:
 
     def copy(self, name: str | None = None) -> "FaceField":
         return FaceField(self.grid, [c.copy() for c in self.components], name if name is not None else self.name)
+
+
+@dataclass
+class VectorField:
+    """Cell-centred vector (Basilisk ``vector``): one :class:`CellField` per axis."""
+
+    components: list
+    name: str = ""
+
+    @classmethod
+    def zeros(cls, grid: CartesianGrid, bcs: list[BoundaryConditions], name: str = "") -> "VectorField":
+        return cls([CellField(grid, bc=bc, name=f"{name}.{'xyz'[a]}") for a, bc in enumerate(bcs)], name)
+
+    @property
+    def grid(self) -> CartesianGrid:
+        return self.components[0].grid
+
+    def __getitem__(self, axis: int) -> CellField:
+        return self.components[axis]
+
+    def __iter__(self):
+        return iter(self.components)
+
+    def __len__(self) -> int:
+        return len(self.components)
+
+    def fill_ghosts(self) -> "VectorField":
+        for c in self.components:
+            c.fill_ghosts()
+        return self
+
+    def copy(self, name: str | None = None) -> "VectorField":
+        return VectorField([c.copy() for c in self.components], name if name is not None else self.name)

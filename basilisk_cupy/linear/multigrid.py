@@ -54,12 +54,12 @@ class MGStats:
 
 
 class MultigridProblem(Protocol):
-    levels: list[CartesianGrid]            # coarsest .. finest
-    correction_bc: BoundaryConditions      # homogeneous conditions for corrections
+    levels: list[CartesianGrid]                  # coarsest .. finest
+    correction_bcs: list[BoundaryConditions]     # homogeneous conditions, one per unknown
 
-    def residual(self, a: CellField, b, res) -> float: ...
+    def residual(self, a: list[CellField], b: list, res: list) -> float: ...
 
-    def relax(self, da: CellField, res, level: int) -> None: ...
+    def relax(self, da: list[CellField], res: list, level: int) -> None: ...
 
 
 # -- transfer operators --------------------------------------------------------
@@ -125,44 +125,62 @@ def prolong_bilinear(coarse: CellField):
 
 
 # -- solver ----------------------------------------------------------------------
-def mg_cycle(a: CellField, res_levels: list, da_levels: list[CellField], problem: MultigridProblem,
-             nrelax: int) -> None:
+def _as_list(x):
+    return list(x) if isinstance(x, (list, tuple)) else [x]
+
+
+def mg_cycle(a: list[CellField], res_levels: list[list], da_levels: list[list[CellField]],
+             problem: MultigridProblem, nrelax: int) -> None:
+    """One Basilisk cycle for the unknowns ``a`` (a list: scalar or vector problems)."""
     nlev = len(problem.levels)
     for lev in range(nlev - 2, -1, -1):
-        res_levels[lev] = restrict_cell(res_levels[lev + 1])
+        res_levels[lev] = [restrict_cell(r) for r in res_levels[lev + 1]]
     for lev in range(nlev):
-        da = da_levels[lev]
+        das = da_levels[lev]
         if lev == 0:
-            da.data[...] = 0.0
+            for da in das:
+                da.data[...] = 0.0
         else:
-            coarse = da_levels[lev - 1]
-            coarse.fill_ghosts()
-            da.interior = prolong_bilinear(coarse)
+            for da, coarse in zip(das, da_levels[lev - 1]):
+                coarse.fill_ghosts()
+                da.interior = prolong_bilinear(coarse)
         for _ in range(nrelax):
-            da.fill_ghosts()
-            problem.relax(da, res_levels[lev], lev)
-    a.interior = a.interior + da_levels[-1].interior
+            for da in das:
+                da.fill_ghosts()
+            problem.relax(das, res_levels[lev], lev)
+    for s, ds in zip(a, da_levels[-1]):
+        s.interior = s.interior + ds.interior
 
 
-def mg_solve(a: CellField, b, problem: MultigridProblem, *, nrelax: int = 4,
+def mg_solve(a, b, problem: MultigridProblem, *, nrelax: int = 4,
              tolerance: float = TOLERANCE, nitermax: int = NITERMAX, nitermin: int = NITERMIN,
              on_cycle: Callable[[int, float], None] | None = None) -> MGStats:
-    """Solve ``L(a) = b`` by repeated multigrid cycles (Basilisk ``mg_solve``)."""
-    xp = a.grid.xp
-    levels = problem.levels
-    da_levels = [CellField(g, bc=problem.correction_bc, name="da") for g in levels]
-    res_levels: list = [None] * len(levels)
-    res_levels[-1] = xp.zeros(a.grid.n, dtype=a.grid.dtype)
+    """Solve ``L(a) = b`` by repeated multigrid cycles (Basilisk ``mg_solve``).
 
-    stats = MGStats(sum=to_float(xp.sum(b)), nrelax=nrelax if nrelax > 0 else 4,
+    ``a`` is a :class:`CellField` or a list of them (e.g. velocity components),
+    ``b`` the matching interior array(s). The problem's ``residual`` and
+    ``relax`` callbacks receive lists.
+    """
+    a, b = _as_list(a), _as_list(b)
+    grid = a[0].grid
+    xp = grid.xp
+    levels = problem.levels
+    bcs = problem.correction_bcs
+    da_levels = [[CellField(g, bc=bc, name="da") for bc in bcs] for g in levels]
+    res_levels: list = [None] * len(levels)
+    res_levels[-1] = [xp.zeros(grid.n, dtype=grid.dtype) for _ in a]
+
+    stats = MGStats(sum=to_float(xp.sum(b[0])), nrelax=nrelax if nrelax > 0 else 4,
                     minlevel=levels[0].n[0], tolerance=tolerance)
-    a.fill_ghosts()
+    for s in a:
+        s.fill_ghosts()
     resb = stats.resb = stats.resa = problem.residual(a, b, res_levels[-1])
 
     stats.i = 0
     while stats.i < nitermax and (stats.i < nitermin or stats.resa > tolerance):
         mg_cycle(a, res_levels, da_levels, problem, stats.nrelax)
-        a.fill_ghosts()
+        for s in a:
+            s.fill_ghosts()
         stats.resa = problem.residual(a, b, res_levels[-1])
         # Tune the number of relaxations so that each cycle reduces the
         # residual by a factor between 2 and 20 (Basilisk heuristic).
@@ -178,7 +196,7 @@ def mg_solve(a: CellField, b, problem: MultigridProblem, *, nrelax: int = 4,
 
     if stats.resa > tolerance:
         warnings.warn(
-            f"multigrid: convergence for {a.name or 'field'} not reached after {stats.i} iterations "
+            f"multigrid: convergence for {a[0].name or 'field'} not reached after {stats.i} iterations "
             f"(res {stats.resa:g}, sum {stats.sum:g}, nrelax {stats.nrelax}, tolerance {tolerance:g})",
             RuntimeWarning, stacklevel=2,
         )
