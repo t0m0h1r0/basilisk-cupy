@@ -458,6 +458,32 @@ BCG, UCCD6/FUCCD and the CFL step still refuse mapped grids (step 4f-3).
 On the GPU the line relaxation's sequential Thomas sweep is slow (one
 launch per row); a cyclic-reduction solver is planned with 4f-3.
 
+## Two-phase flow (M4) — step M4a: VOF advection
+
+```python
+from basilisk_cupy.interface.fractions import fraction
+from basilisk_cupy.interface.vof import VOFInterface, VOFTracer, vof_advection
+f = CellField.from_interior(grid, fraction(grid, lambda x, y: 0.04 - (x * x + y * y)), BoundaryConditions())
+vof_advection([VOFInterface(f, [VOFTracer(cf)])], uf, dt, i)
+```
+
+Port of Basilisk's `geometry.h`, `myc2d.h`, `fractions.h` and `vof.h` (2-D, uniform grid):
+PLIC with the Mixed Youngs-Centred normal, direction-split geometric fluxes, the
+Weymouth & Yue `cc = (c > 1/2)` term, sweeps alternating with the iteration index, and
+VOF concentrations. The operations follow the C code's order. `cases/reversed_vof.py`
+(`src/test/reversed.c`, constant grid) reproduces `reversed.cref` to the printed digits:
+
+| N | volume sum (t = 0 and T) | error avg / rms / max at t = T |
+| --- | --- | --- |
+| 32 | 0.124638306824 | 0.0605584 / 0.21841 / 1 |
+| 64 | 0.125405298502 | 0.00992636 / 0.0733979 / 1 |
+| 128 | 0.125600659213 | 0.00143235 / 0.017043 / 0.474599 |
+
+The volume fraction stays in [−1.4e-16, 1 + 4e-16] and the VOF concentration within
+8e-13 of 1. N = 128 (3723 steps) takes 28 s with cupy. With FCCD operators the
+advecting velocity must be `ops.wall_free_flux(uf, periodic)` (see *Face divergence*).
+Plan and notes: `docs/notes/12_two_phase.md`.
+
 ## GPU (cupy)
 
 On the GPU the multigrid hot loops run as fused `cupy.RawKernel`s
