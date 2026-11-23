@@ -166,7 +166,7 @@ def advection(tracers: list[CellField], uf: FaceField, dt: float, src: list[Cell
     src = src or [None] * len(tracers)
     for f, s in zip(tracers, src):
         flux = tracer_fluxes(f, uf, dt, s, limiter=limiter)
-        f.interior = f.interior - dt * ops.div_f(flux)
+        f.interior = f.interior - dt * ops.div_f(flux, periodic=f.bc.periodic_axes(f.grid.ndim))
         f.fill_ghosts()
 
 

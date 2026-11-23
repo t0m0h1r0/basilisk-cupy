@@ -146,7 +146,7 @@ class FD2Stress:
         out = []
         for a in range(ndim):
             fluxes = [(2.0 if b == a else 1.0) * mu[b] * self.face.grad_f(u[a], b) for b in range(ndim)]
-            acc = self.face.div_f(FaceField(grid, fluxes))
+            acc = self.face.div_f(FaceField(grid, fluxes), periodic=u[a].bc.periodic_axes(ndim))
             for b in range(ndim):
                 if b != a:  # d_b (mu d_a u_b): centred differences through the velocity ghosts (corners included)
                     acc = acc + _cross_term(grid, u[b].data, mu_cell, a, b)

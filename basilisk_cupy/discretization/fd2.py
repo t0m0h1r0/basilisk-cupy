@@ -45,7 +45,7 @@ class FD2FaceComplex:
         left, right = a.grid.face_neighbours(axis)
         return 0.5 * (a.data[right] + a.data[left])
 
-    def div_f(self, flux: FaceField):
+    def div_f(self, flux: FaceField, periodic=None):
         grid = flux.grid
         out = None
         for axis in range(grid.ndim):

@@ -149,6 +149,10 @@ class BoundaryConditions:
             raise ValueError(f"axis {axis}: periodic must be set on both sides")
         return lo.periodic
 
+    def periodic_axes(self, ndim: int) -> tuple:
+        """``is_periodic`` for every axis (the ``periodic`` argument of ``FaceComplex.div_f``)."""
+        return tuple(self.is_periodic(k) for k in range(ndim))
+
     def homogeneous(self) -> "BoundaryConditions":
         return BoundaryConditions({k: c.homogeneous() for k, c in self.sides.items()})
 

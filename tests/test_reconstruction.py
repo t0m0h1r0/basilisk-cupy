@@ -146,5 +146,5 @@ def test_lid_cavity_with_walls(backend):
                   reconstruction="ccd")
     ns.start(events=[1.1])
     ns.run(1.1)
-    assert ns.kinetic_energy() == pytest.approx(0.009257, rel=0.01)  # 4th-order R_h, same run: 0.009257
+    assert ns.kinetic_energy() == pytest.approx(0.009324, rel=0.01)  # 4th-order D_f (plain face difference: 0.009257)
     assert ns.max_divergence() < 1e-5

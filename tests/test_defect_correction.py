@@ -35,7 +35,7 @@ def problem(n, kind, ops, backend="numpy"):
     else:
         bc = (BoundaryConditions().set("left", Neumann(lambda x, y: -gx(x, y))).set("right", Neumann(gx))
               .set("bottom", Neumann(lambda x, y: -gy(x, y))).set("top", Neumann(gy)))
-    b = ops.div_f(FaceField(grid, [gx(*grid.face_meshgrid(0)), gy(*grid.face_meshgrid(1))]))
+    b = ops.div_f(FaceField(grid, [gx(*grid.face_meshgrid(0)), gy(*grid.face_meshgrid(1))]), periodic=(False, False))
     return grid, CellField(grid, bc=bc), b
 
 
