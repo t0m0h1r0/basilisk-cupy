@@ -12,7 +12,7 @@ Design document: see the project's design doc ("Basilisk → CuPy 移植設計�
 | Layer | Implemented |
 | --- | --- |
 | Grid, fields, boundary conditions | cell-centred grid (1D/2D/3D), uniform or mapped per axis (`grid/mapping.py`: tanh wall clustering, periodic sine stretching, monitor-function equidistribution); Dirichlet / Neumann / periodic with automatic homogeneous versions |
-| ① Spatial operators | `fd2` (Basilisk-compatible 2nd order); `ccd` (CCD, Chu & Fan: f′ 6th, f″ 5th order with walls) and `fccd` (FCCD face operators, 4th order) on the cell-centred grid with new wall closures (`tools/derive_ccd_closures.py`) |
+| ① Spatial operators | `fd2` (Basilisk-compatible 2nd order); `ccd` (CCD, Chu & Fan: f′ and f″ 6th order inside; compact wall closures, f′ 4th and f″ 3rd at the wall cells) and `fccd` (FCCD face operators, 4th order) on the cell-centred grid with new wall closures (`tools/derive_ccd_closures.py`) |
 | ② Linear solvers | Basilisk-style multigrid (`mg_solve`, scalar or vector unknowns, red/black Gauss–Seidel, adaptive `nrelax`) with a separate high-order residual hook; GCR-accelerated defect correction for high-order operators (`poisson(method="dc")`, chosen automatically for non-fd2 `ops`); implicit viscosity (`viscosity.h`) and its CCD defect-correction version (`CCDViscosity`) |
 | ③ Terms | BCG advection and `prediction()` (`bcg.h`), minmod / superbee / sweby limiters |
 | ④ Projection | Basilisk `project()` (approximate projection, variable density) |
@@ -55,10 +55,57 @@ ns = CenteredNS(grid, periodic=(0, 1), ops=FCCDFaceComplex())   # or operators: 
 | Check | fd2 | fccd |
 | --- | --- | --- |
 | Poisson, projection setting (rhs = D_f of face gradients), walls | 2nd order | 4th order (defect correction: FCCD residual, fd2 multigrid) |
-| Lid cavity Re = 1000, N = 64, steady state | t = 44.0, max diff. from Ghia 0.0148 | t = 43.9, max diff. from Ghia 0.0138 |
-| Defect-correction cost, N = 256, Dirichlet walls | — | 22 GCR steps / 44 MG cycles (plain correction: 400 cycles, not converged) |
+| Lid cavity Re = 1000, N = 64, steady state | t = 44.0, max diff. from Ghia 0.0148 | t = 43.9, max diff. from Ghia 0.0139 |
+| Defect-correction cost, N = 256, Dirichlet walls | — | residual 1.8e-10 after 19 GCR steps (round-off level: max\|b\| = 4.8e5); reaching the 1e-10 tolerance then took 128 (plain correction: 400 cycles, not converged) |
 | Poisson, pointwise rhs | 2nd order | 2nd order, error halved (D_f is the conservative difference, as in TwoPhaseFlow) |
 | Taylor–Green t = 2, N = 32 / 64 / 128, rms error | 3.2e-2 / 4.5e-3 / 5.9e-4 | 9.4e-3 / 1.3e-3 / 2.0e-4 (BCG advection unchanged) |
+
+## Wall closures: compact, accuracy from derivatives
+
+The CCD first-cell rows and the FCCD wall faces read the wall datum and the
+first two cells only, the width of the interior stencil. Their accuracy comes
+from the implicit derivatives, as in the interior rows, not from a wider
+one-sided stencil (`tools/derive_ccd_closures.py`, Taylor matching):
+
+| Closure | implicit terms | explicit terms | order at the wall |
+| --- | --- | --- | --- |
+| CCD Dirichlet / Neumann, row I (`f′₀`) | `f″₀, f′₁, f″₁` | datum, `f₀, f₁` | `f′` 4th |
+| CCD Dirichlet, row II (`f″₀`) | `f′₀, f″₁` | datum, `f₀, f₁` | `f″` 3rd |
+| CCD Neumann, row II | `f′₁, f″₁` | datum | `f″` 3rd |
+| CCD extrapolate (no datum: derivatives of derivatives) | as Dirichlet | `f₀, f₁` | `f′` 3rd, `f″` 2nd |
+| FCCD wall gradient (Dirichlet) | — | datum, `f₀, h f′₀, f₁, h f′₁` | 4th |
+| FCCD wall value (Neumann) | — | `h` datum, `f₀, h f′₀, h² f″₀` | 4th |
+
+A wall row one order below the interior (two for a second derivative) keeps
+the global order (Gustafsson 1975). A row II with `f′₁` as well would be the
+row I relation again (singular system), so 3rd order is the most these
+three-term rows give. The earlier wide closures (datum + 4 to 6 cells, `f′`
+6th and `f″` 5th at the wall) were measured against them:
+
+| Check | wide (before) | compact |
+| --- | --- | --- |
+| CCD 1-D Dirichlet, `f′` / `f″`, N = 16 → 256 | 8.1e-7 → 1.1e-11 / 1.1e-5 → 2.1e-9 (N = 256 worse than 128: round-off) | 7.9e-5 → 1.5e-9 / 9.3e-4 → 2.9e-7 (4.0 / 3.0) |
+| `Re(−D1 h)` max, Dirichlet (advection eigenvalue; > 0 grows) | +0.096 | +1e-15 |
+| FCCD face gradient of a Dirichlet field (max over faces), N = 128 | 2.9e-8 | 1.4e-8 |
+| Poisson, projection setting, Dirichlet, N = 16 / 32 / 64 | 1.2e-4 / 4.9e-6 / 1.7e-7 | 7.4e-5 / 2.8e-6 / 1.3e-7 |
+| Poisson N = 64: GCR steps / plain defect correction cycles | 17 / 165 | 18 / 461 |
+| Taylor–Green in a free-slip box, face state, CCD `R_h`, N = 16 / 32 / 64 | 1.66e-5 / 1.07e-6 / 6.78e-8 | 1.61e-5 / 1.02e-6 / 6.51e-8 |
+| Lid cavity E(1.1), N = 64: BDF2 / IMEX-RK cell / face + CCD `R_h` / face + implicit UCCD6 | 0.009131 / 0.009245 / 0.009250 / 0.009246 | 0.009134 / 0.009251 / 0.009251 / 0.009247 |
+| Channel decay (CCD viscosity), N = 16 / 32 / 64 | 4.8e-7 / 3.0e-8 / — | 1.1e-6 / 4.0e-8 / 2.0e-9 |
+| Boundary layer `exp(−x/0.02)`, N = 32, uniform / tanh | 5.6e-3 / 8.6e-7 | 1.4e-2 / 3.3e-5 |
+
+The operators lose orders at the wall cells (max norm: CCD `f′` 4, `f″` 3,
+full stress 3, UCCD6 tendency 4), the Navier–Stokes results do not change.
+What is lost: a boundary layer resolved by only a few cells (the tanh case
+above), and the plain defect correction converges more slowly (GCR does not).
+
+UCCD6 hyperviscosity: `(D2)^4` with the extrapolating closure in the outer
+three factors now has one slightly negative wall eigenvalue, `−1.66 / h⁸`
+(Dirichlet; Neumann `−0.020 / h⁸`; the largest is `8493.5 / h⁸`), a growth
+rate `1.7 σ|u|/h`. With the wide closures it was ≥ 0, but their Dirichlet
+advection had the eigenvalue above, 56 times larger (0.096 against 1.7e-3 at σ = 1e-3). A non-negative factor
+needs the field's closure in all four factors (1st order at the wall,
+measured) or a symmetrised form (3rd order); neither was adopted.
 
 ## Time integration: IMEX-BDF2 + IPC
 
@@ -163,7 +210,8 @@ This removes the `O(dt h^p)` error of the approximate projection.
   changed no Navier–Stokes result. Taylor–Green in a free-slip box, face
   state, N = 16 / 32 / 64, cell error: 1.8e-5 / 1.1e-6 / 6.8e-8 (wide) and
   1.7e-5 / 1.1e-6 / 6.8e-8 (compact); FCCD's `face_to_cell` gives 1.9e-7 at
-  N = 64. Wider one-sided rows have larger coefficients (largest row sum 4.6
+  N = 64 (all with the earlier wide cell closures; with the compact ones of
+  *Wall closures* below the compact `R_h` gives 1.6e-5 / 1.0e-6 / 6.5e-8). Wider one-sided rows have larger coefficients (largest row sum 4.6
   against 3.3), so they were dropped: wall rows keep the interior width and
   give up an order.
 * In the face-state (periodic) Taylor–Green (N = 64, CFL 1) both `R_h` take
@@ -261,21 +309,21 @@ untouched while `A_L` damps it most, and the layered correction stalls:
 
 | Corrections to 1e-10, N = 64, walls, white-noise rhs | κ = νdt/h² = 0.1 | 1 | 10 | 100 | 1000 |
 | --- | --- | --- | --- | --- | --- |
-| `layered` | 24 | 77 | > 300 | > 300 | > 300 |
-| `split` | 15 | 20 | 23 | 25 | 26 |
-| `split`, μ ∈ [1, 10] variable, N = 32 / 64 / 128 | 20 / 20 / 20 | — | 25 / 25 / 25 | — | 29 / 28 / 28 |
+| `layered` | 20 | 65 | 213 | > 300 | > 300 |
+| `split` | 13 | 18 | 20 | 22 | 23 |
+| `split`, μ ∈ [1, 10] variable, N = 32 / 64 / 128 | 18 / 18 / 18 | — | 22 / 22 / 22 | — | 26 / 26 / 25 |
 
 | Check | fd2 (`basilisk`) | CCD (`ccd`, split) |
 | --- | --- | --- |
-| `L_H u` vs exact, periodic / walls (μ constant or variable) | 2nd | 6.0 / 4.8–5.4 (layered: 6.0 / 4.8, 20× larger wall error) |
+| `L_H u` vs exact, periodic / walls (μ constant or variable) | 2nd | 6.0 / 3.1–3.3 at the wall cells (layered: 6.0 / 2.8–3.0, 13× larger wall error) |
 | Taylor–Green μ = 0.01, IMEX-BDF2, FCCD ops, N = 16 / 32 / 64 | 1.03e-3 / 2.55e-4 / 6.45e-5 (2nd) | 1.16e-4 / 3.30e-6 / 1.70e-7 (5.1, 4.3) |
 | Corrections per viscous solve in that run | — | 1–2 |
-| Lid cavity Re = 1000, E(t = 1.1), N = 64 (fine-grid value ≈ 0.00969) | 0.008872 | 0.009131 |
+| Lid cavity Re = 1000, E(t = 1.1), N = 64 (fine-grid value ≈ 0.00969) | 0.008872 | 0.009134 |
 | Stokes, self-convergence in dt | 2nd | 2nd |
 
 Lid-cavity energies at N = 32 / 64 / 128 / 256 (IMEX-BDF2, central convection,
 dt = 0.25/N): fd2 ops + fd2 viscosity 0.007304 / 0.008872 / 0.009486 / 0.009694;
-FCCD ops + CCD viscosity 0.008223 / 0.009131 / 0.009613 / 0.009673. The
+FCCD ops + CCD viscosity 0.008250 / 0.009134 / 0.009614 / 0.009676. The
 corner singularity of the lid limits both to about order 1.5; `lid.ref`
 (Basilisk, N = 64: 0.008904) is itself under-resolved at t = 1.1.
 
@@ -301,14 +349,15 @@ paper's trapezoidal construction would cap the map at O(Δξ²).
 
 | Check (N = 16…128) | tanh × tanh, Dirichlet | tanh × tanh, Neumann | sine × sine, periodic |
 | --- | --- | --- | --- |
-| CCD `f′` / `f″` | 6.2–6.6 / 5.2–5.6 | 6.2–6.5 / 5.2–5.3 | 6.1 / 6.0 |
-| FCCD face gradient / value / face→cell | 4.2–4.8 / 4.0 / 4.0 | 4.0 / 4.0 / 4.0 | 4.0 / 4.0 / 4.0 |
+| CCD `f′` / `f″` (walls: max over the wall cells) | 4.0–4.4 / 2.8–3.6 | 4.0–4.4 / 2.9–3.1 | 6.1 / 6.0 |
+| FCCD face gradient / value / face→cell | 4.2–4.6 / 4.0 / 4.0 | 3.9–4.0 / 4.0 / 4.0 | 4.0 / 4.0 / 4.0 |
 | fd2 face gradient / divergence | 2.0 / 2.0 | 2.0 / 2.0 | 2.0 / 2.0 |
 | GCL `d x/d x − 1` (CCD / FCCD / fd2) | 9e-14 / 1e-14 / 0 | | |
 
-CCD full stress (`CCDStress`, split) on tanh × monitor: 5th order.
+CCD full stress (`CCDStress`, split) on tanh × monitor: 4.1–4.3 (wall cells).
 Boundary layer `exp(−x/0.02)` at N = 32: the CCD derivative error drops from
-5.6e-3 (uniform) to 8.6e-7 (tanh, β = 3, first cell 0.001).
+1.4e-2 (uniform) to 3.3e-5 (tanh, β = 3, first cell 0.001); the earlier wide
+wall closures gave 5.6e-3 and 8.6e-7 (see *Wall closures* below).
 
 ### Step 4f-2: solvers
 
@@ -331,15 +380,16 @@ Boundary layer `exp(−x/0.02)` at N = 32: the CCD derivative error drops from
 
 | Check (N = 16 / 32 / 64 / 128) | fd2 multigrid | FCCD residual + fd2 multigrid |
 | --- | --- | --- |
-| Poisson, Dirichlet, tanh × monitor | 2.0 order, 10–13 cycles | 4.0–5.1, 15–17 |
+| Poisson, Dirichlet, tanh × monitor | 2.0 order, 10–13 cycles | 3.6–6.8 (6.5e-3 / 5.6e-5 / 4.5e-6 at N = 16 / 32 / 64), 16–17 |
 | Poisson, Neumann, tanh × tanh | 2.0, 13–14 | 3.9–4.0, 10–11 |
 | Poisson, periodic, sine × sine | 2.0, 14–19 | 3.9–4.0, 10–12 |
 
-Viscous defect correction on tanh(β = 2)², 32², white-noise rhs: 26–39
-(CCD) and 16–21 (fd2) corrections for κ = νdt/h² = 0.1…1000. Decaying
-channel mode u = sin(πy)e^{−νπ²t} on tanh(β = 2) in y, t = 0.1,
-200 steps, N = 8/16/32: FD2Viscosity 2.9e-3 / 1.1e-3 / 3.0e-4, CCDViscosity
-7.1e-3 / 1.6e-5 / 2.7e-7.
+Viscous defect correction on tanh(β = 2)², 32², white-noise rhs: 24–37
+(CCD) and 15–21 (fd2) corrections for κ = νdt/h² = 0.1…1000. Decaying
+channel mode u = sin(πy) on tanh(β = 2) in y, ν = 1, 20 backward-Euler
+viscous steps to t = 0.1, against the time-discrete factor (1 + νπ²dt)^−20
+(spatial error only), N = 8/16/32: FD2Viscosity 1.2e-2 / 3.7e-3 / 9.6e-4,
+CCDViscosity 6.6e-4 / 1.3e-5 / 2.6e-7.
 
 BCG, UCCD6/FUCCD and the CFL step still refuse mapped grids (step 4f-3).
 On the GPU the line relaxation's sequential Thomas sweep is slow (one
