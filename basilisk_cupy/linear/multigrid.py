@@ -101,6 +101,10 @@ def prolong_bilinear(coarse: CellField):
     xp = grid.xp
     g = grid.ghosts
     arr = coarse.data
+    if xp.__name__ == "cupy" and arr.dtype == xp.float64 and arr.flags.c_contiguous:
+        from ..kernels.transfer_gpu import prolong  # noqa: PLC0415
+
+        return prolong(arr, grid.n, g)
     for axis in range(grid.ndim):
         n = grid.n[axis]
 

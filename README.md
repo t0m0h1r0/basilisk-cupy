@@ -73,6 +73,28 @@ With the same operators, the incremental (δp) and full-pressure projections are
 identical to round-off (Basilisk starts the Poisson iteration from pⁿ), so IPC
 only changes results together with BDF2 or variable density.
 
+## GPU (cupy)
+
+On the GPU the multigrid hot loops run as fused `cupy.RawKernel`s
+(`basilisk_cupy/kernels/`): red/black relaxation of the Poisson–Helmholtz and
+viscosity problems, ghost-layer filling for constant Dirichlet/Neumann/periodic
+conditions, and prolongation. They reproduce the array path bitwise
+(`--fmad=false`, same operation order; checked in `tests/test_gpu_kernels.py`).
+Other conditions (callable values) fall back to the array path.
+
+Taylor–Green, ms per time step (RTX 3080 Ti vs one core of a Ryzen 9 5950X):
+
+| Solver | N | numpy | cupy | speed-up |
+| --- | --- | --- | --- | --- |
+| `CenteredNS` (fd2) | 64 | 90.4 | 99.3 | 0.91 |
+| `CenteredNS` (fd2) | 256 | 430.6 | 142.5 | 3.0 |
+| `CenteredNS` (fd2) | 512 | 1395.1 | 156.8 | 8.9 |
+| `IMEXBDF2NS` (FCCD) | 64 | 98.1 | 86.4 | 1.1 |
+| `IMEXBDF2NS` (FCCD) | 256 | 728.7 | 112.8 | 6.5 |
+
+The GPU time hardly grows with N: it is still dominated by kernel launches
+(~10–20 µs each) on the small multigrid levels, so use cupy from N ≈ 128 up.
+
 ## Tests
 
 ```bash
@@ -82,4 +104,5 @@ pytest -m slow      # full lid-cavity run to steady state (~1 min)
 ```
 
 Tests run on numpy; when cupy is importable every backend-parametrised test
-also runs on cupy and a numpy/cupy agreement test is enabled.
+(all solver, Poisson, CCD/FCCD, defect-correction and IMEX-BDF2 tests, and the
+slow lid-cavity run) also runs on cupy, together with the kernel tests.

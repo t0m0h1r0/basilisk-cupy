@@ -32,6 +32,7 @@ from functools import lru_cache
 
 import numpy as np
 
+from ..backend import array_module
 from ..boundary import LOWER, UPPER, Dirichlet, Neumann, _boundary_value
 from ..fields import CellField, FaceField
 from .ccd_coefficients import CCD_WALL, FCCD_WALL
@@ -311,7 +312,7 @@ class FCCDFaceComplex:
         """
         if periodic is None:
             raise ValueError("FCCD face_to_cell needs periodic=True/False for the axis")
-        xp = _xp_of(face_values)
+        xp = array_module(face_values)
         n = face_values.shape[axis] - 1
         w = self._f2c
         if periodic:
@@ -323,13 +324,3 @@ class FCCDFaceComplex:
         last = sum(wj * _take(face_values, axis, n - j) for wj, j in zip(ww, range(4)))
         return xp.concatenate([xp.expand_dims(first, axis), inner, xp.expand_dims(last, axis)], axis=axis)
 
-
-def _xp_of(arr):
-    try:
-        import cupy  # noqa: PLC0415
-
-        if isinstance(arr, cupy.ndarray):
-            return cupy
-    except ImportError:
-        pass
-    return np

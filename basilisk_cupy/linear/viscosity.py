@@ -17,6 +17,7 @@ from __future__ import annotations
 from ..backend import to_float
 from ..fields import CellField, FaceField, VectorField
 from ..grid.hierarchy import build_levels
+from ..kernels.viscosity_gpu import relax_viscosity_redblack
 from .multigrid import NITERMAX, NITERMIN, TOLERANCE, MGStats, mg_solve, restrict_cell, restrict_face
 
 
@@ -48,6 +49,8 @@ class ViscosityProblem:
             self.rho = rhos[::-1]
         else:
             self.rho = [float(rho)] * len(self.levels)
+        # GPU: one fused kernel per colour (kernels/viscosity_gpu.py); otherwise red/black masks.
+        self.fused = xp.__name__ == "cupy" and grid.dtype == "float64"
         self.masks = []
         for g in self.levels:
             idx = xp.indices(g.n).sum(axis=0)
@@ -90,6 +93,9 @@ class ViscosityProblem:
         mu = self.mu[level]
         rho = self.rho[level]
         dt = self.dt
+        if self.fused:
+            relax_viscosity_redblack([c.data for c in da], res, mu, rho, grid.n, h2, dt, grid.ghosts)
+            return
         ua = [c.data.copy() for c in da]  # frozen copy with filled ghosts
         for mask in self.masks[level]:
             new = []

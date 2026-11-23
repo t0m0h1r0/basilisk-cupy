@@ -17,6 +17,7 @@ from ..discretization.base import FaceComplex
 from ..discretization.fd2 import FD2FaceComplex
 from ..fields import CellField, FaceField
 from ..grid.hierarchy import build_levels
+from ..kernels.relax_gpu import relax_redblack
 from .multigrid import NITERMAX, NITERMIN, TOLERANCE, MGStats, mg_solve, restrict_cell, restrict_face
 
 
@@ -52,7 +53,8 @@ class HelmholtzProblem:
             self.lam = lams[::-1]
             self.has_lambda = True
 
-        # Red/black masks per level.
+        # GPU: one fused kernel per colour (kernels/relax_gpu.py); otherwise red/black masks.
+        self.fused = xp.__name__ == "cupy" and grid.dtype == "float64"
         self.masks = []
         for g in self.levels:
             idx = xp.indices(g.n).sum(axis=0)
@@ -75,6 +77,9 @@ class HelmholtzProblem:
         xp = grid.xp
         alpha = self.alpha[level]
         lam = self.lam[level]
+        if self.fused:
+            relax_redblack(da.data, res, alpha, lam if self.has_lambda else None, grid.n, grid.h, grid.ghosts)
+            return
         for mask in self.masks[level]:
             num = -res
             den = -lam if self.has_lambda else 0.0

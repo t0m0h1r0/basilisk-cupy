@@ -130,9 +130,9 @@ def test_lid_cavity_matches_basilisk_log(backend):
 
 
 @pytest.mark.slow
-def test_lid_cavity_steady_state_and_ghia():
+def test_lid_cavity_steady_state_and_ghia(backend):
     """Full run: stops at t = 44.0 like lid.ref; centreline profiles within 0.02 of Ghia et al."""
-    ns, rows = lid_cavity.run(64, 60.0, log=None)
+    ns, rows = lid_cavity.run(64, 60.0, backend, log=None)
     t_ref, e_ref = lid_cavity.REFERENCE_STEADY
     assert rows[-1][0] == pytest.approx(t_ref, abs=1e-9)
     assert rows[-1][1] == pytest.approx(e_ref, rel=1e-3)

@@ -153,8 +153,41 @@ class BoundaryConditions:
         """Fill the ghost layers of ``data`` (a padded cell array) in place."""
         for axis in range(grid.ndim):
             self.is_periodic(axis)
+        if grid.xp.__name__ == "cupy":
+            sides = self._kernel_sides(grid.ndim)
+            if sides is not None and data.dtype == grid.xp.float64 and data.flags.c_contiguous:
+                from .kernels.ghosts_gpu import fill_ghosts  # noqa: PLC0415
+
+                fill_ghosts(data, grid.n, grid.h, grid.ghosts, sides)
+                return
+        for axis in range(grid.ndim):
             for side in (LOWER, UPPER):
                 self.get(axis, side).fill(grid, data, axis, side)
+
+    def _kernel_sides(self, ndim: int):
+        """``(kind, value)`` per axis and side for the GPU ghost kernel, or None when a
+        condition is not one of the three basic ones with a constant value."""
+        from .kernels.ghosts_gpu import DIRICHLET, NEUMANN, PERIODIC  # noqa: PLC0415
+
+        out = []
+        for axis in range(ndim):
+            pair = []
+            for side in (LOWER, UPPER):
+                cond = self.get(axis, side)
+                if type(cond) is Periodic:
+                    pair.append((PERIODIC, 0.0))
+                    continue
+                if type(cond) is Dirichlet:
+                    kind, value = DIRICHLET, cond.value
+                elif type(cond) is Neumann:
+                    kind, value = NEUMANN, cond.gradient
+                else:
+                    return None
+                if not isinstance(value, (int, float)):
+                    return None
+                pair.append((kind, float(value)))
+            out.append(tuple(pair))
+        return out
 
 
 def vector_bcs(ndim: int, periodic_axes=(), normal: dict | None = None,
