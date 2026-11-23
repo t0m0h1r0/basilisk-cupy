@@ -22,12 +22,13 @@ from pathlib import Path
 from typing import Any
 
 from .discretization.base import CellDerivative, FaceComplex
+from .discretization.ccd import CCDCellDerivative, FCCDFaceComplex
 from .discretization.fd2 import FD2CellDerivative, FD2FaceComplex
 from .grid.cartesian import CartesianGrid
 
 _REGISTRY: dict[str, dict[str, type]] = {
-    "face": {"fd2": FD2FaceComplex},
-    "cell": {"fd2": FD2CellDerivative},
+    "face": {"fd2": FD2FaceComplex, "fccd": FCCDFaceComplex},
+    "cell": {"fd2": FD2CellDerivative, "ccd": CCDCellDerivative},
 }
 
 

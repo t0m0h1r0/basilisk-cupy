@@ -47,7 +47,7 @@ class FD2FaceComplex:
             out = term if out is None else out + term
         return out
 
-    def face_to_cell(self, face_values, axis: int):
+    def face_to_cell(self, face_values, axis: int, periodic: bool | None = None):
         n = face_values.shape[axis] - 1
         lo = [slice(None)] * face_values.ndim
         hi = [slice(None)] * face_values.ndim
