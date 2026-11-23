@@ -33,6 +33,9 @@ def _face_lo_hi(face, axis: int, n: int):
 class ViscosityProblem:
     def __init__(self, u: VectorField, mu: FaceField, rho, dt: float, min_cells: int = 2) -> None:
         grid = u.grid
+        if not grid.is_uniform:
+            raise NotImplementedError("Basilisk viscosity() needs a uniform grid (single Delta); on a mapped grid "
+                                      "use CCDViscosity / FD2Viscosity (terms/viscous.py)")
         if len(set(round(h, 14) for h in grid.h)) != 1:
             raise ValueError("viscosity(): square cells are required (Basilisk uses a single Delta)")
         xp = grid.xp

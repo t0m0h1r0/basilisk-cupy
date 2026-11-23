@@ -12,7 +12,8 @@ same spirit as TwoPhaseFlow's ``method:`` section::
     terms:
       convection: bcg    # bcg (CenteredNS's own) | central | uccd6 | fuccd4 | fuccd1
       sigma: 1.0e-3      # optional, UCCD6 / FUCCD dissipation coefficient
-      viscosity: basilisk  # basilisk (fd2 multigrid) | ccd (CCD full stress, defect correction)
+      viscosity: basilisk  # basilisk (fd2 multigrid, uniform grids) | ccd (CCD full stress, defect
+                           # correction) | fd2 (Basilisk's stencil structure by defect correction, any grid)
 
 New implementations are added with :func:`register` and picked by name;
 :meth:`Scheme.validate` rejects inconsistent combinations at start-up
@@ -35,7 +36,7 @@ from .grid.cartesian import CartesianGrid
 from .terms.convection.central import CentralFluxConvection
 from .terms.convection.fuccd import FUCCDConvection
 from .terms.convection.uccd6 import UCCD6Convection
-from .terms.viscous import BasiliskViscosity, CCDViscosity
+from .terms.viscous import BasiliskViscosity, CCDViscosity, FD2Viscosity
 
 
 def _fccd_of(face):
@@ -61,6 +62,7 @@ _REGISTRY: dict[str, dict[str, type]] = {
         "basilisk": lambda face, cell: BasiliskViscosity(),
         "ccd": lambda face, cell: CCDViscosity(_ccd_of(face, cell)),
         "ccd_layered": lambda face, cell: CCDViscosity(_ccd_of(face, cell), form="layered"),
+        "fd2": lambda face, cell: FD2Viscosity(),
     },
 }
 

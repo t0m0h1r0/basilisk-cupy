@@ -346,6 +346,12 @@ class FCCDFaceComplex:
             cells = self._cells_from_wall(u, ax, side, 4)
             datum = _wall_datum(f, ax, side)
             if isinstance(cond, Neumann):
+                if not f.grid.axis_uniform(ax):
+                    # the face metric applied below is FCCD's (4th order); divide it out so that the wall
+                    # face carries the physical datum exactly (Neumann compatibility of the projection)
+                    m = f.grid.metric(ax)
+                    k = 0 if side == LOWER else 1
+                    datum = datum / (m.wall_x_xi[k] * float(m.J_face[0 if side == LOWER else -1]))
                 return self._broadcast(datum, cells[0])
             c = self._grad_w
             s = 1.0 if side == LOWER else -1.0

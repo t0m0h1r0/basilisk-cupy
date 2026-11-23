@@ -226,9 +226,13 @@ def test_wall_clustering_resolves_a_boundary_layer(backend):
 def test_solvers_not_yet_ported_refuse_mapped_grids():
     from basilisk_cupy.terms.convection.uccd6 import UCCD6Convection
 
+    from basilisk_cupy.linear.viscosity import ViscosityProblem
+
     grid = CartesianGrid((16, 16), mapping=(TanhMapping(2.0), None))
-    with pytest.raises(NotImplementedError):
-        build_levels(grid)
+    assert len(build_levels(grid)) == 4  # multigrid works on mapped grids (step 4f-2)
+    with pytest.raises(NotImplementedError):  # Basilisk's viscosity stencil needs a single Delta
+        ViscosityProblem(VectorField.zeros(grid, [BoundaryConditions(), BoundaryConditions()]),
+                         FaceField.constant(grid, 1.0), 1.0, 0.1)
     with pytest.raises(NotImplementedError):
         UCCD6Convection().tendency(VectorField.zeros(grid, [BoundaryConditions(), BoundaryConditions()]))
     with pytest.raises(ValueError):

@@ -87,6 +87,15 @@ def restrict_cell(fine, out=None):
     return out
 
 
+def restrict_residual(fine, fine_grid):
+    """Coarse residual: the child average (Basilisk), volume-weighted on a mapped grid,
+    ``r_c = sum V_f r_f / V_c``, as the finite-volume equations are per unit volume."""
+    if fine_grid.is_uniform:
+        return restrict_cell(fine)
+    vol = fine_grid.cell_volumes()
+    return restrict_cell(vol * fine) / restrict_cell(vol)
+
+
 def restrict_face(fine, axis: int):
     """Coarse face value = average of the fine faces it covers."""
     ndim = fine.ndim
@@ -153,7 +162,7 @@ def mg_cycle(a: list[CellField], res_levels: list[list], da_levels: list[list[Ce
     """One Basilisk cycle for the unknowns ``a`` (a list: scalar or vector problems)."""
     nlev = len(problem.levels)
     for lev in range(nlev - 2, -1, -1):
-        res_levels[lev] = [restrict_cell(r) for r in res_levels[lev + 1]]
+        res_levels[lev] = [restrict_residual(r, problem.levels[lev + 1]) for r in res_levels[lev + 1]]
     for lev in range(nlev):
         das = da_levels[lev]
         if lev == 0:

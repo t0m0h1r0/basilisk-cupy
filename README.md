@@ -178,9 +178,40 @@ CCD full stress (`CCDStress`, split) on tanh × monitor: 5th order.
 Boundary layer `exp(−x/0.02)` at N = 32: the CCD derivative error drops from
 5.6e-3 (uniform) to 8.6e-7 (tanh, β = 3, first cell 0.001).
 
-Multigrid, Poisson/projection, the viscous solvers, BCG, UCCD6/FUCCD and
-the CFL step raise `NotImplementedError` on a mapped grid until steps 4f-2
-(solvers) and 4f-3 (Navier–Stokes).
+### Step 4f-2: solvers
+
+* Multigrid on mapped grids: every level is the same map. The residual
+  restriction is volume weighted (`r_c = Σ V r / V_c`). The relaxation is
+  alternating zebra line Gauss–Seidel along the wall axes, one batched
+  Thomas solve per colour. Basilisk's point red/black smoother stalls on
+  stretched (anisotropic) cells: 52 cycles on tanh(β = 2) × tanh(β = 2),
+  64², against 11 on a uniform grid. Lines bring it back to 10, also at
+  β = 3. Uniform grids keep Basilisk's point smoother, its GPU kernels and
+  CUDA graphs.
+* FCCD Neumann wall faces return the datum exactly. Without that the
+  4th-order face metric breaks the compatibility of pure-Neumann problems,
+  and the defect correction stalled at 5e-3.
+* Viscosity on mapped grids: `CCDViscosity` and the new `FD2Viscosity`
+  (Basilisk's stencil structure, i.e. compact same-axis face fluxes and
+  centred cross terms through the velocity ghosts, by defect correction).
+  On a mapped grid `A_L` is the componentwise scalar fd2 Helmholtz.
+  `BasiliskViscosity` stays uniform-only.
+
+| Check (N = 16 / 32 / 64 / 128) | fd2 multigrid | FCCD residual + fd2 multigrid |
+| --- | --- | --- |
+| Poisson, Dirichlet, tanh × monitor | 2.0 order, 10–13 cycles | 4.0–5.1, 15–17 |
+| Poisson, Neumann, tanh × tanh | 2.0, 13–14 | 3.9–4.0, 10–11 |
+| Poisson, periodic, sine × sine | 2.0, 14–19 | 3.9–4.0, 10–12 |
+
+Viscous defect correction on tanh(β = 2)², 32², white-noise rhs: 26–39
+(CCD) and 16–21 (fd2) corrections for κ = νdt/h² = 0.1…1000. Decaying
+channel mode u = sin(πy)e^{−νπ²t} on tanh(β = 2) in y, t = 0.1,
+200 steps, N = 8/16/32: FD2Viscosity 2.9e-3 / 1.1e-3 / 3.0e-4, CCDViscosity
+7.1e-3 / 1.6e-5 / 2.7e-7.
+
+BCG, UCCD6/FUCCD and the CFL step still refuse mapped grids (step 4f-3).
+On the GPU the line relaxation's sequential Thomas sweep is slow (one
+launch per row); a cyclic-reduction solver is planned with 4f-3.
 
 ## GPU (cupy)
 
