@@ -92,7 +92,7 @@ speed (the paper's choice; `face_velocity="interpolated"` gives TwoPhaseFlow's
 | Explicit (EXT2/BDF2) stability bound, σ = 1e-3 | — | CFL ≤ 0.157 per axis (`σ ω₂(π)⁸ CFL ≤ 4/3`, sharp: 0.9× stable, 1.1× blows up) | CFL ≤ 0.27 (`μ₄(π) = 4954`, matches the operator's eigenvalues) |
 | Inviscid Taylor–Green, IMEX-BDF2, FCCD ops, N = 64 | 1.90e-7 (5th order) | 3.55e-7 (5th) | 1.90e-7 (5th) |
 | Lid cavity Re = 1000, N = 64, t = 1.1 energy vs lid.ref | 0.21 % | 0.92 % (543 steps) | 0.25 % (315 steps) |
-| Inviscid double shear layer, N = 64, t ≤ 1.5 | energy +13 %, max\|u\| 3.8 | energy decreases, max\|u\| 1.67 | energy decreases, max\|u\| 1.63 |
+| Inviscid double shear layer, N = 64, t ≤ 1.5 | energy +13 % (t = 1.0), max\|u\| 3.95 | energy decreases, max\|u\| 1.65 | energy decreases, max\|u\| 1.63 |
 
 The point-value order of the conservative forms is that of the face difference
 `D_f F = (F_{i+1/2} − F_{i−1/2})/h` (2nd order), the same structure as
