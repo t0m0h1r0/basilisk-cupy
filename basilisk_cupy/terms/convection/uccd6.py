@@ -54,6 +54,16 @@ class UCCD6Convection:
                    for k in range(grid.ndim))
         return EXT2_REAL_LIMIT / rate if rate > 0.0 else float("inf")
 
+    def spectrum(self, u: VectorField, uf: FaceField | None = None) -> tuple[float, float]:
+        """``(max |Im lambda|, max |Re lambda|)`` in 1/time: CCD ``D1`` and the hyperviscosity."""
+        from .spectra import advective_rate  # noqa: PLC0415
+
+        grid = u.grid
+        xp = grid.xp
+        real = sum(self.sigma * float(xp.max(xp.abs(u[k].interior))) * OMEGA2_SQ_NYQUIST ** 4 / grid.h[k]
+                   for k in range(grid.ndim))
+        return advective_rate(u, None, "ccd"), real
+
     def hyperviscosity(self, comp, axis: int):
         """``(D2)^4`` of one velocity component along ``axis`` (first ``D2`` with its BC)."""
         grid = comp.grid
