@@ -199,6 +199,8 @@ def mg_solve(a, b, problem: MultigridProblem, *, nrelax: int = 4,
         if xp.__name__ == "cupy" and cycle_graph.supported(a, problem, da_levels):
             graphs = cycle_graph.CycleGraphs(a, problem, da_levels, res_levels)
 
+    if graphs is not None:
+        graphs.load_rhs(b)
     stats = MGStats(sum=to_float(xp.sum(b[0])), nrelax=nrelax if nrelax > 0 else 4,
                     minlevel=levels[0].n[0], tolerance=tolerance)
     for s in a:
@@ -207,13 +209,14 @@ def mg_solve(a, b, problem: MultigridProblem, *, nrelax: int = 4,
 
     stats.i = 0
     while stats.i < nitermax and (stats.i < nitermin or stats.resa > tolerance):
-        if graphs is not None:
-            graphs.run(stats.nrelax)
-        else:
+        resa = graphs.run(stats.nrelax) if graphs is not None else None
+        if graphs is None:
             mg_cycle(a, res_levels, da_levels, problem, stats.nrelax)
-        for s in a:
-            s.fill_ghosts()
-        stats.resa = problem.residual(a, b, res_levels[-1])
+        if resa is None:
+            for s in a:
+                s.fill_ghosts()
+            resa = problem.residual(a, b, res_levels[-1])
+        stats.resa = resa
         # Tune the number of relaxations so that each cycle reduces the
         # residual by a factor between 2 and 20 (Basilisk heuristic).
         if stats.resa > tolerance:

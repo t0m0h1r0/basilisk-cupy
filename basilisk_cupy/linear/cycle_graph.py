@@ -19,12 +19,21 @@ and their buffers are kept on the problem object, so repeated ``mg_solve``
 calls for the same problem and unknowns (the preconditioner of the defect
 correction) replay them too. The buffers' contents between calls do not
 matter: a cycle zeroes the coarsest correction and overwrites the others.
+
+When the problem has a device residual (fd2 Poisson--Helmholtz, viscosity:
+kernels/residual_gpu.py) and the unknowns' boundary conditions suit the ghost
+kernel, the graph also refills the unknowns' ghosts and computes the residual
+and its maximum norm, so a whole ``mg_solve`` iteration is one graph launch and
+one 8-byte read. The right-hand side is copied into the graph's own buffer at
+the start of each ``mg_solve``; the unknowns' conditions are compared with the
+ones recorded (their constant values are baked into the graph).
 """
 
 from __future__ import annotations
 
 import os
 
+from ..boundary import BoundaryConditions
 from ..fields import CellField
 
 
@@ -54,10 +63,20 @@ def supported(a: list[CellField], problem, da_levels) -> bool:
     return all(f.data.flags.c_contiguous and f.data.dtype == grid.xp.float64 for f in fields)
 
 
+def _residual_in_graph(a: list[CellField], problem) -> bool:
+    supported_ = getattr(problem, "device_residual_supported", None)
+    if supported_ is None or not supported_():
+        return False
+    return all(s.bc._kernel_sides(s.grid.ndim) is not None for s in a)
+
+
 def cached(problem, a: list[CellField]):
-    """The :class:`CycleGraphs` recorded earlier for ``problem`` and the same unknown arrays."""
+    """The :class:`CycleGraphs` recorded earlier for ``problem`` and the same unknowns
+    (same arrays, same boundary conditions, same residual operator)."""
     graphs = getattr(problem, "_cycle_graphs", None)
     if graphs is None or len(graphs.a) != len(a) or any(s.data is not c.data for s, c in zip(a, graphs.a)):
+        return None
+    if [s.bc for s in a] != graphs.bcs or _residual_in_graph(a, problem) != graphs.with_residual:
         return None
     return graphs
 
@@ -78,7 +97,18 @@ class CycleGraphs:
         self.seen: set[int] = set()
         self.graphs: dict = {}
         self.stream = cp.cuda.Stream(non_blocking=True)
+        self.bcs = [BoundaryConditions(dict(s.bc.sides)) for s in a]  # snapshot: values are baked in
+        self.with_residual = _residual_in_graph(a, problem)
+        if self.with_residual:
+            self.b = [cp.zeros(levels[-1].n, dtype=cp.float64) for _ in a]
+            self.norm = cp.zeros(1, dtype=cp.uint64)
         problem._cycle_graphs = self
+
+    def load_rhs(self, b: list) -> None:
+        """Copy the right-hand side into the graph's buffer (start of each ``mg_solve``)."""
+        if self.with_residual:
+            for dst, src in zip(self.b, b):
+                dst[...] = src
 
     # the cycle, allocation free -------------------------------------------------------
     def _cycle(self, nrelax: int) -> None:
@@ -105,6 +135,11 @@ class CycleGraphs:
         for s, ds in zip(self.a, da_levels[-1]):
             target = s.interior
             target += ds.interior
+        if self.with_residual:
+            for s in self.a:
+                s.fill_ghosts()
+            self.norm.fill(0)
+            problem.device_residual(self.a, self.b, res_levels[-1], self.norm)
 
     def _record(self, nrelax: int):
         cp = self.cp
@@ -123,12 +158,16 @@ class CycleGraphs:
                 cp.cuda.set_allocator(pool.malloc)
         return graph
 
-    def run(self, nrelax: int) -> None:
+    def run(self, nrelax: int) -> float | None:
+        """One cycle; returns the residual norm when the graph computes it, else None."""
         graph = self.graphs.get(nrelax)
-        if graph is None:
-            if nrelax not in self.seen:
-                self.seen.add(nrelax)
-                self._cycle(nrelax)
-                return
-            graph = self.graphs[nrelax] = self._record(nrelax)
-        graph.launch(stream=self.cp.cuda.get_current_stream())
+        if graph is None and nrelax not in self.seen:
+            self.seen.add(nrelax)
+            self._cycle(nrelax)
+        else:
+            if graph is None:
+                graph = self.graphs[nrelax] = self._record(nrelax)
+            graph.launch(stream=self.cp.cuda.get_current_stream())
+        if not self.with_residual:
+            return None
+        return float(self.norm.view(self.cp.float64)[0])

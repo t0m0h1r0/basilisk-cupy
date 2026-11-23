@@ -18,6 +18,7 @@ from ..discretization.fd2 import FD2FaceComplex
 from ..fields import CellField, FaceField
 from ..grid.hierarchy import build_levels
 from ..kernels.relax_gpu import relax_redblack
+from ..kernels.residual_gpu import helmholtz_residual
 from .multigrid import NITERMAX, NITERMIN, TOLERANCE, MGStats, mg_solve, restrict_cell, restrict_face
 
 
@@ -96,9 +97,25 @@ class HelmholtzProblem:
         return self._masks
 
     # L_high residual on the finest level -------------------------------------------
+    def device_residual_supported(self) -> bool:
+        """Whether :meth:`device_residual` applies (GPU kernels and the fd2 residual operator)."""
+        return self.fused and type(self.ops) is FD2FaceComplex
+
+    def device_residual(self, al: list[CellField], bl: list, resl: list, norm) -> None:
+        """Residual into ``resl`` and ``max |res|`` into the device scalar ``norm`` (no sync,
+        no allocation: kernels/residual_gpu.py). ``bl`` must be contiguous float64."""
+        a = al[0]
+        grid = a.grid
+        helmholtz_residual(a.data, bl[0], resl[0], self.alpha[-1], self.lam[-1] if self.has_lambda else None,
+                           grid.n, grid.h, grid.ghosts, norm)
+
     def residual(self, al: list[CellField], bl: list, resl: list) -> float:
         a, b, res = al[0], bl[0], resl[0]
         xp = a.grid.xp
+        if self.device_residual_supported() and res.flags.c_contiguous:
+            norm = xp.zeros(1, dtype=xp.uint64)
+            self.device_residual(al, [xp.ascontiguousarray(b, dtype=xp.float64)], resl, norm)
+            return to_float(norm.view(xp.float64)[0])
         flux = FaceField(a.grid, [self.alpha_fine[ax] * self.ops.grad_f(a, ax) for ax in range(a.grid.ndim)])
         res[...] = b - self.ops.div_f(flux)
         if self.has_lambda:

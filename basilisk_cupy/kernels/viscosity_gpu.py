@@ -10,7 +10,7 @@ from __future__ import annotations
 
 from functools import lru_cache
 
-from .relax_gpu import THREADS, launch_args, padded_strides, face_strides, unflatten
+from .relax_gpu import compile_kernel, face_strides, index, launch_colours, padded_strides, unflatten_colour, wide_indices
 
 
 def _source(ndim: int, rho_array: bool) -> str:
@@ -23,7 +23,7 @@ def _source(ndim: int, rho_array: bool) -> str:
               + (["const double* __restrict__ rho"] if rho_array else [])
               + ["const double* __restrict__ prm"]  # prm[0] = dt, prm[1] = constant rho
               + [f"const long long n{a}" for a in range(ndim)]
-              + ["const double h2", "const long long g", "const int colour", "const long long total"])
+              + ["const double h2", "const long long g", "const int colour", "const long long count"])
     body = []
     for j in range(ndim):
         fs = face_strides(ndim, j)
@@ -48,14 +48,12 @@ def _source(ndim: int, rho_array: bool) -> str:
                 body.append(f"den{i} = den{i} + mhi{j} + mlo{j};")
         body.append(f"const double new{i} = (res{i}[t] * h2 + dtr * num{i}) / (h2 + dtr * den{i});")
     body += [f"u{i}[p] = new{i};" for i in range(ndim)]
-    parity = " + ".join(f"i{a}" for a in range(ndim))
     nl = "\n    "
     return f"""
 extern "C" __global__ void relax_viscosity({", ".join(params)}) {{
-    const long long t = (long long)blockDim.x * blockIdx.x + threadIdx.x;
-    if (t >= total) return;
-    {nl.join(unflatten(ndim))}
-    if (({parity}) % 2 != colour) return;
+    const long long q = (long long)blockDim.x * blockIdx.x + threadIdx.x;
+    if (q >= count) return;
+    {nl.join(unflatten_colour(ndim))}
     const long long p = {pidx};
     {nl.join(body)}
 }}
@@ -63,10 +61,8 @@ extern "C" __global__ void relax_viscosity({", ".join(params)}) {{
 
 
 @lru_cache(maxsize=None)
-def _kernel(ndim: int, rho_array: bool):
-    import cupy as cp  # noqa: PLC0415
-
-    return cp.RawKernel(_source(ndim, rho_array), "relax_viscosity", options=("--fmad=false",))
+def _kernel(ndim: int, rho_array: bool, wide: bool):
+    return compile_kernel(_source(ndim, rho_array), "relax_viscosity", wide)
 
 
 def relax_viscosity_redblack(us, res, mu, rho, n, h2: float, params, ghosts: int, frozen=None) -> None:
@@ -90,8 +86,10 @@ def relax_viscosity_redblack(us, res, mu, rho, n, h2: float, params, ghosts: int
         for dst, u in zip(ua, us):
             cp.copyto(dst, u)
     rho_array = hasattr(rho, "shape")
-    args = (list(us) + ua + [cp.ascontiguousarray(r, dtype=cp.float64) for r in res]
-            + [cp.ascontiguousarray(m, dtype=cp.float64) for m in mu]
+    mu = [cp.ascontiguousarray(m, dtype=cp.float64) for m in mu]
+    wide = wide_indices(*us, *mu)
+    ix = index(wide)
+    args = (list(us) + ua + [cp.ascontiguousarray(r, dtype=cp.float64) for r in res] + mu
             + ([cp.ascontiguousarray(rho, dtype=cp.float64)] if rho_array else []) + [params]
-            + [cp.int64(v) for v in n] + [cp.float64(h2), cp.int64(ghosts)])
-    launch_args(_kernel(ndim, rho_array), n, args)
+            + [ix(v) for v in n] + [cp.float64(h2), ix(ghosts)])
+    launch_colours(_kernel(ndim, rho_array, wide), n, args, wide)

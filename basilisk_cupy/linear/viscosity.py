@@ -17,6 +17,7 @@ from __future__ import annotations
 from ..backend import to_float
 from ..fields import CellField, FaceField, VectorField
 from ..grid.hierarchy import build_levels
+from ..kernels.residual_gpu import viscosity_residual
 from ..kernels.viscosity_gpu import relax_viscosity_redblack
 from .multigrid import NITERMAX, NITERMIN, TOLERANCE, MGStats, mg_solve, restrict_cell, restrict_face
 
@@ -106,9 +107,23 @@ class ViscosityProblem:
         return self._masks
 
     # Basilisk residual_viscosity ("naive" Cartesian version) ------------------------
+    def device_residual_supported(self) -> bool:
+        return self.fused
+
+    def device_residual(self, a: list[CellField], b: list, res: list, norm) -> None:
+        """Residual into ``res`` and ``max |res|`` into the device scalar ``norm`` (no sync,
+        no allocation: kernels/residual_gpu.py). ``b`` must be contiguous float64."""
+        grid = a[0].grid
+        viscosity_residual([c.data for c in a], b, res, self.mu[-1], self.rho[-1], self.params, grid.n,
+                           grid.h[0] ** 2, grid.ghosts, norm)
+
     def residual(self, a: list[CellField], b: list, res: list) -> float:
         grid = a[0].grid
         xp = grid.xp
+        if self.device_residual_supported() and all(r.flags.c_contiguous for r in res):
+            norm = xp.zeros(1, dtype=xp.uint64)
+            self.device_residual(a, [xp.ascontiguousarray(v, dtype=xp.float64) for v in b], res, norm)
+            return to_float(norm.view(xp.float64)[0])
         ndim = grid.ndim
         h2 = grid.h[0] ** 2
         mu = self.mu[-1]

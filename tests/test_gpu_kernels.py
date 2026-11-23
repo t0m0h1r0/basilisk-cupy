@@ -21,9 +21,14 @@ def cp():
     return cupy
 
 
-@pytest.mark.parametrize("n,lam", [((32,), 1.0), ((16, 12), None), ((16, 12), -2.0), ((8, 6, 10), -2.0),
-                                   ((8, 6, 10), None)])
-def test_poisson_relaxation_kernel(cp, n, lam):
+@pytest.mark.parametrize("wide", [False, True])
+@pytest.mark.parametrize("n,lam", [((32,), 1.0), ((5,), 2.0), ((16, 12), None), ((16, 12), -2.0), ((7, 9), -1.0),
+                                   ((8, 6, 10), -2.0), ((8, 6, 10), None), ((5, 3, 7), None)])
+def test_poisson_relaxation_kernel(cp, monkeypatch, n, lam, wide):
+    from basilisk_cupy.kernels import relax_gpu
+
+    if wide:  # force 64-bit indices
+        monkeypatch.setattr(relax_gpu, "_INT32_LIMIT", 1)
     out = []
     for fused in (False, True):
         rng = np.random.default_rng(1)
@@ -39,8 +44,14 @@ def test_poisson_relaxation_kernel(cp, n, lam):
     np.testing.assert_array_equal(out[0], out[1])
 
 
-@pytest.mark.parametrize("n,rho_array", [((32,), False), ((16, 12), False), ((16, 16), True), ((8, 6, 10), True)])
-def test_viscosity_relaxation_kernel(cp, n, rho_array):
+@pytest.mark.parametrize("wide", [False, True])
+@pytest.mark.parametrize("n,rho_array", [((32,), False), ((16, 12), False), ((16, 16), True), ((9, 7), True),
+                                         ((8, 6, 10), True), ((5, 7, 3), False)])
+def test_viscosity_relaxation_kernel(cp, monkeypatch, n, rho_array, wide):
+    from basilisk_cupy.kernels import relax_gpu
+
+    if wide:
+        monkeypatch.setattr(relax_gpu, "_INT32_LIMIT", 1)
     out = []
     for fused in (False, True):
         rng = np.random.default_rng(1)
@@ -174,3 +185,61 @@ def test_cycle_graphs_in_3d(cp, monkeypatch, n):
         poisson(a, cp.sin(math.pi * x) * cp.sin(2 * math.pi * y) * z, tolerance=1e-9)
         out.append(cp.asnumpy(a.interior))
     np.testing.assert_array_equal(out[0], out[1])
+
+
+@pytest.mark.parametrize("wide", [False, True])
+@pytest.mark.parametrize("n,lam", [((32,), 1.0), ((16, 12), None), ((7, 9), -2.0), ((8, 6, 10), 3.0), ((5, 3, 7), None)])
+def test_helmholtz_residual_kernel(cp, monkeypatch, n, lam, wide):
+    from basilisk_cupy.kernels import relax_gpu
+
+    if wide:
+        monkeypatch.setattr(relax_gpu, "_INT32_LIMIT", 1)
+    rng = np.random.default_rng(2)
+    grid = CartesianGrid(n, length=(1.0, 2.0, 0.5)[:len(n)], backend="cupy")
+    alpha = FaceField(grid, [cp.asarray(1 + rng.random(grid.face_shape(a))) for a in range(len(n))])
+    a = CellField(grid)
+    a.data[...] = cp.asarray(rng.random(a.data.shape) - 0.5)
+    b = cp.asarray(rng.random(grid.n))
+    problem = HelmholtzProblem(a, alpha, cp.asarray(rng.random(grid.n)) if lam else None)
+    out = []
+    for device in (False, True):
+        monkeypatch.setattr(problem, "device_residual_supported", lambda device=device: device)
+        res = cp.zeros(grid.n)
+        norm = problem.residual([a], [b], [res])
+        out.append((norm, cp.asnumpy(res)))
+    assert out[0][0] == out[1][0]
+    np.testing.assert_array_equal(out[0][1], out[1][1])
+
+
+@pytest.mark.parametrize("wide", [False, True])
+@pytest.mark.parametrize("n,rho_array", [((32,), False), ((16, 12), False), ((9, 7), True), ((8, 6, 10), True)])
+def test_viscosity_residual_kernel(cp, monkeypatch, n, rho_array, wide):
+    from basilisk_cupy.kernels import relax_gpu
+
+    if wide:
+        monkeypatch.setattr(relax_gpu, "_INT32_LIMIT", 1)
+    rng = np.random.default_rng(3)
+    grid = CartesianGrid(n, length=tuple(v / 16 for v in n), backend="cupy")
+    mu = FaceField(grid, [cp.asarray(1 + rng.random(grid.face_shape(a))) for a in range(len(n))])
+    u = VectorField.zeros(grid, [BoundaryConditions() for _ in n])
+    for c in u:
+        c.data[...] = cp.asarray(rng.random(c.data.shape))
+    problem = ViscosityProblem(u, mu, cp.asarray(1 + rng.random(grid.n)) if rho_array else 1.3, 0.01)
+    b = [cp.asarray(rng.random(grid.n)) for _ in n]
+    out = []
+    for device in (False, True):
+        monkeypatch.setattr(problem, "device_residual_supported", lambda device=device: device)
+        res = [cp.zeros(grid.n) for _ in n]
+        norm = problem.residual(list(u), b, res)
+        out.append((norm, [cp.asnumpy(r) for r in res]))
+    assert out[0][0] == out[1][0]
+    for x, y in zip(out[0][1], out[1][1]):
+        np.testing.assert_array_equal(x, y)
+
+
+def test_residual_norm_propagates_nan(cp):
+    grid = CartesianGrid((16, 16), backend="cupy")
+    a = CellField(grid)
+    a.data[5, 7] = float("nan")
+    norm = HelmholtzProblem(a, None).residual([a], [cp.zeros(grid.n)], [cp.zeros(grid.n)])
+    assert norm != norm

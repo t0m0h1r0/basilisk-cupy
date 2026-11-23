@@ -88,8 +88,19 @@ launch. The cycle writes only into buffers allocated beforehand (allocation
 is switched off while recording), and the Poisson, viscosity and
 defect-correction problems are kept with their unknown field and reused with
 refreshed coefficients, so the recorded graphs survive from one time step to
-the next (dt and a constant ρ are read from device memory). Results are
-bitwise those without graphs; `BASILISK_CUPY_GRAPHS=0` turns them off.
+the next (dt and a constant ρ are read from device memory). For fd2
+Poisson–Helmholtz and viscosity problems the graph also contains the residual
+and its maximum norm (`kernels/residual_gpu.py`, warp-reduced `atomicMax` on
+the bit pattern, exact), so one `mg_solve` iteration is one graph launch and
+one 8-byte read; the nrelax heuristic and the stopping test stay on the host,
+as in Basilisk. Results are bitwise those without graphs;
+`BASILISK_CUPY_GRAPHS=0` turns them off.
+
+Relaxation kernels launch threads for the cells of one colour only and use
+32-bit indices when the arrays allow it. On a GeForce card the remaining cost
+is double-precision arithmetic (FP64 runs at 1/64 of FP32): the divisions by
+h and h² are kept, as in Basilisk, rather than replaced by multiplications
+that would change the rounding.
 
 Cell restriction sums the 2^d children in C order and divides by 2^d, as
 Basilisk's `restriction_average`, on every backend.
@@ -98,19 +109,19 @@ Taylor–Green, ms per time step (RTX 3080 Ti vs one core of a Ryzen 9 5950X):
 
 | Solver | N | numpy | cupy | speed-up |
 | --- | --- | --- | --- | --- |
-| `CenteredNS` (fd2) | 64 | 90.3 | 34.7 | 2.6 |
-| `CenteredNS` (fd2) | 256 | 420.3 | 47.4 | 8.9 |
-| `CenteredNS` (fd2) | 512 | 1267.9 | 71.7 | 17.7 |
-| `IMEXBDF2NS` (FCCD) | 64 | 98.2 | 46.9 | 2.1 |
-| `IMEXBDF2NS` (FCCD) | 256 | 678.5 | 58.4 | 11.6 |
+| `CenteredNS` (fd2) | 64 | 89.1 | 29.1 | 3.1 |
+| `CenteredNS` (fd2) | 256 | 404.4 | 37.6 | 10.7 |
+| `CenteredNS` (fd2) | 512 | 1332.7 | 51.7 | 25.8 |
+| `IMEXBDF2NS` (FCCD) | 64 | 98.3 | 41.3 | 2.4 |
+| `IMEXBDF2NS` (FCCD) | 256 | 567.4 | 51.4 | 11.0 |
 
 3D Poisson (Dirichlet, tolerance 1e-8, 12 cycles), one solve:
 
 | N | numpy | cupy | speed-up |
 | --- | --- | --- | --- |
-| 32³ | 74.2 ms | 8.9 ms | 8.3 |
-| 64³ | 364.4 ms | 18.2 ms | 20.0 |
-| 128³ | 4902.0 ms | 101.8 ms | 48.2 |
+| 32³ | 75.0 ms | 7.6 ms | 9.9 |
+| 64³ | 366.2 ms | 13.8 ms | 26.5 |
+| 128³ | 4905.2 ms | 59.3 ms | 82.7 |
 
 ## Tests
 

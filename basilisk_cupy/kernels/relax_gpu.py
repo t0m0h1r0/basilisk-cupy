@@ -10,10 +10,13 @@ Cells of the other colour are only read, so updating in place equals the
 masked update of the array path. Kernels are compiled with ``--fmad=false`` so
 that no multiply-add is contracted and the result is bitwise the array path's.
 
-Index conventions shared by the kernels: one thread per interior cell, flat
-index ``t`` in C order over ``n``; ``p`` is the cell's index in the padded
-array (``ghosts`` layers per side); the face array normal to axis ``a`` has
-``n_a + 1`` entries along ``a``.
+Index conventions shared by the kernels: ``t`` is the cell's flat index in C
+order over the interior ``n``; ``p`` is its index in the padded array
+(``ghosts`` layers per side); the face array normal to axis ``a`` has
+``n_a + 1`` entries along ``a``. Indices are ``idx_t``: 32-bit when every array
+is small enough, 64-bit otherwise (integer division is much cheaper in 32 bits).
+A red/black sweep launches threads for the cells of one colour only: along the
+last axis every other cell, offset by the parity of the other indices.
 """
 
 from __future__ import annotations
@@ -21,16 +24,35 @@ from __future__ import annotations
 from functools import lru_cache
 
 THREADS = 256
+_INT32_LIMIT = 2**31 - 2**20
 
 
-def unflatten(ndim: int) -> list[str]:
-    """C statements giving ``i0 .. i{ndim-1}`` from the flat index ``t``."""
-    out, rem = [], "t"
+def unflatten(ndim: int, flat: str = "t") -> list[str]:
+    """C statements giving ``i0 .. i{ndim-1}`` from the flat interior index ``flat``."""
+    out, rem = [], flat
     for a in range(ndim - 1, -1, -1):
         out.append(f"const long long i{a} = {rem} % n{a};")
         if a:
             out.append(f"const long long r{a} = {rem} / n{a};")
             rem = f"r{a}"
+    return out
+
+
+def unflatten_colour(ndim: int) -> list[str]:
+    """``i0 .. i{ndim-1}`` and ``t`` for thread ``q`` of a colour-``colour`` sweep (returns if outside)."""
+    last = ndim - 1
+    out = [f"const long long m = (n{last} + 1) / 2;", "const long long k = q % m;"]
+    rem = "(q / m)"
+    for a in range(last - 1, -1, -1):
+        out.append(f"const long long i{a} = {rem} % n{a};")
+        if a:
+            out.append(f"const long long r{a} = {rem} / n{a};")
+            rem = f"r{a}"
+    others = " + ".join([f"i{a}" for a in range(last)] + ["colour"])
+    out.append(f"const long long i{last} = 2 * k + (({others}) & 1);")
+    out.append(f"if (i{last} >= n{last}) return;")
+    strides = [" * ".join(f"n{b}" for b in range(a + 1, ndim)) or "1" for a in range(ndim)]
+    out.append("const long long t = " + " + ".join(f"i{a} * ({strides[a]})" for a in range(ndim)) + ";")
     return out
 
 
@@ -43,16 +65,39 @@ def face_strides(ndim: int, axis: int) -> list[str]:
             for b in range(ndim)]
 
 
-def launch_args(kernel, n, args) -> None:
-    """Run ``kernel`` for colour 0 then colour 1; ``args`` end before ``colour, total``."""
+def wide_indices(*arrays) -> bool:
+    """Whether 64-bit indices are needed for ``arrays``."""
+    return any(a.size >= _INT32_LIMIT for a in arrays)
+
+
+def compile_kernel(source: str, name: str, wide: bool):
+    """Compile ``source`` with ``idx_t`` (written ``long long`` in the generators) 32- or 64-bit."""
     import cupy as cp  # noqa: PLC0415
 
-    total = 1
-    for v in n:
-        total *= v
-    blocks = (total + THREADS - 1) // THREADS
+    text = source.replace("unsigned long long", "UNSIGNED_LL").replace("long long", "idx_t")
+    text = text.replace("UNSIGNED_LL", "unsigned long long")
+    header = "typedef long long idx_t;\n" if wide else "typedef int idx_t;\n"
+    return cp.RawKernel(header + text, name, options=("--fmad=false",))
+
+
+def index(wide: bool):
+    """Host scalar type matching ``idx_t``."""
+    import cupy as cp  # noqa: PLC0415
+
+    return cp.int64 if wide else cp.int32
+
+
+def launch_colours(kernel, n, args, wide: bool) -> None:
+    """Run ``kernel`` for colour 0 then colour 1, one thread per cell of the colour;
+    ``args`` end before ``colour, count``."""
+    import cupy as cp  # noqa: PLC0415
+
+    count = (n[-1] + 1) // 2
+    for v in n[:-1]:
+        count *= v
+    blocks = (count + THREADS - 1) // THREADS
     for colour in (0, 1):
-        kernel((blocks,), (THREADS,), tuple(args) + (cp.int32(colour), cp.int64(total)))
+        kernel((blocks,), (THREADS,), tuple(args) + (cp.int32(colour), index(wide)(count)))
 
 
 def _source(ndim: int, has_lambda: bool) -> str:
@@ -63,7 +108,7 @@ def _source(ndim: int, has_lambda: bool) -> str:
               + [f"const double* __restrict__ al{a}" for a in range(ndim)]
               + [f"const long long n{a}" for a in range(ndim)]
               + [f"const double h2_{a}" for a in range(ndim)]
-              + ["const long long g", "const int colour", "const long long total"])
+              + ["const long long g", "const int colour", "const long long count"])
     body = ["double num = -res[t];", f"double den = {'-lam[t]' if has_lambda else '0.0'};"]
     for a in range(ndim):
         fs = face_strides(ndim, a)
@@ -77,14 +122,12 @@ def _source(ndim: int, has_lambda: bool) -> str:
             f"    den = den + (ahi + alo) / h2_{a};",
             "}",
         ]
-    parity = " + ".join(f"i{a}" for a in range(ndim))
     nl = "\n    "
     return f"""
 extern "C" __global__ void relax({", ".join(params)}) {{
-    const long long t = (long long)blockDim.x * blockIdx.x + threadIdx.x;
-    if (t >= total) return;
-    {nl.join(unflatten(ndim))}
-    if (({parity}) % 2 != colour) return;
+    const long long q = (long long)blockDim.x * blockIdx.x + threadIdx.x;
+    if (q >= count) return;
+    {nl.join(unflatten_colour(ndim))}
     const long long p = {pidx};
     {nl.join(body)}
     u[p] = den != 0.0 ? num / den : 0.0;
@@ -93,10 +136,8 @@ extern "C" __global__ void relax({", ".join(params)}) {{
 
 
 @lru_cache(maxsize=None)
-def _kernel(ndim: int, has_lambda: bool):
-    import cupy as cp  # noqa: PLC0415
-
-    return cp.RawKernel(_source(ndim, has_lambda), "relax", options=("--fmad=false",))
+def _kernel(ndim: int, has_lambda: bool, wide: bool):
+    return compile_kernel(_source(ndim, has_lambda), "relax", wide)
 
 
 def relax_redblack(u, res, alphas, lam, n, h, ghosts: int) -> None:
@@ -108,6 +149,8 @@ def relax_redblack(u, res, alphas, lam, n, h, ghosts: int) -> None:
     args = [u, cp.ascontiguousarray(res, dtype=cp.float64)]
     if lam is not None:
         args.append(cp.ascontiguousarray(lam, dtype=cp.float64))
-    args += [cp.ascontiguousarray(a, dtype=cp.float64) for a in alphas]
-    args += [cp.int64(v) for v in n] + [cp.float64(hv ** 2) for hv in h] + [cp.int64(ghosts)]
-    launch_args(_kernel(len(n), lam is not None), n, args)
+    alphas = [cp.ascontiguousarray(a, dtype=cp.float64) for a in alphas]
+    wide = wide_indices(u, *alphas)
+    ix = index(wide)
+    args += alphas + [ix(v) for v in n] + [cp.float64(hv ** 2) for hv in h] + [ix(ghosts)]
+    launch_colours(_kernel(len(n), lam is not None, wide), n, args, wide)
