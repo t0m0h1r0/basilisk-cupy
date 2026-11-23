@@ -27,6 +27,11 @@ with ``u** = u_s + dt sum_j (bE_j - aE_sj) C_j`` and one more projection
 The implicit part is stiffly accurate in both, so ``u^{n+1}`` carries the
 implicit update exactly.
 
+``face_native=True`` (see :mod:`.imex_bdf2`): every stage moves the faces by the
+interpolated cell increment, ``u_f*_i = u_f^n + P_f(u*_i - u^n - c_i dt g^n) + c_i dt (a - alpha G_f p^n)``,
+projects them and reconstructs the cells; the final ARS(3,4,3) correction projects
+``u_f,s + P_f(dt sum_j (bE_j - aE_sj) C_j)`` over ``p_s``.
+
 Step size: a fixed ``fixed_dt``, or Basilisk's CFL step capped by the
 convection term's spectrum (``spectrum(u, uf)``: largest imaginary and real
 parts) and the tableau's axis limits times ``safety``.
@@ -148,6 +153,10 @@ class IMEXRKNS(IMEXBDF2NS):
 
         t = self.tableau
         ndim = self.grid.ndim
+        if self.face_native and not getattr(self, "_fn_started", False):
+            self._reconstruct_cells()  # the state is uf; cells are its reconstruction
+            self._fn_started = True
+        uf_n = [self.uf[ax].copy() for ax in range(ndim)]
         u_n = [comp.interior.copy() for comp in self.u]
         g_n = [comp.interior.copy() for comp in self.g]
         p_n = self.p.interior.copy()
@@ -180,11 +189,24 @@ class IMEXRKNS(IMEXBDF2NS):
             V.append([(us - r) / gdt for us, r in zip(ustar, rhs)] if self.mu is not None else zero)
             self._run_hooks("acceleration")
             self._run_hooks("projection")
-            self._project_stage(ustar, g_n, p_n, t.c[i] * dt)
+            cdt = t.c[i] * dt
+            if self.face_native:
+                finc = self._faces_from_increment([us - un - cdt * gn for us, un, gn in zip(ustar, u_n, g_n)])
+                self.p.interior = p_n
+                self._project_faces([uf_n[ax] + finc[ax] + cdt * self._face_pressure_force(self.p, ax)
+                                     for ax in range(ndim)], p_n, cdt)
+            else:
+                self._project_stage(ustar, g_n, p_n, cdt)
             if i < t.stages - 1 or not t.explicit_stiffly_accurate:
                 C.append(zero if self.stokes else self.convection.tendency(self.u, self.uf))
 
-        if not t.explicit_stiffly_accurate and not self.stokes:
+        if not t.explicit_stiffly_accurate and not self.stokes and self.face_native:
+            s = t.stages - 1
+            inc = [sum(dt * (t.bE[j] - t.AE[s][j]) * C[j][ax] for j in range(t.stages) if t.bE[j] != t.AE[s][j])
+                   for ax in range(ndim)]
+            finc = self._faces_from_increment(inc)
+            self._project_faces([self.uf[ax] + finc[ax] for ax in range(ndim)], self.p.interior.copy(), dt)
+        elif not t.explicit_stiffly_accurate and not self.stokes:
             s = t.stages - 1
             final = []
             for ax in range(ndim):

@@ -23,6 +23,20 @@ velocity is not discretely divergence-free); it vanishes for Stokes flow,
 where the scheme is exactly 2nd order. TwoPhaseFlow avoids it by carrying
 the projected face velocity as the state, which is a later step here.
 
+Face-native state (``face_native=True``; TwoPhaseFlow paper §11b2: the state
+is the face velocity ``f`` with ``D_f f = 0`` and ``u = R_h f``): the projected
+face velocity is carried as the state and the cell velocity is always its
+reconstruction ``R_h`` (``face_to_cell`` of the shared operators), used only to
+evaluate convection and viscosity. The predictor is still solved on cells, but
+only its increment moves the faces, ``u_f* = A_f + P_f(u* - R_h A_f - gamma dt g^n)
++ gamma dt (a - alpha G_f p^n)`` with ``A_f = c_n u_f^n - c_m u_f^{n-1}``, so the
+non-invertible ``R_h``/``P_f`` round trip never acts on the state itself. The
+cell correction ``u* + gamma dt (g^{n+1} - g^n)`` and its ``O(dt h^p)`` error
+disappear; the cell values carry the error of ``R_h`` (4th order for FCCD,
+2nd for fd2) instead. (TwoPhaseFlow's code has the option behind
+``face_native_predictor_state``, off by default; §11b1 stage 7 still writes the
+nodal correction.)
+
 Convection terms with an explicit stability bound (UCCD6, FUCCD:
 ``max_stable_dt``) cap the adaptive step; a fixed step above the bound warns.
 
@@ -45,8 +59,12 @@ from .stepping import dtnext
 class IMEXBDF2NS(CenteredNS):
     """Same fields, boundary conditions and hook stages as :class:`CenteredNS`."""
 
-    def __init__(self, grid, *, convection=None, viscous=None, fixed_dt: float | None = None, **kwargs) -> None:
+    def __init__(self, grid, *, convection=None, viscous=None, fixed_dt: float | None = None,
+                 face_native: bool = False, **kwargs) -> None:
         super().__init__(grid, **kwargs)
+        #: carry the projected face velocity as the state, cells reconstructed from it (see module doc)
+        self.face_native = face_native
+        self._uf_prev = None
         self.convection = convection or CentralFluxConvection(self.ops)
         #: implicit viscous solver (``solve(u, mu, rho, dt)``): Basilisk's fd2 multigrid or ``CCDViscosity``
         self.viscous = viscous or BasiliskViscosity()
@@ -89,6 +107,39 @@ class IMEXBDF2NS(CenteredNS):
         p.fill_ghosts()
         return self.a[ax] - self.alpha[ax] * self.ops.grad_f(p, ax)
 
+    # -- face-native state helpers ------------------------------------------------------
+    def _cells_from_faces(self, faces) -> list:
+        """``R_h``: cell velocity from face-normal velocities (``face_to_cell`` of the shared operators)."""
+        return [self.ops.face_to_cell(faces[ax], ax, periodic=self.u[ax].bc.is_periodic(ax))
+                for ax in range(self.grid.ndim)]
+
+    def _reconstruct_cells(self) -> None:
+        for ax, v in enumerate(self._cells_from_faces(self.uf)):
+            self.u[ax].interior = v
+        self.u.fill_ghosts()
+
+    def _faces_from_increment(self, inc: list) -> list:
+        """``P_f`` of a cell-velocity increment (homogeneous conditions: the increment of a fixed BC)."""
+        out = []
+        for ax in range(self.grid.ndim):
+            f = CellField.from_interior(self.grid, inc[ax], self.u[ax].bc.homogeneous())
+            f.fill_ghosts()
+            out.append(self.ops.interp_f(f, ax))
+        return out
+
+    def _project_faces(self, uf_star: list, p_base, cdt: float) -> None:
+        """Project ``uf*`` for the increment over ``p_base``; cells are then ``R_h uf``."""
+        self.uf = FaceField(self.grid, uf_star, "uf")
+        self._apply_uf_bc(self.uf)
+        self.dp.data[...] = 0.0
+        self.mgp = project(self.uf, self.dp, self.alpha, cdt, ops=self.ops,
+                           nrelax=self.mgp.nrelax or 4, tolerance=self.tolerance)
+        self._apply_uf_bc(self.uf)
+        self.p.interior = p_base + self.dp.interior
+        self.p.fill_ghosts()
+        self.centered_gradient()
+        self._reconstruct_cells()
+
     # -- one step ----------------------------------------------------------------------
     def step(self) -> None:
         c = self.clock
@@ -110,6 +161,9 @@ class IMEXBDF2NS(CenteredNS):
         else:
             w, gamma, c_n, c_m = 0.0, 1.0, 1.0, 0.0
 
+        if self.face_native and self._uf_prev is None and not getattr(self, "_fn_started", False):
+            self._reconstruct_cells()  # the state is uf; cells are its reconstruction from the first step on
+            self._fn_started = True
         # explicit convection at t^n (extrapolated)
         self._run_hooks("advection_term")
         conv_n = [0.0] * ndim if self.stokes else self.convection.tendency(self.u, self.uf)
@@ -121,10 +175,17 @@ class IMEXBDF2NS(CenteredNS):
         u_n = [comp.interior.copy() for comp in self.u]
         g_n = [comp.interior.copy() for comp in self.g]
         gdt = gamma * dt
+        if self.face_native:
+            uf_n = [self.uf[ax].copy() for ax in range(ndim)]
+            a_face = [c_n * uf_n[ax] - (c_m * self._uf_prev[ax] if bdf2 else 0.0) for ax in range(ndim)]
+            a_cell = self._cells_from_faces(a_face)
         for ax in range(ndim):
-            rhs = c_n * u_n[ax] + gdt * (conv[ax] + g_n[ax])
-            if bdf2:
-                rhs = rhs - c_m * self._u_prev[ax]
+            if self.face_native:
+                rhs = a_cell[ax] + gdt * (conv[ax] + g_n[ax])
+            else:
+                rhs = c_n * u_n[ax] + gdt * (conv[ax] + g_n[ax])
+                if bdf2:
+                    rhs = rhs - c_m * self._u_prev[ax]
             self.u[ax].interior = rhs
         self.u.fill_ghosts()
 
@@ -135,6 +196,21 @@ class IMEXBDF2NS(CenteredNS):
         if not self.a_is_constant:
             for ax in range(ndim):
                 self.a[ax] = 0.0
+
+        if self.face_native:
+            # faces advance by the interpolated cell increment (no R_h/P_f round trip of the state)
+            self._run_hooks("acceleration")
+            inc = [self.u[ax].interior - a_cell[ax] - gdt * g_n[ax] for ax in range(ndim)]
+            finc = self._faces_from_increment(inc)
+            self._run_hooks("projection")
+            self._project_faces([a_face[ax] + finc[ax] + gdt * self._face_pressure_force(self.p, ax)
+                                 for ax in range(ndim)], self.p.interior.copy(), gdt)
+            self._u_prev, self._c_prev, self._dt_prev = u_n, conv_n, dt
+            self._uf_prev = uf_n
+            self._run_hooks("end_timestep")
+            c.t = c.tnext
+            c.i += 1
+            return
 
         # IPC: remove the cell pressure gradient, add the face one, project the increment
         self._run_hooks("acceleration")

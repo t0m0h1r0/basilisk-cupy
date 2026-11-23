@@ -119,6 +119,38 @@ given error is about the same: N = 64, 5e-6 takes 3 s (RK, CFL 2) and 4 s
 viscosity. Both steppers keep the O(dt h^p) error of the approximate
 projection: the RK error grows linearly with dt (Stokes: 3rd order).
 
+### Face-native state (`face_native=True`)
+
+```python
+ns = IMEXRKNS(grid, ..., face_native=True)   # or IMEXBDF2NS(..., face_native=True)
+```
+
+The projected face velocity is the state. Cells are its reconstruction
+`R_h` (`face_to_cell`: 4th order with FCCD) and are used only to evaluate the
+terms (TwoPhaseFlow paper §11b2: `D_f f = 0`, `u = R_h f`). The predictor is
+solved on cells, and only its increment is interpolated to the faces. The
+non-invertible `R_h`/`P_f` round trip therefore never touches the state.
+This removes the `O(dt h^p)` error of the approximate projection.
+
+| Viscous Taylor–Green, IMEX-RK + FCCD, N = 16 / 32 / 64 | cells | faces |
+| --- | --- | --- |
+| cell state, CFL 0.1 | 2.6e-4 / 8.5e-6 / 2.7e-7 (5.0) | 3.7e-4 / 2.0e-5 / 1.1e-6 (4.2) |
+| cell state, CFL 1.0 | 2.7e-3 / 8.6e-5 / 2.7e-6 (5.0) | 1.5e-3 / 5.5e-5 / 2.2e-6 (4.7) |
+| face state, CFL 0.1 and 1.0 (identical) | 5.4e-4 / 3.5e-5 / 2.2e-6 (4.0) | 1.1e-4 / 7.0e-6 / 4.5e-7 (4.0) |
+
+* Inviscid, noisy Taylor–Green, N = 32, t = 1, IMEX-RK + FCCD: the error is
+  5.5e-5 for every CFL from 0.1 to 2.0, against 3.1e-5 … 5.9e-4 with the
+  cell state. CFL 3 fails, close to the imaginary limit 2.83 / 1.378.
+* IMEX-BDF2 + fd2: self-convergence in dt goes from 1st order back to 2nd.
+* Viscous Taylor–Green, N = 64, t = 0.5, wall time on the GPU:
+  - IMEX-BDF2, cell state, CFL 0.2: 2.1e-6 in 160 steps, 6.9 s;
+  - IMEX-RK, face state, CFL 2: 1.5e-6 in 16 steps, 3.3 s.
+* What it costs: the cell values carry the `R_h` error, so at a small step
+  the cell state is more accurate on cells (5th against 4th order). A
+  higher-order `R_h` would lower that floor.
+* Lid cavity Re = 1000, N = 64, CFL 1: E(1.1) = 0.009257 (IMEX-RK, face
+  state); every variant lies within 0.00913–0.00926.
+
 ## Convection: UCCD6 / FUCCD
 
 ```python
