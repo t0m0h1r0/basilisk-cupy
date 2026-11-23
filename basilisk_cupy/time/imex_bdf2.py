@@ -107,6 +107,31 @@ class IMEXBDF2NS(CenteredNS):
         p.fill_ghosts()
         return self.a[ax] - self.alpha[ax] * self.ops.grad_f(p, ax)
 
+    # -- implicit part: viscosity and, optionally, the convection term's implicit part ----------
+    def _implicit_term(self):
+        """The convection term's implicit part frozen at ``u^n`` (UCCD6 ``implicit=True``), or None."""
+        if self.stokes or not getattr(self.convection, "implicit", False):
+            return None
+        return self.convection.implicit_part(self.u)
+
+    def _implicit_solve(self, tau: float, extra) -> None:
+        """``(I - tau/rho V + tau E) u = u`` in place (viscosity and the implicit extra term)."""
+        if self.mu is None and extra is None:
+            return
+        from ..terms.viscous import DCViscosity  # noqa: PLC0415
+
+        solver = self.viscous
+        if extra is not None and not isinstance(solver, DCViscosity):
+            if self.mu is not None:
+                raise ValueError("an implicit convection part needs a defect-correction viscous solver "
+                                 "(CCDViscosity / FD2Viscosity), not Basilisk's viscosity()")
+            from ..terms.viscous import CCDViscosity  # noqa: PLC0415
+
+            solver = self._extra_solver = getattr(self, "_extra_solver", None) or CCDViscosity()
+        kwargs = {"extra": extra} if extra is not None else {}
+        self.mgu = solver.solve(self.u, self.mu, self.rho, tau, nrelax=self.mgu.nrelax or 4,
+                                tolerance=self.tolerance, **kwargs)
+
     # -- face-native state helpers ------------------------------------------------------
     def _cells_from_faces(self, faces) -> list:
         """``R_h``: cell velocity from face-normal velocities (``face_to_cell`` of the shared operators)."""
@@ -164,6 +189,7 @@ class IMEXBDF2NS(CenteredNS):
         if self.face_native and self._uf_prev is None and not getattr(self, "_fn_started", False):
             self._reconstruct_cells()  # the state is uf; cells are its reconstruction from the first step on
             self._fn_started = True
+        extra = self._implicit_term()  # frozen at u^n
         # explicit convection at t^n (extrapolated)
         self._run_hooks("advection_term")
         conv_n = [0.0] * ndim if self.stokes else self.convection.tendency(self.u, self.uf)
@@ -190,9 +216,7 @@ class IMEXBDF2NS(CenteredNS):
         self.u.fill_ghosts()
 
         self._run_hooks("viscous_term")
-        if self.mu is not None:
-            self.mgu = self.viscous.solve(self.u, self.mu, self.rho, gdt, nrelax=self.mgu.nrelax or 4,
-                                          tolerance=self.tolerance)
+        self._implicit_solve(gdt, extra)
         if not self.a_is_constant:
             for ax in range(ndim):
                 self.a[ax] = 0.0

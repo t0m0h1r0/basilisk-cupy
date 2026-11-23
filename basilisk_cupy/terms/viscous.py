@@ -217,11 +217,16 @@ class DCViscosity:
         self.inner_cycles = inner_cycles
         self.maxiter = maxiter
 
-    def high(self, u: VectorField, mu_cell, rho, dt: float, mu: FaceField | None = None) -> list:
-        """``A_H u = u - dt/rho L_H u``."""
+    def high(self, u: VectorField, mu_cell, rho, dt: float, mu: FaceField | None = None, extra=None) -> list:
+        """``A_H u = u - dt/rho L_H u (+ dt E u)``, ``E`` an implicit extra term (``apply``)."""
         u.fill_ghosts()
-        lap = self.stress(u, mu_cell, mu) if isinstance(self.stress, FD2Stress) else self.stress(u, mu_cell)
-        return [c.interior - dt / rho * l for c, l in zip(u, lap)]
+        out = [c.interior for c in u]
+        if mu is not None:
+            lap = self.stress(u, mu_cell, mu) if isinstance(self.stress, FD2Stress) else self.stress(u, mu_cell)
+            out = [o - dt / rho * l for o, l in zip(out, lap)]
+        if extra is not None:
+            out = [o + dt * e for o, e in zip(out, extra.apply(u))]
+        return out
 
     def _workspace(self, u: VectorField):
         """Correction fields with homogeneous conditions, kept with ``u`` (reuse of problems/graphs)."""
@@ -233,15 +238,24 @@ class DCViscosity:
             ws = u._viscous_dc_workspace = (make("dc_work"), make("dc_z"))
         return ws
 
-    def solve(self, u: VectorField, mu: FaceField, rho, dt: float, *, nrelax: int = 4,
-              tolerance: float = TOLERANCE, history: list | None = None) -> MGStats:
-        """Advance ``u`` in place; ``u``'s interior on entry is the right-hand side ``u^*``."""
+    def solve(self, u: VectorField, mu: FaceField | None, rho, dt: float, *, nrelax: int = 4,
+              tolerance: float = TOLERANCE, history: list | None = None, extra=None) -> MGStats:
+        """Advance ``u`` in place; ``u``'s interior on entry is the right-hand side ``u^*``.
+
+        ``extra``: an implicit term ``E`` (e.g. :class:`~basilisk_cupy.terms.convection.uccd6.ImplicitHyperviscosity`)
+        solved together, ``(I - dt/rho L + dt E) u = u^*``; its ``precondition(r, dt, bcs)``
+        follows the viscous multigrid. ``mu = None``: ``(I + dt E) u = u^*`` alone.
+        """
         grid = u.grid
         xp = grid.xp
-        mu_cell = cell_viscosity(mu)
+        mu_cell = cell_viscosity(mu) if mu is not None else None
         b = [c.interior.copy() for c in u]
         work, z = self._workspace(u)
-        if grid.is_uniform:
+        homog = [c.bc for c in z]
+        low = lows = None
+        if mu is None:
+            pass
+        elif grid.is_uniform:
             low = ViscosityProblem.reuse(z, mu, rho, dt)
             lows = None
         else:
@@ -252,28 +266,32 @@ class DCViscosity:
             low = lows[0]
 
         def true_residual():
-            ah = self.high(u, mu_cell, rho, dt, mu)
+            ah = self.high(u, mu_cell, rho, dt, mu, extra)
             r = [bi - ai for bi, ai in zip(b, ah)]
             return max(to_float(xp.max(xp.abs(ri))) for ri in r), r
 
         def apply_high0(v):
             for c, vi in zip(work, v):
                 c.interior = vi
-            return self.high(work, mu_cell, rho, dt, mu)
+            return self.high(work, mu_cell, rho, dt, mu, extra)
 
         def precondition(r):
-            for c in z:
-                c.data[...] = 0.0
-            if lows is None:
-                mg_solve(list(z), r, low, nrelax=nrelax, tolerance=0.0, nitermax=self.inner_cycles,
-                         nitermin=self.inner_cycles, warn=False)
+            if mu is None:
+                out = [ri.copy() for ri in r]
             else:
-                for c, ri, problem in zip(z, r, lows):
-                    mg_solve(c, -rho / dt * ri, problem, nrelax=nrelax, tolerance=0.0, nitermax=self.inner_cycles,
+                for c in z:
+                    c.data[...] = 0.0
+                if lows is None:
+                    mg_solve(list(z), r, low, nrelax=nrelax, tolerance=0.0, nitermax=self.inner_cycles,
                              nitermin=self.inner_cycles, warn=False)
-            return [c.interior.copy() for c in z]
+                else:
+                    for c, ri, problem in zip(z, r, lows):
+                        mg_solve(c, -rho / dt * ri, problem, nrelax=nrelax, tolerance=0.0,
+                                 nitermax=self.inner_cycles, nitermin=self.inner_cycles, warn=False)
+                out = [c.interior.copy() for c in z]
+            return extra.precondition(out, dt, homog) if extra is not None else out
 
-        stats = MGStats(nrelax=0, minlevel=low.levels[0].n[0], tolerance=tolerance)
+        stats = MGStats(nrelax=0, minlevel=low.levels[0].n[0] if low is not None else grid.n[0], tolerance=tolerance)
         stats.resb, r = true_residual()
         stats.resa = stats.resb
         if history is not None:

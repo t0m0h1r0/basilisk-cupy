@@ -165,6 +165,8 @@ class IMEXRKNS(IMEXBDF2NS):
         V = []  # viscous tendencies of the solved stages
         gdt = t.gamma * dt
 
+        extra = self._implicit_term()  # implicit hyperviscosity frozen at u^n
+        implicit = self.mu is not None or extra is not None
         self._run_hooks("advection_term")
         C.append(zero if self.stokes else self.convection.tendency(self.u, self.uf))
         V.append(zero)
@@ -182,11 +184,9 @@ class IMEXRKNS(IMEXBDF2NS):
                 self.u[ax].interior = rhs[ax]
             self.u.fill_ghosts()
             self._run_hooks("viscous_term")
-            if self.mu is not None:
-                self.mgu = self.viscous.solve(self.u, self.mu, self.rho, gdt, nrelax=self.mgu.nrelax or 4,
-                                              tolerance=self.tolerance)
+            self._implicit_solve(gdt, extra)
             ustar = [comp.interior.copy() for comp in self.u]
-            V.append([(us - r) / gdt for us, r in zip(ustar, rhs)] if self.mu is not None else zero)
+            V.append([(us - r) / gdt for us, r in zip(ustar, rhs)] if implicit else zero)
             self._run_hooks("acceleration")
             self._run_hooks("projection")
             cdt = t.c[i] * dt

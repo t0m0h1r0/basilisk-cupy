@@ -151,6 +151,37 @@ This removes the `O(dt h^p)` error of the approximate projection.
 * Lid cavity Re = 1000, N = 64, CFL 1: E(1.1) = 0.009257 (IMEX-RK, face
   state); every variant lies within 0.00913–0.00926.
 
+### Implicit UCCD6 hyperviscosity (`implicit=True`)
+
+```python
+scheme = build_scheme({"operators": {"face": "fccd", "cell": "ccd"},
+                       "terms": {"convection": "uccd6", "implicit": True, "viscosity": "ccd"}})
+```
+
+The explicit hyperviscosity caps UCCD6 at the real-axis bound,
+`σ ω₂(π)⁸ CFL ≤ 4/3` (EXT2) or `≤ 2.79` (RK). The paper also says UCCD6 needs
+an implicit treatment (§4.5), but integrates it explicitly in the NS.
+
+With `implicit=True` the term `H u = Σ_k c_k D2_k⁴ u` is solved with the
+viscous step, `(I − τV + τH)u = r`. The coefficients `c_k = σ max|u_k| h⁷`
+are frozen at `uⁿ`. Every 1-D factor has a real, non-negative spectrum (also
+with walls), so the implicit term is unconditionally stable. The viscous
+defect correction applies `H` exactly in its residual. Its preconditioner is
+the viscous multigrid followed by `(I + τH)⁻¹` by fast diagonalization
+(per-axis eigenvectors; condition ≈ 5e5 with walls, hence only as a
+preconditioner).
+
+| Case (N, t) | explicit H | implicit H, cell state | implicit H, face state |
+| --- | --- | --- | --- |
+| Inviscid noisy Taylor–Green (32, 1), largest stable CFL tried | 0.1 | 1.5 (2.0: 8e-3) | 2.0 (5.4e-5 at every CFL) |
+| Viscous Taylor–Green (64, 0.5): error / steps / GPU wall time | CFL 0.1: 3.2e-7 / 320 / 48 s | CFL 1: 3.2e-6 / 32 / 7.2 s | CFL 2: 1.5e-6 / 16 / 4.0 s |
+| Lid cavity Re = 1000 (64, 1.1): E / steps / time | CFL 0.07: 0.009221 / 1006 / 130 s | CFL 1: 0.009249 / 71 / 12 s | CFL 2: 0.009246 / 36 / 7 s |
+
+At the same step (CFL 0.1) the implicit and explicit results coincide
+(3.21e-7). A viscous solve then takes 1, 5 or 8 corrections at CFL 0.1, 1
+and 2. IMEX-BDF2 with the implicit hyperviscosity stays at CFL 0.3, which is
+EXT2's limit for the CCD advective part.
+
 ## Convection: UCCD6 / FUCCD
 
 ```python
