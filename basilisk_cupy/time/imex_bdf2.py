@@ -35,9 +35,9 @@ the difference between the two steppers is the time integration.
 from __future__ import annotations
 
 from ..fields import CellField, FaceField
-from ..linear.viscosity import viscosity
 from ..projection.approximate import project
 from ..terms.convection.central import CentralFluxConvection
+from ..terms.viscous import BasiliskViscosity
 from .basilisk_centered import CenteredNS
 from .stepping import dtnext
 
@@ -45,9 +45,11 @@ from .stepping import dtnext
 class IMEXBDF2NS(CenteredNS):
     """Same fields, boundary conditions and hook stages as :class:`CenteredNS`."""
 
-    def __init__(self, grid, *, convection=None, fixed_dt: float | None = None, **kwargs) -> None:
+    def __init__(self, grid, *, convection=None, viscous=None, fixed_dt: float | None = None, **kwargs) -> None:
         super().__init__(grid, **kwargs)
         self.convection = convection or CentralFluxConvection(self.ops)
+        #: implicit viscous solver (``solve(u, mu, rho, dt)``): Basilisk's fd2 multigrid or ``CCDViscosity``
+        self.viscous = viscous or BasiliskViscosity()
         #: Use a constant step instead of Basilisk's adaptive one (``cfl_number`` reports the CFL).
         self.fixed_dt = fixed_dt
         self.cfl_number = 0.0
@@ -128,8 +130,8 @@ class IMEXBDF2NS(CenteredNS):
 
         self._run_hooks("viscous_term")
         if self.mu is not None:
-            self.mgu = viscosity(self.u, self.mu, self.rho, gdt, nrelax=self.mgu.nrelax or 4,
-                                 tolerance=self.tolerance)
+            self.mgu = self.viscous.solve(self.u, self.mu, self.rho, gdt, nrelax=self.mgu.nrelax or 4,
+                                          tolerance=self.tolerance)
         if not self.a_is_constant:
             for ax in range(ndim):
                 self.a[ax] = 0.0

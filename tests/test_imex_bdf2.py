@@ -20,7 +20,7 @@ def taylor_green(cls, n, dt, t_end, *, mu=0.01, stokes=False, ops=None, backend=
     xp = grid.xp
     x, y = grid.meshgrid()
     kw = dict(periodic=(0, 1), mu=mu, stokes=stokes, ops=ops, tolerance=1e-10)
-    ns = cls(grid, fixed_dt=dt, **kw) if cls is IMEXBDF2NS else cls(grid, DT=dt, cfl=100.0, **kw)
+    ns = cls(grid, fixed_dt=dt, **kw) if issubclass(cls, IMEXBDF2NS) else cls(grid, DT=dt, cfl=100.0, **kw)
     ns.u[0].interior = -xp.cos(2 * math.pi * x) * xp.sin(2 * math.pi * y)
     ns.u[1].interior = xp.sin(2 * math.pi * x) * xp.cos(2 * math.pi * y)
     ns.p.interior = -(xp.cos(4 * math.pi * x) + xp.cos(4 * math.pi * y)) / 4
