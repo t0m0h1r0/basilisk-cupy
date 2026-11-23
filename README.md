@@ -275,8 +275,9 @@ an implicit treatment (§4.5), but integrates it explicitly in the NS.
 
 With `implicit=True` the term `H u = Σ_k c_k D2_k⁴ u` is solved with the
 viscous step, `(I − τV + τH)u = r`. The coefficients `c_k = σ max|u_k| h⁷`
-are frozen at `uⁿ`. Every 1-D factor has a real, non-negative spectrum (also
-with walls), so the implicit term is unconditionally stable. The viscous
+are frozen at `uⁿ`. Every 1-D factor has a real spectrum; with walls one
+eigenvalue is slightly negative (−1.66/h⁸ Dirichlet, see *Wall closures*),
+a growth rate 1.7σ|u|/h, so the implicit term is stable up to that. The viscous
 defect correction applies `H` exactly in its residual. Its preconditioner is
 the viscous multigrid followed by `(I + τH)⁻¹` by fast diagonalization
 (per-axis eigenvectors; condition ≈ 5e5 with walls, hence only as a
