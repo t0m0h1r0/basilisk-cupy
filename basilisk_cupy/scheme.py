@@ -12,6 +12,7 @@ same spirit as TwoPhaseFlow's ``method:`` section::
     terms:
       convection: bcg    # bcg (CenteredNS's own) | central | uccd6 | fuccd4 | fuccd1
       sigma: 1.0e-3      # optional, UCCD6 / FUCCD dissipation coefficient
+      viscosity: basilisk  # basilisk (fd2 multigrid) | ccd (CCD full stress, defect correction)
 
 New implementations are added with :func:`register` and picked by name;
 :meth:`Scheme.validate` rejects inconsistent combinations at start-up
@@ -34,6 +35,7 @@ from .grid.cartesian import CartesianGrid
 from .terms.convection.central import CentralFluxConvection
 from .terms.convection.fuccd import FUCCDConvection
 from .terms.convection.uccd6 import UCCD6Convection
+from .terms.viscous import BasiliskViscosity, CCDViscosity
 
 
 def _fccd_of(face):
@@ -54,6 +56,11 @@ _REGISTRY: dict[str, dict[str, type]] = {
         "uccd6": lambda face, cell, **kw: UCCD6Convection(_ccd_of(face, cell), **kw),
         "fuccd4": lambda face, cell, **kw: FUCCDConvection(_fccd_of(face), r=4, **kw),
         "fuccd1": lambda face, cell, **kw: FUCCDConvection(_fccd_of(face), r=1, **kw),
+    },
+    "viscosity": {
+        "basilisk": lambda face, cell: BasiliskViscosity(),
+        "ccd": lambda face, cell: CCDViscosity(_ccd_of(face, cell)),
+        "ccd_layered": lambda face, cell: CCDViscosity(_ccd_of(face, cell), form="layered"),
     },
 }
 
@@ -81,6 +88,7 @@ class Scheme:
     cell: CellDerivative
     config: dict[str, Any] = field(default_factory=dict)
     convection: Any = None  # tendency(u, uf) object, or None for the stepper's own (BCG)
+    viscous: Any = None     # implicit viscous solver (solve(u, mu, rho, dt))
 
     def validate(self) -> None:
         need = max(self.face.stencil_ghosts, self.cell.stencil_ghosts)
@@ -102,6 +110,7 @@ def build_scheme(config: dict[str, Any]) -> Scheme:
         backend=gcfg.get("backend", "numpy"),
     )
     tcfg = dict(config.get("terms", {}))
+    visc_name = tcfg.pop("viscosity", "basilisk")
     conv_name = tcfg.pop("convection", "bcg")
     try:
         factory = _REGISTRY["convection"][conv_name]
@@ -109,7 +118,12 @@ def build_scheme(config: dict[str, Any]) -> Scheme:
         raise ValueError(f"unknown 'convection' implementation {conv_name!r}; "
                          f"available: {available('convection')}") from None
     convection = factory(face, cell, **tcfg)
-    scheme = Scheme(grid=grid, face=face, cell=cell, config=config, convection=convection)
+    try:
+        viscous = _REGISTRY["viscosity"][visc_name](face, cell)
+    except KeyError:
+        raise ValueError(f"unknown 'viscosity' implementation {visc_name!r}; "
+                         f"available: {available('viscosity')}") from None
+    scheme = Scheme(grid=grid, face=face, cell=cell, config=config, convection=convection, viscous=viscous)
     scheme.validate()
     return scheme
 

@@ -13,7 +13,7 @@ Design document: see the project's design doc ("Basilisk → CuPy 移植設計�
 | --- | --- |
 | Grid, fields, boundary conditions | uniform cell-centred grid (1D/2D/3D), Dirichlet / Neumann / periodic with automatic homogeneous versions |
 | ① Spatial operators | `fd2` (Basilisk-compatible 2nd order); `ccd` (CCD, Chu & Fan: f′ 6th, f″ 5th order with walls) and `fccd` (FCCD face operators, 4th order) on the cell-centred grid with new wall closures (`tools/derive_ccd_closures.py`) |
-| ② Linear solvers | Basilisk-style multigrid (`mg_solve`, scalar or vector unknowns, red/black Gauss–Seidel, adaptive `nrelax`) with a separate high-order residual hook; GCR-accelerated defect correction for high-order operators (`poisson(method="dc")`, chosen automatically for non-fd2 `ops`); implicit viscosity (`viscosity.h`) |
+| ② Linear solvers | Basilisk-style multigrid (`mg_solve`, scalar or vector unknowns, red/black Gauss–Seidel, adaptive `nrelax`) with a separate high-order residual hook; GCR-accelerated defect correction for high-order operators (`poisson(method="dc")`, chosen automatically for non-fd2 `ops`); implicit viscosity (`viscosity.h`) and its CCD defect-correction version (`CCDViscosity`) |
 | ③ Terms | BCG advection and `prediction()` (`bcg.h`), minmod / superbee / sweby limiters |
 | ④ Projection | Basilisk `project()` (approximate projection, variable density) |
 | ⑥ Time stepping | `timestep()` / `dtnext()`; `CenteredNS` (`navier-stokes/centered.h`) with Basilisk's event order exposed as hook stages; `IMEXBDF2NS` (TwoPhaseFlow: EXT2 convection, implicit BDF2 viscosity, incremental pressure correction with projection step 2dt/3) |
@@ -104,7 +104,48 @@ With viscosity the Taylor–Green error is limited by the fd2 implicit viscosity
 (Basilisk `viscosity()`), whatever the convection and the face operators:
 μ = 0.01, N = 64, |u − exact| = 8.1e-5 (fd2 ops) and 6.45e-5 (FCCD ops, all three
 convection terms), 2nd order; without viscosity FCCD gives 1.9e-7 against 3.4e-5
-for fd2.
+for fd2. `CCDViscosity` (next section) removes that limit.
+
+## Viscosity: CCD full stress by defect correction
+
+```python
+scheme = build_scheme({"operators": {"face": "fccd", "cell": "ccd"},
+                       "terms": {"convection": "uccd6", "viscosity": "ccd"}})
+ns = IMEXBDF2NS(grid, ..., ops=scheme.face, convection=scheme.convection, viscous=scheme.viscous)
+```
+
+`CCDViscosity` (TwoPhaseFlow paper §6.3 `06d_viscous_3layer.tex`, §7.4
+`07b_defect_viscous.tex`) solves `A_H u = u*` with `A_H = I − dt/ρ L_H`,
+`L_H u = ∇·(μ(∇u + ∇uᵀ))` with CCD, correcting with Basilisk's fd2 viscosity
+multigrid (`A_L`) under GCR; the stopping test is on the `A_H` residual.
+
+`L_H` comes in two forms. `layered` is the paper's layers A/B/C literally
+(CCD velocity gradients, cell stress, CCD divergence of the stress).
+`split` (the default) takes the same-axis term as
+`∂_b(μ ∂_b u) = μ D₂u + (D₁μ)(D₁u)` and keeps A/B/C for the cross terms.
+Both are the full stress, valid for variable μ. The CCD first derivative
+has no grid-scale mode (its symbol is 0 at θ = π), so `D₁D₁` leaves that mode
+untouched while `A_L` damps it most, and the layered correction stalls:
+
+| Corrections to 1e-10, N = 64, walls, white-noise rhs | κ = νdt/h² = 0.1 | 1 | 10 | 100 | 1000 |
+| --- | --- | --- | --- | --- | --- |
+| `layered` | 24 | 77 | > 300 | > 300 | > 300 |
+| `split` | 15 | 20 | 23 | 25 | 26 |
+| `split`, μ ∈ [1, 10] variable, N = 32 / 64 / 128 | 20 / 20 / 20 | — | 25 / 25 / 25 | — | 29 / 28 / 28 |
+
+| Check | fd2 (`basilisk`) | CCD (`ccd`, split) |
+| --- | --- | --- |
+| `L_H u` vs exact, periodic / walls (μ constant or variable) | 2nd | 6.0 / 4.8–5.4 (layered: 6.0 / 4.8, 20× larger wall error) |
+| Taylor–Green μ = 0.01, IMEX-BDF2, FCCD ops, N = 16 / 32 / 64 | 1.03e-3 / 2.55e-4 / 6.45e-5 (2nd) | 1.16e-4 / 3.30e-6 / 1.70e-7 (5.1, 4.3) |
+| Corrections per viscous solve in that run | — | 1–2 |
+| Lid cavity Re = 1000, E(t = 1.1), N = 64 (fine-grid value ≈ 0.00969) | 0.008872 | 0.009131 |
+| Stokes, self-convergence in dt | 2nd | 2nd |
+
+Lid-cavity energies at N = 32 / 64 / 128 / 256 (IMEX-BDF2, central convection,
+dt = 0.25/N): fd2 ops + fd2 viscosity 0.007304 / 0.008872 / 0.009486 / 0.009694;
+FCCD ops + CCD viscosity 0.008223 / 0.009131 / 0.009613 / 0.009673. The
+corner singularity of the lid limits both to about order 1.5; `lid.ref`
+(Basilisk, N = 64: 0.008904) is itself under-resolved at t = 1.1.
 
 ## GPU (cupy)
 
