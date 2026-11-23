@@ -145,6 +145,22 @@ vortex with `kx = ky` was measured with the plain `D_f`, on a flow that hides
 its 2nd-order term. With the 4th-order `D_f` those `a = b` values do not
 change (the `a = b` row above).
 
+### 6th-order face value and gradient (`FCCDFaceComplex(order=6)`)
+
+The CCD solve already gives each cell its jet `(f, f′, f″)`. FCCD used only
+`f` and `f″`. The quintic Hermite interpolant of the two cell jets, evaluated
+at the face, gives the face value `(f_L+f_R)/2 + 5h/32 (f′_L − f′_R) +
+h²/64 (f″_L + f″_R)` and the face gradient `15/8 (f_R−f_L)/h −
+7/16 (f′_L + f′_R) + h/32 (f″_R − f″_L)`. Both are 6th order on the same
+two-cell stencil, with no second solve (`f′′′′ = D2 D2 f` was not used: its
+second stage has no wall data). Wall faces keep the 4th-order closures. On a
+mapped axis `J_face` comes from the same 6th-order gradient, which keeps
+`d x/d x = 1`. Periodic, N = 128: gradient 3.8e-12, value 3.0e-13
+(order 4: 2.1e-8, 7.6e-8). Taylor–Green, face state, N = 64: `a = b`
+7.90e-9 (order 4: 8.01e-7); `a ≠ b` 4.49e-6 (8.49e-6), where the 4th-order
+divergence is the floor. The default stays `order=4`. Design notes:
+`docs/notes/`.
+
 ## Time integration: IMEX-BDF2 + IPC
 
 | Check (Taylor–Green, self-convergence in dt) | Basilisk `CenteredNS` | `IMEXBDF2NS` |
