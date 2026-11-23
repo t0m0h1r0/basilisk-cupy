@@ -16,7 +16,8 @@ Design document: see the project's design doc ("Basilisk → CuPy 移植設計�
 | ② Linear solvers | Basilisk-style multigrid (`mg_solve`, scalar or vector unknowns, red/black Gauss–Seidel, adaptive `nrelax`) with a separate high-order residual hook; GCR-accelerated defect correction for high-order operators (`poisson(method="dc")`, chosen automatically for non-fd2 `ops`); implicit viscosity (`viscosity.h`) |
 | ③ Terms | BCG advection and `prediction()` (`bcg.h`), minmod / superbee / sweby limiters |
 | ④ Projection | Basilisk `project()` (approximate projection, variable density) |
-| ⑥ Time stepping | `timestep()` / `dtnext()`; `CenteredNS` (`navier-stokes/centered.h`) with Basilisk's event order exposed as hook stages |
+| ⑥ Time stepping | `timestep()` / `dtnext()`; `CenteredNS` (`navier-stokes/centered.h`) with Basilisk's event order exposed as hook stages; `IMEXBDF2NS` (TwoPhaseFlow: EXT2 convection, implicit BDF2 viscosity, incremental pressure correction with projection step 2dt/3) |
+| ③ Terms | `CentralFluxConvection` (semi-discrete `D_f(P_f(u) u_f)` for multistep integrators) |
 | Scheme | `scheme.py` registry and YAML loader |
 
 ## Usage
@@ -58,6 +59,19 @@ ns = CenteredNS(grid, periodic=(0, 1), ops=FCCDFaceComplex())   # or operators: 
 | Defect-correction cost, N = 256, Dirichlet walls | — | 22 GCR steps / 44 MG cycles (plain correction: 400 cycles, not converged) |
 | Poisson, pointwise rhs | 2nd order | 2nd order, error halved (D_f is the conservative difference, as in TwoPhaseFlow) |
 | Taylor–Green t = 2, N = 32 / 64 / 128, rms error | 3.2e-2 / 4.5e-3 / 5.9e-4 | 9.4e-3 / 1.3e-3 / 2.0e-4 (BCG advection unchanged) |
+
+## Time integration: IMEX-BDF2 + IPC
+
+| Check (Taylor–Green, self-convergence in dt) | Basilisk `CenteredNS` | `IMEXBDF2NS` |
+| --- | --- | --- |
+| Unsteady Stokes | 1st order (backward-Euler viscosity) | 2nd order (2.02) |
+| Navier–Stokes, FCCD, N = 32 | 1st order | ≈ 2nd order (2.3–2.5) |
+| Navier–Stokes, fd2 | 1st order | 1st order: cross term O(dt h²) of the approximate projection |
+| Lid cavity, t = 1.1 energy | 0.008904 (lid.ref) | 0.00887 |
+
+With the same operators, the incremental (δp) and full-pressure projections are
+identical to round-off (Basilisk starts the Poisson iteration from pⁿ), so IPC
+only changes results together with BDF2 or variable density.
 
 ## Tests
 
