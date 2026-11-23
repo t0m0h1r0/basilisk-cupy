@@ -120,9 +120,11 @@ The fix is the dual of FCCD's face gradient
 `(u_R − u_L)/h − (h/24)(q_R − q_L)`. `div_f` differences the flux
 `F̂ = F − (h²/24) ∂ₙₙF` (`face_flux`). `∂ₙₙF` comes from the face-line CCD,
 the same compact solve as `R_h`. The result is 4th order, the stencil is not
-wider, and both terms telescope, so the scheme stays conservative:
-`D_f F̂ = 0` holds exactly. Fluxes that must be divergence-free in the
-finite-volume sense (VOF, tracers) are therefore `F̂`, not `u_f`. On a mapped
+wider, and both terms telescope, so the scheme stays conservative: after a
+projection `D_f F̂ = 0` holds exactly in every cell. On a wall, however,
+`F̂ = −(h²/24) ∂ₙₙu_n` is not zero although `u_n = 0` (lid cavity: up to
+0.04, net zero along the walls), so `F̂` is not yet a flux a VOF advection
+can use there (open: `docs/notes/03_face_divergence.md`). On a mapped
 axis the difference is divided by `h_ξ/J` at the cell centre. Its sum over
 the cells still telescopes; dividing by the cell width would add an `O(h²)`
 term.
