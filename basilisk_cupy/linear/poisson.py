@@ -96,8 +96,32 @@ class HelmholtzProblem:
 
 def poisson(a: CellField, b, alpha: FaceField | None = None, lam=None, *,
             ops: FaceComplex | None = None, tolerance: float = TOLERANCE, nrelax: int = 4,
-            min_cells: int = 2, nitermax: int = NITERMAX, nitermin: int = NITERMIN) -> MGStats:
-    """Solve ``div(alpha grad a) + lambda a = b`` in place (``a`` is the initial guess)."""
+            min_cells: int = 2, nitermax: int = NITERMAX, nitermin: int = NITERMIN,
+            method: str = "auto", memory: int = 10) -> MGStats:
+    """Solve ``div(alpha grad a) + lambda a = b`` in place (``a`` is the initial guess).
+
+    ``method``: ``"mg"`` runs Basilisk's multigrid with the ``ops`` residual
+    (plain defect correction when ``ops`` is not fd2); ``"dc"`` runs the
+    GCR-accelerated defect correction of :mod:`.defect_correction` with
+    ``memory`` directions (1 = TwoPhaseFlow's line-search correction);
+    ``"auto"`` picks ``"mg"`` for fd2 and ``"dc"`` otherwise.
+    """
+    ops = ops or FD2FaceComplex()
+    if method == "auto":
+        method = "mg" if ops.name == "fd2" else "dc"
+    if method == "dc":
+        from .defect_correction import defect_correction  # noqa: PLC0415
+
+        stats = defect_correction(a, b, alpha, lam, ops=ops, tolerance=tolerance, maxiter=nitermax,
+                                  memory=memory, nrelax=nrelax, min_cells=min_cells)
+        if stats.resa > tolerance:
+            import warnings  # noqa: PLC0415
+
+            warnings.warn(f"defect correction: res {stats.resa:g} > tolerance {tolerance:g} after "
+                          f"{stats.i} corrections", RuntimeWarning, stacklevel=2)
+        return stats
+    if method != "mg":
+        raise ValueError(f"unknown method {method!r}")
     problem = HelmholtzProblem(a, alpha, lam, ops=ops, min_cells=min_cells)
     return mg_solve(a, b, problem, nrelax=nrelax, tolerance=tolerance,
                     nitermax=nitermax, nitermin=nitermin)

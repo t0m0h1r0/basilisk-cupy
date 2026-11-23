@@ -154,7 +154,7 @@ def mg_cycle(a: list[CellField], res_levels: list[list], da_levels: list[list[Ce
 
 def mg_solve(a, b, problem: MultigridProblem, *, nrelax: int = 4,
              tolerance: float = TOLERANCE, nitermax: int = NITERMAX, nitermin: int = NITERMIN,
-             on_cycle: Callable[[int, float], None] | None = None) -> MGStats:
+             on_cycle: Callable[[int, float], None] | None = None, warn: bool = True) -> MGStats:
     """Solve ``L(a) = b`` by repeated multigrid cycles (Basilisk ``mg_solve``).
 
     ``a`` is a :class:`CellField` or a list of them (e.g. velocity components),
@@ -194,7 +194,7 @@ def mg_solve(a, b, problem: MultigridProblem, *, nrelax: int = 4,
         if on_cycle is not None:
             on_cycle(stats.i, stats.resa)
 
-    if stats.resa > tolerance:
+    if warn and stats.resa > tolerance:
         warnings.warn(
             f"multigrid: convergence for {a[0].name or 'field'} not reached after {stats.i} iterations "
             f"(res {stats.resa:g}, sum {stats.sum:g}, nrelax {stats.nrelax}, tolerance {tolerance:g})",
