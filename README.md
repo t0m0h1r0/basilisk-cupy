@@ -727,6 +727,15 @@ with FCCD across the jump (fd2: 4.4e-5). Capillary wave: 0.0419 / 0.0082 at 16 /
 (fd2 faces 0.0639 / 0.0109), mostly from the period; the damping error barely moves. Figure:
 `docs/figures/fccd_projection.png`. Notes: `docs/notes/32_fccd_projection.md`.
 
+A linear model of CenteredNS's capillary loop (`cases/coupled_stability.py`: the interface moves with the
+previous velocity, the predictor damps the previous step's force with the viscosity and removes it, the new
+force enters with the projection) gives `a <= min(2(1+b)/(2-b), (1+b)/(1-b))`, `a = (omega dt)^2`,
+`b = 1/(1 + d dt)`: the limit falls from omega dt = 2 to 1 as the viscosity grows, as measured (static drop,
+N = 64: 1.60-1.65 times tension.h's step at mu = 0, 1.00-1.05 at mu = 1). With the force inside the implicit
+viscosity the model gives `a <= 4 + 2 d dt`. Viscous operators alone: projected white noise decays alike with
+fd2 and the CCD split form (E/E0 1.2e-3 after 40 steps), grows with the layered D1 D1 form (7.8).
+Figure: `docs/figures/coupled_stability.png`. Notes: `docs/notes/33_coupled_stability.md`.
+
 ## GPU (cupy)
 
 On the GPU the multigrid hot loops run as fused `cupy.RawKernel`s
