@@ -84,10 +84,15 @@ class CenteredNS:
         self._hooks: dict[str, list[Hook]] = defaultdict(list)
 
     # -- extension points ------------------------------------------------------
-    def on(self, stage: str, hook: Hook) -> None:
+    def on(self, stage: str, hook: Hook, *, after: bool = False) -> None:
+        """Run ``hook`` at ``stage``: before the hooks registered earlier (Basilisk: a later
+        definition of an event runs first), or after them with ``after=True``."""
         if stage not in STAGES:
             raise ValueError(f"unknown stage {stage!r}; stages are {STAGES}")
-        self._hooks[stage].insert(0, hook)
+        if after:
+            self._hooks[stage].append(hook)
+        else:
+            self._hooks[stage].insert(0, hook)
 
     def _run_hooks(self, stage: str) -> None:
         for hook in self._hooks.get(stage, ()):

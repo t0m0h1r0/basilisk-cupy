@@ -484,6 +484,28 @@ The volume fraction stays in [−1.4e-16, 1 + 4e-16] and the VOF concentration w
 advecting velocity must be `ops.wall_free_flux(uf, periodic)` (see *Face divergence*).
 Plan and notes: `docs/notes/12_two_phase.md`.
 
+### Step M4b: two-phase properties, height functions, reduced gravity
+
+```python
+tp = TwoPhase(ns, f, rho1=1.0, rho2=0.1, mu1=mu, mu2=mu, vof_first=True)   # hooks into CenteredNS
+tp.add_reduced_gravity(G=(0.0, 50.0))
+```
+
+Ports of `two-phase.h` (`alpha = 1/rho(f_face)`, `rho(f)`, `mu(f_face)`), `heights.h`
+(height functions, multigrid version; the column propagation runs as one GPU kernel,
+bitwise equal to the array path), `position()` from `curvature.h`, `iforce.h` and
+`reduced.h`. `cases/gravity_wave.py` (`src/test/gravity.c`) against `gravity.ref`, relative
+RMS error of the amplitude against Prosperetti's solution:
+
+| points per wavelength | 8 | 16 | 32 | 64 |
+| --- | --- | --- | --- | --- |
+| this port | 0.126721 | 0.0317969 | 0.00809545 | 0.00455989 |
+| `gravity.ref` | 0.126713 | 0.031758 | 0.00807759 | 0.00455815 |
+
+The remaining 0.006–0.22 % is not yet explained (at 8 points it is the size of the Poisson
+tolerance effect, at 16 points it is larger). A flat interface under reduced gravity stays
+at rest to 1.4e-17. N = 128 (738 steps) takes 37 s with cupy.
+
 ## GPU (cupy)
 
 On the GPU the multigrid hot loops run as fused `cupy.RawKernel`s
