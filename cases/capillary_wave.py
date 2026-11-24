@@ -17,6 +17,8 @@ from pathlib import Path
 
 from basilisk_cupy import BoundaryConditions, CartesianGrid, CellField
 from basilisk_cupy.constants import PI
+from basilisk_cupy.interface.cls import CLSInterface
+from basilisk_cupy.interface.cls_two_phase import TwoPhaseCLS
 from basilisk_cupy.interface.fractions import fraction
 from basilisk_cupy.interface.heights import NODATA, position
 from basilisk_cupy.interface.two_phase import TwoPhase
@@ -39,22 +41,46 @@ def event_times():
     return times
 
 
-def run(n: int, backend: str = "numpy", tolerance: float = 1e-6):
+def _cls_amplitude(xp, psi, grid):
+    """Largest ``y`` of the ``psi = 1/2`` crossings along the columns (linear interpolation)."""
+    _, y = grid.meshgrid()
+    a, b = psi[:, :-1] - 0.5, psi[:, 1:] - 0.5
+    cross = (a * b <= 0) & (a != b)
+    t = xp.where(cross, a / xp.where(cross, a - b, 1.0), 0.0)
+    yc = y[:, :-1] + t * float(grid.h[1])
+    return float(xp.max(xp.where(cross, yc, -1e30)))
+
+
+def run(n: int, backend: str = "numpy", tolerance: float = 1e-6, interface: str = "vof", **cls_kw):
+    """``interface="cls"``: TwoPhaseFlow's CLS (:class:`TwoPhaseCLS`, keywords ``cls_kw``), the
+    amplitude from the ``psi = 1/2`` crossings."""
     grid = CartesianGrid((n, n), length=(2.0, 2.0), origin=(0.0, -1.0), backend=backend)
     xp = grid.xp
     walls = ("left", "right", "bottom", "top")
     ns = CenteredNS(grid, uf_normal={w: 0.0 for w in walls}, tolerance=tolerance)
-    f = CellField.from_interior(grid, fraction(grid, lambda x, y: y - 0.01 * xp.cos(2.0 * PI * x)),
-                                BoundaryConditions())
-    tp = TwoPhase(ns, f, rho1=1.0, rho2=1.0, mu1=MU, mu2=MU, vof_first=True)
+    if interface == "cls":
+        x, y = grid.meshgrid()
+        k = 2.0 * PI
+        # signed distance to y = 0.01 cos(k x) to O(a^2 k^2): (y - eta) / sqrt(1 + eta'^2)
+        dist = (y - 0.01 * xp.cos(k * x)) / xp.sqrt(1.0 + (0.01 * k * xp.sin(k * x)) ** 2)
+        cls = CLSInterface.from_level_set(grid, dist, BoundaryConditions())
+        f = cls.psi
+        tp = TwoPhaseCLS(ns, cls, rho1=1.0, rho2=1.0, mu1=MU, mu2=MU, vof_first=True, **cls_kw)
+    else:
+        f = CellField.from_interior(grid, fraction(grid, lambda x, y: y - 0.01 * xp.cos(2.0 * PI * x)),
+                                    BoundaryConditions())
+        tp = TwoPhase(ns, f, rho1=1.0, rho2=1.0, mu1=MU, mu2=MU, vof_first=True)
     tp.add_surface_tension(1.0)
     times = event_times()
     amps = []
 
     def amplitude(_ns):
         if len(amps) < len(times) and abs(_ns.clock.t - times[len(amps)]) <= 1e-9 * max(1.0, _ns.clock.t):
-            pos = position(f.interior, f.bc, grid, (0.0, 1.0))
-            amps.append(float(xp.max(xp.where(pos == NODATA, -1e30, pos))))
+            if interface == "cls":
+                amps.append(_cls_amplitude(xp, f.interior, grid))
+            else:
+                pos = position(f.interior, f.bc, grid, (0.0, 1.0))
+                amps.append(float(xp.max(xp.where(pos == NODATA, -1e30, pos))))
 
     ns.on("set_dtmax", amplitude, after=True)  # right after the VOF advection moved "first"
     ns.start(events=times[1:])

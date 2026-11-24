@@ -18,3 +18,4 @@
 | [12_two_phase.md](12_two_phase.md) | 二相流（M4）：計画、VOF 移流（#23）、物性・高さ関数・換算重力（#24）、表面張力（#26） |
 | [13_cls.md](13_cls.md) | CLS（保存型レベルセット）への差し替えと VOF との比較（#27）、Ridge–Eikonal 再初期化（#28） |
 | [14_psi_curvature.md](14_psi_curvature.md) | ψ からの曲率：正確なプロファイルで O(h⁻¹)、輸送後の収束は再初期化しだい（#29） |
+| [15_cls_ns.md](15_cls_ns.md) | CLS の二相 NS への組み込み：静止液滴、毛管波（CSF の周波数ずれ）（#30） |

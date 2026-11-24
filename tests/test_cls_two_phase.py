@@ -1,0 +1,63 @@
+"""Two-phase Navier--Stokes with the CLS interface (TwoPhaseCLS) against the VOF baseline."""
+
+import math
+
+import pytest
+
+from basilisk_cupy import BoundaryConditions, CartesianGrid
+from basilisk_cupy.interface.cls import CLSInterface
+from basilisk_cupy.interface.cls_two_phase import TwoPhaseCLS
+from basilisk_cupy.time.basilisk_centered import CenteredNS
+
+
+def _static_drop(n, backend, steps=10, rho2=1.0, **kw):
+    grid = CartesianGrid((n, n), origin=(-0.5, -0.5), backend=backend)
+    xp = grid.xp
+    walls = ("left", "right", "bottom", "top")
+    ns = CenteredNS(grid, uf_normal={w: 0.0 for w in walls}, tolerance=1e-8)
+    x, y = grid.meshgrid()
+    r = xp.sqrt(x * x + y * y)
+    cls = CLSInterface.from_level_set(grid, 0.25 - r, BoundaryConditions())
+    tp = TwoPhaseCLS(ns, cls, rho1=1.0, rho2=rho2, mu1=0.1, mu2=0.1, **kw)
+    tp.add_surface_tension(1.0)
+    m0 = cls.mass()
+    ns.start()
+    for _ in range(steps):
+        ns.step()
+    jump = float(xp.mean(ns.p.interior[r < 0.1]) - xp.mean(ns.p.interior[r > 0.4]))
+    umax = max(float(xp.max(xp.abs(c.interior))) for c in ns.u)
+    return jump, umax, cls.mass() / m0 - 1
+
+
+@pytest.mark.parametrize("kw,jump,umax", [
+    ({}, 4.0230, 3.159e-4),
+    ({"curvature_kw": {"psi_min": 1e-4}}, 4.1299, 5.168e-5),
+    ({"reinit_every": 5, "reinit_method": "xi_sdf"}, None, None),
+])
+def test_static_drop(backend, kw, jump, umax):
+    """R = 0.25, sigma = 1, mu = 0.1, N = 64, 10 steps. The jump sigma/R = 4 (VOF: 4.0138, parasitic
+    velocity 4.2e-3). With the paper's band psi_min = 0.01 the CSF jump keeps 98% of sum grad psi:
+    4.0230 / 3.9410 / 3.9228 at N = 64 / 128 / 256; psi_min = 1e-4: 4.1299 / 4.0298 / 4.0067."""
+    j, u, dm = _static_drop(64, backend, **kw)
+    assert abs(dm) < 1e-12 and math.isfinite(u)
+    if jump is not None:
+        assert j == pytest.approx(jump, rel=1e-3) and u == pytest.approx(umax, rel=0.05)
+    else:
+        assert j == pytest.approx(4.0, rel=0.02)
+
+
+def test_density_ratio(backend):
+    """rho2 = 0.1 (light outer phase): the jump is unchanged (no gravity)."""
+    j, u, _ = _static_drop(64, backend, rho2=0.1)
+    assert j == pytest.approx(4.0230, rel=2e-3) and u < 1e-2
+
+
+def test_capillary_wave(backend):
+    """Basilisk's capwave.c with the CLS interface, 8 points per wavelength: relative RMS error 0.355
+    (VOF: 0.1386). 16 / 32 points: 0.315 / 0.236 (VOF 0.0242 / 0.0064). The CSF force spread over
+    eps = 1.5 Delta slows the wave: half period 4.79 / 4.05 / 3.70 against Prosperetti's 3.456 (in
+    omega_0 t) at 8 / 16 / 32 points per wavelength."""
+    from cases import capillary_wave as cw
+
+    r = cw.run(16, backend, interface="cls")
+    assert r["error"] == pytest.approx(0.35541, rel=1e-3)

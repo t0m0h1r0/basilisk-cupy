@@ -484,31 +484,6 @@ The volume fraction stays in [−1.4e-16, 1 + 4e-16] and the VOF concentration w
 advecting velocity must be `ops.wall_free_flux(uf, periodic)` (see *Face divergence*).
 Plan and notes: `docs/notes/12_two_phase.md`.
 
-### TwoPhaseFlow's conservative level set (CLS) against VOF
-
-```python
-from basilisk_cupy.interface.cls import CLSInterface
-cls = CLSInterface.from_level_set(grid, distance, bc)   # psi = H_eps(distance), eps = 1.5 Delta
-cls.advect(uf, dt)          # TVD-RK3, flux (P_f psi) u_f with FCCD face values, clipping, mass closure
-cls.reinitialize(4)         # compression--diffusion (provisional; Ridge--Eikonal next)
-```
-
-On Basilisk's reversed vortex (T = 15) the sharp indicator `psi > 1/2` has an L1 error of
-0.0707 / 0.0306 / 0.0139 at N = 32 / 64 / 128 (re-initialising every 10 steps: 0.0707 /
-0.0306 / 0.0080), against 0.0606 / 0.0099 / 0.0014 for VOF on the same velocity. A periodic
-translation gives a psi L1 error of 6.0e-3 / 5.4e-3 / 4.3e-3 (VOF 1.5e-3 / 3.4e-4 / 8.7e-5).
-Mass is kept to 1e-13.
-
-`cls.reinitialize()` defaults to the paper's standard re-initialisation on uniform grids, the
-Ridge--Eikonal distance reconstruction in its xi-SDF form (zero crossings by linear
-interpolation, distance to the nearest crossing, `psi = H_eps`, mass closed by a uniform shift
-of `phi`). Measured: on an exact profile it moves psi by 4.5e-2 at every resolution (the
-distance to crossing points along the axes overestimates an oblique interface's distance by up
-to sqrt(2)); the distance to the polyline through the crossings (`distance="segments"`) moves
-it by 3.6e-3 / 1.8e-3 / 9.0e-4 (N = 32 / 64 / 128). In passive transport both make the
-results worse than no re-initialisation (reversed vortex every 10 steps, N = 64: 0.068 and
-0.079 against 0.031). Notes: `docs/notes/13_cls.md`.
-Mass is kept to 1e-13. Notes: `docs/notes/13_cls.md`.
 ### Step M4b: two-phase properties, height functions, reduced gravity
 
 ```python
@@ -570,6 +545,31 @@ to reach the event (`CenteredNS.start()` now does the same). A static drop (R = 
 sigma = 1, equal densities, N = 32) has a pressure jump of 4.038 (sigma/R = 4) and parasitic
 velocities of 7.4e-3 (7.4e-4 of sigma/mu) after 10 steps.
 
+### TwoPhaseFlow's conservative level set (CLS) against VOF
+
+```python
+from basilisk_cupy.interface.cls import CLSInterface
+cls = CLSInterface.from_level_set(grid, distance, bc)   # psi = H_eps(distance), eps = 1.5 Delta
+cls.advect(uf, dt)          # TVD-RK3, flux (P_f psi) u_f with FCCD face values, clipping, mass closure
+cls.reinitialize(4)         # compression--diffusion (provisional; Ridge--Eikonal next)
+```
+
+On Basilisk's reversed vortex (T = 15) the sharp indicator `psi > 1/2` has an L1 error of
+0.0707 / 0.0306 / 0.0139 at N = 32 / 64 / 128 (re-initialising every 10 steps: 0.0707 /
+0.0306 / 0.0080), against 0.0606 / 0.0099 / 0.0014 for VOF on the same velocity. A periodic
+translation gives a psi L1 error of 6.0e-3 / 5.4e-3 / 4.3e-3 (VOF 1.5e-3 / 3.4e-4 / 8.7e-5).
+Mass is kept to 1e-13.
+
+`cls.reinitialize()` defaults to the paper's standard re-initialisation on uniform grids, the
+Ridge--Eikonal distance reconstruction in its xi-SDF form (zero crossings by linear
+interpolation, distance to the nearest crossing, `psi = H_eps`, mass closed by a uniform shift
+of `phi`). Measured: on an exact profile it moves psi by 4.5e-2 at every resolution (the
+distance to crossing points along the axes overestimates an oblique interface's distance by up
+to sqrt(2)); the distance to the polyline through the crossings (`distance="segments"`) moves
+it by 3.6e-3 / 1.8e-3 / 9.0e-4 (N = 32 / 64 / 128). In passive transport both make the
+results worse than no re-initialisation (reversed vortex every 10 steps, N = 64: 0.068 and
+0.079 against 0.031). Notes: `docs/notes/13_cls.md`.
+
 `cls.curvature()` is the paper's curvature from the derivatives of `psi` (CCD `psi_x`, `psi_xx`,
 `psi_xy`, zero outside `0.01 < psi < 0.99`). Measured on a circle (max over `|phi| < eps` of
 `|kappa - 1/r| R`): on the exact profile 6.3e-4 / 1.2e-3 / 2.4e-3 / 4.8e-3 (N = 64 / 128 / 256 /
@@ -577,6 +577,17 @@ velocities of 7.4e-3 (7.4e-4 of sigma/mu) after 10 steps.
 `phi = H_eps^{-1}(psi)` at N = 128; after a periodic translation 0.39 / 0.61 / 0.81 (N = 32 / 64 /
 128) without re-initialisation, 0.13 / 0.037 / 0.017 with compression--diffusion every 10 steps.
 Notes: `docs/notes/14_psi_curvature.md`.
+
+`TwoPhaseCLS(ns, cls, rho1=..., rho2=..., mu1=..., mu2=...)` couples the CLS interface to
+`CenteredNS` exactly as `TwoPhase` couples VOF (properties from `psi` with arithmetic face
+averages, CSF surface tension `sigma kappa grad psi` in `iforce.h`'s balanced-force face form).
+Static drop (R = 0.25, N = 64 / 128 / 256): pressure jump 4.0230 / 3.9410 / 3.9228 with the
+paper's band `psi_min = 0.01` (the gradient outside the band, 2%, carries no curvature) and
+4.1299 / 4.0298 / 4.0067 with `psi_min = 1e-4`; parasitic velocities 3.2e-4 / 1.7e-4 / 1.3e-4
+(VOF 4.2e-3 / 2.0e-3 at N = 64 / 128). Capillary wave (`cases/capillary_wave.py`,
+`interface="cls"`): 0.355 / 0.315 / 0.236 at 8 / 16 / 32 points per wavelength (VOF 0.139 /
+0.024 / 0.0064); the wave is slow by 39% / 17% / 7.1% in the half period, set by `k eps` alone
+(the CSF force spread over the interface width). Notes: `docs/notes/15_cls_ns.md`.
 
 ## GPU (cupy)
 
@@ -634,15 +645,7 @@ Taylor–Green, ms per time step (RTX 3080 Ti vs one core of a Ryzen 9 5950X):
 pip install -e ".[dev]"      # add ",gpu" for cupy
 pytest              # fast suite
 pytest -m slow      # full lid-cavity run to steady state (~1 min)
-pytest -n auto --dist loadgroup              # in parallel (pytest-xdist)
-pytest -n auto --dist loadgroup -k "not cupy"  # numpy tests only, in parallel
 ```
-
-In parallel the numpy tests spread over all cores (one BLAS thread per worker), while the
-tests that use the GPU (a `cupy` backend parameter, cupy in the test body, or
-`@pytest.mark.gpu`) stay on one worker (`xdist_group("gpu")`), so they do not compete for
-it. The fast suite takes 4 min 16 s on 28 cores and the GPU (numpy only: 2 min), against 23 min
-serially.
 
 Tests run on numpy; when cupy is importable every backend-parametrised test
 (all solver, Poisson, CCD/FCCD, defect-correction and IMEX-BDF2 tests, and the
