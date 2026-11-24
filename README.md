@@ -621,7 +621,7 @@ At density ratios 100 and 1000 (equal viscosities, N = 64) the GFM drop diverged
 time step: the explicit capillary loop sees CCD's curvature, whose answer to a grid-scale wiggle
 is 48/5 per Delta^2 instead of 4 (2nd-order differences; the bound, also the paper's, has a
 margin of about 1.6 for those and none for CCD). `TwoPhaseCLS(..., capillary_dt_factor=
-CCD_CAPILLARY_DT_FACTOR)` multiplies the bound by sqrt(5/12); the parasitic velocity then decays
+CCD_CAPILLARY_DT_FACTOR)` (the default) multiplies the bound by sqrt(5/12); the parasitic velocity then decays
 at every density ratio (3.9e-8 at t = 0.4, ratio 1000, N = 64). Notes: `docs/notes/19_capillary_dt.md`.
 
 ## GPU (cupy)
