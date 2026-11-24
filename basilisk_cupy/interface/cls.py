@@ -84,6 +84,12 @@ class CLSInterface:
     def mass(self) -> float:
         return float(self.psi.interior.sum()) * self.dv
 
+    def curvature(self, **kw):
+        """Curvature of the ``psi`` level sets in the interface band (:func:`.cls_curvature.psi_curvature`)."""
+        from .cls_curvature import psi_curvature  # noqa: PLC0415
+
+        return psi_curvature(self.psi, eps=self.eps, ccd=self.ccd, **kw)
+
     # -- stage A ---------------------------------------------------------------------------
     def _rhs(self, q, uf: FaceField):
         f = CellField.from_interior(self.psi.grid, q, self.psi.bc)

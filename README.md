@@ -570,6 +570,14 @@ to reach the event (`CenteredNS.start()` now does the same). A static drop (R = 
 sigma = 1, equal densities, N = 32) has a pressure jump of 4.038 (sigma/R = 4) and parasitic
 velocities of 7.4e-3 (7.4e-4 of sigma/mu) after 10 steps.
 
+`cls.curvature()` is the paper's curvature from the derivatives of `psi` (CCD `psi_x`, `psi_xx`,
+`psi_xy`, zero outside `0.01 < psi < 0.99`). Measured on a circle (max over `|phi| < eps` of
+`|kappa - 1/r| R`): on the exact profile 6.3e-4 / 1.2e-3 / 2.4e-3 / 4.8e-3 (N = 64 / 128 / 256 /
+512; the profile is 3 cells wide at every N, so the error grows like 1/h), 4.9e-7 from
+`phi = H_eps^{-1}(psi)` at N = 128; after a periodic translation 0.39 / 0.61 / 0.81 (N = 32 / 64 /
+128) without re-initialisation, 0.13 / 0.037 / 0.017 with compression--diffusion every 10 steps.
+Notes: `docs/notes/14_psi_curvature.md`.
+
 ## GPU (cupy)
 
 On the GPU the multigrid hot loops run as fused `cupy.RawKernel`s
