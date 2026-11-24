@@ -112,4 +112,5 @@ def test_fccd_taylor_green_uses_defect_correction_without_warnings(backend):
         warnings.simplefilter("error")
         ns.start(events=[0.5])
         ns.run(0.5)
-    assert ns.mgp.converged and ns.max_divergence() < 1e-4
+    # Basilisk's project() tolerance bounds the volume change of a cell in one step, |div u| dt
+    assert ns.mgp.converged and ns.max_divergence() * ns.clock.dt < ns.tolerance

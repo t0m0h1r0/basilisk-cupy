@@ -60,6 +60,8 @@ from .stepping import dtnext
 class IMEXBDF2NS(CenteredNS):
     """Same fields, boundary conditions and hook stages as :class:`CenteredNS`."""
 
+    basilisk_init_dt = False  # fixed or CFL steps from the first step on
+
     def __init__(self, grid, *, convection=None, viscous=None, fixed_dt: float | None = None,
                  face_native: bool = False, reconstruction=None, **kwargs) -> None:
         super().__init__(grid, **kwargs)

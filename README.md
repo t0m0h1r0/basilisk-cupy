@@ -498,6 +498,66 @@ On Basilisk's reversed vortex (T = 15) the sharp indicator `psi > 1/2` has an L1
 0.0306 / 0.0080), against 0.0606 / 0.0099 / 0.0014 for VOF on the same velocity. A periodic
 translation gives a psi L1 error of 6.0e-3 / 5.4e-3 / 4.3e-3 (VOF 1.5e-3 / 3.4e-4 / 8.7e-5).
 Mass is kept to 1e-13. Notes: `docs/notes/13_cls.md`.
+### Step M4b: two-phase properties, height functions, reduced gravity
+
+```python
+tp = TwoPhase(ns, f, rho1=1.0, rho2=0.1, mu1=mu, mu2=mu, vof_first=True)   # hooks into CenteredNS
+tp.add_reduced_gravity(G=(0.0, 50.0))
+```
+
+Ports of `two-phase.h` (`alpha = 1/rho(f_face)`, `rho(f)`, `mu(f_face)`), `heights.h`
+(height functions, multigrid version; the column propagation runs as one GPU kernel,
+bitwise equal to the array path), `position()` from `curvature.h`, `iforce.h` and
+`reduced.h`. `cases/gravity_wave.py` (`src/test/gravity.c`), relative RMS error of the
+amplitude against Prosperetti's solution:
+
+| points per wavelength | 8 | 16 | 32 | 64 |
+| --- | --- | --- | --- | --- |
+| lexicographic relaxation (as Basilisk's CPU build) | 0.126711 | 0.031758 | 0.00807759 | 0.00455815 |
+| `gravity.ref` (Basilisk, CPU) | 0.126713 | 0.031758 | 0.00807759 | 0.00455815 |
+| red/black relaxation (default) | 0.126717 | 0.0317753 | 0.0080898 | 0.00455964 |
+| Basilisk built with `-DGAUSS_SEIDEL` (red/black) | 0.126716 | 0.0317752 | 0.00808982 | 0.00455964 |
+
+Matching Basilisk needed three corrections of the port and one constant (found by building
+Basilisk from the mirror and comparing the fields after the first step, which now agree to
+1e-15 for both relaxations; `tests/data/`): Basilisk's `project()` solves to
+`TOLERANCE/dt²` (`project(..., basilisk_tolerance=True)`, used by `CenteredNS`); its red/black
+sweep starts with the odd cells (`i + j`); its CPU build relaxes lexicographically
+(`linear.lexicographic.set_relaxation("lexicographic")`, fronts `2i + j = const`, exact for
+the 9-point viscous stencil too); and its `pi` is 3.14159265358979
+(`basilisk_cupy.constants.PI`), which decides whether a cell cut near a vertex gets a
+volume fraction of exactly 1. A flat interface under reduced gravity stays at rest to 1.4e-17.
+N = 128 (738 steps) takes 37 s with cupy (red/black).
+
+### Step M4c: surface tension
+
+```python
+tp = TwoPhase(ns, f, rho1=1.0, rho2=1.0, mu1=mu, mu2=mu, vof_first=True)
+tp.add_surface_tension(1.0)          # phi = sigma kappa, dt <= sqrt(rho_m Delta^3 / (pi sigma))
+```
+
+Ports of `curvature()` (`curvature.h`: height-function curvature, then a parabola fitted to
+mixed heights, the 3x3 average, a parabola fitted to centroids; `parabola.h`) and
+`tension.h`. The curvature agrees bitwise with Basilisk's on five shapes that use all four
+methods (`tests/data`, printed by Basilisk built from the mirror). With accurate volume
+fractions the largest relative error on a circle (R = 0.2) is 3.7e-2 / 4.9e-3 / 1.2e-3 at
+N = 32 / 64 / 128, the level of Basilisk's `curvature.ref`; `fraction()` alone is only
+O(h²) accurate and leaves an O(1) curvature error. `cases/capillary_wave.py`
+(`src/test/capwave.c`), relative RMS error against Prosperetti's solution:
+
+| points per wavelength | 8 | 16 | 32 | 64 |
+| --- | --- | --- | --- | --- |
+| lexicographic relaxation | 0.138643 | 0.0242378 | — | — |
+| `capwave.ref` (Basilisk, CPU) | 0.13865 | 0.0242375 | 0.00639279 | 0.00226914 |
+| red/black relaxation (default) | 0.138631 | 0.0242639 | 0.00638451 | 0.00232291 |
+| Basilisk `-DGAUSS_SEIDEL` | 0.138638 | 0.0242618 | 0.0063841 | 0.00232294 |
+
+The first step agrees with Basilisk to 1e-15 in every field; the differences above come from
+round-off growing over the run (1e-14 after 50 steps). Basilisk's `init` calls `dtnext()`
+before any event time is known: the first step keeps that `dt` and the next one is shortened
+to reach the event (`CenteredNS.start()` now does the same). A static drop (R = 0.25,
+sigma = 1, equal densities, N = 32) has a pressure jump of 4.038 (sigma/R = 4) and parasitic
+velocities of 7.4e-3 (7.4e-4 of sigma/mu) after 10 steps.
 
 ## GPU (cupy)
 
@@ -555,7 +615,15 @@ Taylor–Green, ms per time step (RTX 3080 Ti vs one core of a Ryzen 9 5950X):
 pip install -e ".[dev]"      # add ",gpu" for cupy
 pytest              # fast suite
 pytest -m slow      # full lid-cavity run to steady state (~1 min)
+pytest -n auto --dist loadgroup              # in parallel (pytest-xdist)
+pytest -n auto --dist loadgroup -k "not cupy"  # numpy tests only, in parallel
 ```
+
+In parallel the numpy tests spread over all cores (one BLAS thread per worker), while the
+tests that use the GPU (a `cupy` backend parameter, cupy in the test body, or
+`@pytest.mark.gpu`) stay on one worker (`xdist_group("gpu")`), so they do not compete for
+it. The fast suite takes 4 min 16 s on 28 cores and the GPU (numpy only: 2 min), against 23 min
+serially.
 
 Tests run on numpy; when cupy is importable every backend-parametrised test
 (all solver, Poisson, CCD/FCCD, defect-correction and IMEX-BDF2 tests, and the

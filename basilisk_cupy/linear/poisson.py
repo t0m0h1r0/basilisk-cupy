@@ -3,8 +3,10 @@
 ``alpha`` is a face field (e.g. the specific volume 1/rho on faces), ``lambda``
 a cell field or scalar. The residual is evaluated with the supplied
 :class:`~basilisk_cupy.discretization.FaceComplex` (``L_high``); relaxation
-always uses the compact 2nd-order operator (``L_low``), on GPUs with
-red/black Gauss--Seidel as Basilisk does (``GAUSS_SEIDEL || _GPU``).
+always uses the compact 2nd-order operator (``L_low``): red/black Gauss--Seidel as Basilisk
+on GPUs or with ``GAUSS_SEIDEL`` (odd ``i + j`` first), or, with
+``linear.lexicographic.set_relaxation("lexicographic")``, the in-place sweep of Basilisk's
+CPU build (2-D uniform grids).
 With ``ops = fd2`` this is exactly Basilisk's solver; with a higher-order
 ``ops`` it becomes a defect-correction iteration.
 """
@@ -20,6 +22,8 @@ from ..grid.hierarchy import build_levels
 from ..kernels.relax_gpu import relax_redblack
 from ..kernels.residual_gpu import helmholtz_residual
 from .multigrid import NITERMAX, NITERMIN, TOLERANCE, MGStats, mg_solve, restrict_cell, restrict_face
+from .lexicographic import lexicographic
+from .lexicographic import relax_poisson as relax_lex
 
 
 class HelmholtzProblem:
@@ -94,7 +98,7 @@ class HelmholtzProblem:
         if not self._masks:
             for g in self.levels:
                 idx = g.xp.indices(g.n).sum(axis=0)
-                self._masks.append(((idx % 2) == 0, (idx % 2) == 1))
+                self._masks.append(((idx % 2) == 1, (idx % 2) == 0))  # Basilisk: odd i + j first
         return self._masks
 
     # L_high residual on the finest level -------------------------------------------
@@ -130,6 +134,10 @@ class HelmholtzProblem:
         xp = grid.xp
         alpha = self.alpha[level]
         lam = self.lam[level]
+        if lexicographic() and grid.is_uniform and grid.ndim == 2 and grid.h[0] == grid.h[1]:
+            relax_lex(xp, da.data, res, alpha, lam if self.has_lambda else None, grid.n, float(grid.h[0]),
+                      grid.ghosts)
+            return
         if self.fused:
             relax_redblack(da.data, res, alpha, lam if self.has_lambda else None, grid.n, grid.h, grid.ghosts)
             return

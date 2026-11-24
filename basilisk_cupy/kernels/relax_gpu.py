@@ -88,15 +88,16 @@ def index(wide: bool):
 
 
 def launch_colours(kernel, n, args, wide: bool) -> None:
-    """Run ``kernel`` for colour 0 then colour 1, one thread per cell of the colour;
-    ``args`` end before ``colour, count``."""
+    """Run ``kernel`` for colour 1 (odd index sum) then colour 0, as Basilisk's red/black
+    relaxation (``(point.i + parity) % 2 != point.j % 2`` with parity 0 first); one thread per
+    cell of the colour; ``args`` end before ``colour, count``."""
     import cupy as cp  # noqa: PLC0415
 
     count = (n[-1] + 1) // 2
     for v in n[:-1]:
         count *= v
     blocks = (count + THREADS - 1) // THREADS
-    for colour in (0, 1):
+    for colour in (1, 0):
         kernel((blocks,), (THREADS,), tuple(args) + (cp.int32(colour), index(wide)(count)))
 
 
