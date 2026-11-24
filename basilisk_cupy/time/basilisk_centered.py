@@ -50,11 +50,14 @@ class CenteredNS:
                  uf_normal: dict | None = None,
                  mu: float | FaceField | None = None,
                  cfl: float = 0.8, DT: float = 1e30, stokes: bool = False,
-                 ops: FaceComplex | None = None, tolerance: float = TOLERANCE) -> None:
+                 ops: FaceComplex | None = None, tolerance: float = TOLERANCE, viscous=None) -> None:
         self.grid = grid
         self.ops = ops or FD2FaceComplex()
         self.periodic = tuple(periodic)
         self.cfl, self.DT, self.stokes, self.tolerance = cfl, DT, stokes, tolerance
+        #: Implicit viscous solver with a ``solve(u, mu, rho, dt, tolerance=)`` method (e.g.
+        #: :class:`~basilisk_cupy.terms.viscous.CCDViscosity`); ``None``: Basilisk's ``viscosity()``.
+        self.viscous = viscous
         self.clock = Clock()
 
         ubcs = vector_bcs(grid.ndim, self.periodic, normal, tangential)
@@ -178,8 +181,11 @@ class CenteredNS:
         self._run_hooks("viscous_term")
         if self.mu is not None:
             self.correction(dt)
-            self.mgu = viscosity(self.u, self.mu, self.rho, dt, nrelax=self.mgu.nrelax or 4,
-                                 tolerance=self.tolerance)
+            if self.viscous is None:
+                self.mgu = viscosity(self.u, self.mu, self.rho, dt, nrelax=self.mgu.nrelax or 4,
+                                     tolerance=self.tolerance)
+            else:
+                self.mgu = self.viscous.solve(self.u, self.mu, self.rho, dt, tolerance=self.tolerance)
             self.correction(-dt)
         if not self.a_is_constant:
             for ax in range(self.grid.ndim):
