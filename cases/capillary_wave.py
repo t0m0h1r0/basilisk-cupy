@@ -17,6 +17,7 @@ from pathlib import Path
 
 from basilisk_cupy import BoundaryConditions, CartesianGrid, CellField
 from basilisk_cupy.constants import PI
+from basilisk_cupy.discretization.ccd import FCCDFaceComplex
 from basilisk_cupy.interface.cls import CLSInterface
 from basilisk_cupy.interface.cls_two_phase import TwoPhaseCLS
 from basilisk_cupy.interface.fractions import fraction
@@ -51,7 +52,8 @@ def _cls_amplitude(xp, psi, grid):
     return float(xp.max(xp.where(cross, yc, -1e30)))
 
 
-def run(n: int, backend: str = "numpy", tolerance: float = 1e-6, interface: str = "vof", **cls_kw):
+def run(n: int, backend: str = "numpy", tolerance: float = 1e-6, interface: str = "vof",
+        divergence: str = "plain", face_order: int = 4, **cls_kw):
     """``interface="cls"``: TwoPhaseFlow's CLS (:class:`TwoPhaseCLS`, keywords ``cls_kw``), the
     amplitude from the ``psi = 1/2`` crossings."""
     grid = CartesianGrid((n, n), length=(2.0, 2.0), origin=(0.0, -1.0), backend=backend)
@@ -63,7 +65,8 @@ def run(n: int, backend: str = "numpy", tolerance: float = 1e-6, interface: str 
         k = 2.0 * PI
         # signed distance to y = 0.01 cos(k x) to O(a^2 k^2): (y - eta) / sqrt(1 + eta'^2)
         dist = (y - 0.01 * xp.cos(k * x)) / xp.sqrt(1.0 + (0.01 * k * xp.sin(k * x)) ** 2)
-        cls = CLSInterface.from_level_set(grid, dist, BoundaryConditions())
+        cls = CLSInterface.from_level_set(grid, dist, BoundaryConditions(), divergence=divergence,
+                                          ops=FCCDFaceComplex(order=face_order))
         f = cls.psi
         tp = TwoPhaseCLS(ns, cls, rho1=1.0, rho2=1.0, mu1=MU, mu2=MU, vof_first=True, **cls_kw)
     else:

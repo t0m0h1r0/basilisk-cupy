@@ -607,6 +607,16 @@ max error 0.202 / 0.0139 / 0.00305 at N = 32 / 64 / 128) but thins filaments (re
 capillary wave with the GFM jump does not improve with an ideal curvature (0.193 / 0.107 /
 0.0448). Notes: `docs/notes/17_curvature_transport.md`.
 
+That interface error is the paper's plain face difference: `D_f` of the FCCD face fluxes is 2nd
+order on point values, and with `eps = 1.5 Delta` its error `-(h^2/24) psi_xxx` is -0.93% of
+`psi_x` at the crossing at every N, so the interface lags by about 0.9% of the distance
+travelled. `CLSInterface(..., divergence="fccd")` subtracts `(h^2/24)(psi_xx u + 2 psi_x u_x)`
+(face-line CCD derivatives; without `psi u_xxx`, so a projected velocity keeps `psi = 1`).
+Translation, psi L1 error at N = 32 / 64 / 128: 6.0e-3 / 5.4e-3 / 4.3e-3 (paper), 1.15e-3 /
+1.06e-3 / 9.8e-4 (corrected), 1.4e-4 / 1.1e-4 / 1.1e-4 (corrected, 6th-order face values).
+Capillary wave with the GFM jump: 0.188 / 0.0639 / 0.0109 / 0.00209 at 8 / 16 / 32 / 64 points
+per wavelength (VOF 0.139 / 0.0242 / 0.0064 / 0.0023). Notes: `docs/notes/18_cls_transport.md`.
+
 ## GPU (cupy)
 
 On the GPU the multigrid hot loops run as fused `cupy.RawKernel`s
