@@ -42,6 +42,9 @@ Hook = Callable[["CenteredNS"], None]
 
 
 class CenteredNS:
+    #: Reproduce Basilisk's first step (init's ``dtnext`` without event times, see ``start``).
+    basilisk_init_dt = True
+
     def __init__(self, grid: CartesianGrid, *, periodic: tuple[int, ...] = (),
                  normal: dict | None = None, tangential: dict | None = None,
                  uf_normal: dict | None = None,
@@ -136,7 +139,16 @@ class CenteredNS:
         self.uf = self.face_velocity()
         self._run_hooks("properties")
         self.dtmax = self.DT
-        self._stability()
+        self._run_hooks("stability")  # Basilisk's init calls event ("stability")
+        # Basilisk's init runs dtnext() before any event time is known (tnext = HUGE): the step is
+        # kept and tnext = t + dt0, which the first step then also aligns to.
+        if self.basilisk_init_dt:
+            dt0 = self.dtmax if self.stokes else timestep(self.uf, self.dtmax, self.cfl, self.clock)
+            self.clock.dt = dt0
+            if dt0 < 1e29:
+                self.clock.events = sorted(self.clock.events + [self.clock.t + dt0])
+        else:
+            self._stability()
 
     # -- stages ------------------------------------------------------------------------
     def _stability(self) -> None:

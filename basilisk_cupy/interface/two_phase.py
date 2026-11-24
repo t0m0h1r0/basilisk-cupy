@@ -9,14 +9,20 @@ Attached to a :class:`~basilisk_cupy.time.basilisk_centered.CenteredNS` through 
 * ``properties``: ``alpha = 1/rho(f_face)``, ``rho(f)``, ``mu(f_face)`` with arithmetic averages
   of the (optionally vertex-filtered) volume fraction;
 * ``acceleration``: interfacial forces ``alpha phi grad f`` (``iforce.h``) from potentials
-  ``phi`` registered by modules such as reduced gravity ``phi = [rho] G . (x - Z)``.
+  ``phi`` registered by modules such as reduced gravity ``phi = [rho] G . (x - Z)``
+  (``reduced.h``) and surface tension ``phi = sigma kappa`` (``tension.h``, height-function
+  curvature), with tension's explicit time-step bound ``sqrt(rho_m Delta^3 / (pi sigma))``.
 
 The VOF scheme caps the CFL number at 1/2.
 """
 
 from __future__ import annotations
 
+import math
+
 from ..fields import CellField, FaceField
+from ..constants import PI
+from .curvature import curvature
 from .heights import NODATA, pad_bc, position
 from .vof import VOFInterface, vof_advection
 
@@ -101,6 +107,22 @@ class TwoPhase:
             phif = xp.where(okl & okr, (pr + pl) / 2.0, xp.where(okr, pr, xp.where(okl, pl, 0.0)))
             add = ns.alpha[ax] / 1.0 * phif * (fr - fl) / h
             ns.a[ax] = ns.a[ax] + xp.where(fr != fl, add, 0.0)
+
+    def add_surface_tension(self, sigma: float) -> None:
+        """Surface tension (``tension.h``): ``phi = sigma kappa`` and the capillary time-step bound."""
+        self.sigma = float(sigma)
+        self.potentials.append(lambda tp: curvature(tp.f.interior, tp.f.bc, tp.f.grid, tp.sigma))
+        self.ns.on("stability", self._capillary_dtmax)
+
+    def _capillary_dtmax(self, ns) -> None:
+        xp = self.f.grid.xp
+        amin = min(float(xp.min(a)) for a in ns.alpha.components)
+        amax = max(float(xp.max(a)) for a in ns.alpha.components)
+        rhom = (1.0 / amin + 1.0 / amax) / 2.0
+        dmin = float(min(self.f.grid.h))
+        dt = math.sqrt(rhom * (dmin * dmin * dmin) / (PI * self.sigma))
+        if dt < ns.dtmax:
+            ns.dtmax = dt
 
     def add_reduced_gravity(self, G=(0.0, 0.0), Z=(0.0, 0.0)) -> None:
         """Reduced gravity (``reduced.h``): ``phi = (rho2 - rho1) G . (x - Z)`` at the interface."""

@@ -515,6 +515,36 @@ the 9-point viscous stencil too); and its `pi` is 3.14159265358979
 volume fraction of exactly 1. A flat interface under reduced gravity stays at rest to 1.4e-17.
 N = 128 (738 steps) takes 37 s with cupy (red/black).
 
+### Step M4c: surface tension
+
+```python
+tp = TwoPhase(ns, f, rho1=1.0, rho2=1.0, mu1=mu, mu2=mu, vof_first=True)
+tp.add_surface_tension(1.0)          # phi = sigma kappa, dt <= sqrt(rho_m Delta^3 / (pi sigma))
+```
+
+Ports of `curvature()` (`curvature.h`: height-function curvature, then a parabola fitted to
+mixed heights, the 3x3 average, a parabola fitted to centroids; `parabola.h`) and
+`tension.h`. The curvature agrees bitwise with Basilisk's on five shapes that use all four
+methods (`tests/data`, printed by Basilisk built from the mirror). With accurate volume
+fractions the largest relative error on a circle (R = 0.2) is 3.7e-2 / 4.9e-3 / 1.2e-3 at
+N = 32 / 64 / 128, the level of Basilisk's `curvature.ref`; `fraction()` alone is only
+O(h²) accurate and leaves an O(1) curvature error. `cases/capillary_wave.py`
+(`src/test/capwave.c`), relative RMS error against Prosperetti's solution:
+
+| points per wavelength | 8 | 16 | 32 | 64 |
+| --- | --- | --- | --- | --- |
+| lexicographic relaxation | 0.138643 | 0.0242378 | — | — |
+| `capwave.ref` (Basilisk, CPU) | 0.13865 | 0.0242375 | 0.00639279 | 0.00226914 |
+| red/black relaxation (default) | 0.138631 | 0.0242639 | 0.00638451 | 0.00232291 |
+| Basilisk `-DGAUSS_SEIDEL` | 0.138638 | 0.0242618 | 0.0063841 | 0.00232294 |
+
+The first step agrees with Basilisk to 1e-15 in every field; the differences above come from
+round-off growing over the run (1e-14 after 50 steps). Basilisk's `init` calls `dtnext()`
+before any event time is known: the first step keeps that `dt` and the next one is shortened
+to reach the event (`CenteredNS.start()` now does the same). A static drop (R = 0.25,
+sigma = 1, equal densities, N = 32) has a pressure jump of 4.038 (sigma/R = 4) and parasitic
+velocities of 7.4e-3 (7.4e-4 of sigma/mu) after 10 steps.
+
 ## GPU (cupy)
 
 On the GPU the multigrid hot loops run as fused `cupy.RawKernel`s
