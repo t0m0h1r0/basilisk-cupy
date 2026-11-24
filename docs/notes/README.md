@@ -23,3 +23,4 @@
 | [17_curvature_transport.md](17_curvature_transport.md) | 移流後の ψ 曲率の誤差は移流した界面から：毎ステップの圧縮・拡散で収束、毛管波は曲率で決まらない（#32） |
 | [18_cls_transport.md](18_cls_transport.md) | ψ 移流の面差分は2次で ψ = ½ が 0.93% 遅れる：補正した発散と6次の面値で毛管波が VOF と同等に（#33） |
 | [19_capillary_dt.md](19_capillary_dt.md) | 高密度比の発散は CCD 曲率の硬さ：表面張力の時間刻みに √(5/12)（#34） |
+| [20_capillary_dt_check.md](20_capillary_dt_check.md) | √(5/12) の検証：曲率の硬さの比は測定と合うが、CLS では境目が N・粘性・密度比で下がる（#35） |

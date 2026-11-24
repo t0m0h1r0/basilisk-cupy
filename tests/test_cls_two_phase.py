@@ -120,3 +120,13 @@ def test_default_capillary_factor(backend):
     cls = CLSInterface.from_level_set(grid, 0.25 - grid.xp.sqrt(x * x + y * y), BoundaryConditions())
     tp = TwoPhaseCLS(ns, cls, pressure_jump=True)
     assert tp.capillary_dt_factor == pytest.approx(math.sqrt(5.0 / 12.0), rel=1e-15)
+
+
+@pytest.mark.parametrize("factor,stable", [(0.95, True), (1.0, False)])
+def test_capillary_stability_threshold(backend, factor, stable):
+    """Density ratio 100, mu = 0.1, N = 64: the static drop is stable at 0.95 of tension.h's bound and
+    grows at 1.0 (docs/notes/20: omega dt <= 2 with CCD's 48/5 predicts 0.913)."""
+    from cases.capillary_dt_scan import growth
+
+    r = growth(64, 0.01, factor, steps=800 if stable else 700, backend=backend)
+    assert r["stable"] == stable
