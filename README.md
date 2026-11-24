@@ -578,6 +578,17 @@ results worse than no re-initialisation (reversed vortex every 10 steps, N = 64:
 128) without re-initialisation, 0.13 / 0.037 / 0.017 with compression--diffusion every 10 steps.
 Notes: `docs/notes/14_psi_curvature.md`.
 
+`TwoPhaseCLS(ns, cls, rho1=..., rho2=..., mu1=..., mu2=...)` couples the CLS interface to
+`CenteredNS` exactly as `TwoPhase` couples VOF (properties from `psi` with arithmetic face
+averages, CSF surface tension `sigma kappa grad psi` in `iforce.h`'s balanced-force face form).
+Static drop (R = 0.25, N = 64 / 128 / 256): pressure jump 4.0230 / 3.9410 / 3.9228 with the
+paper's band `psi_min = 0.01` (the gradient outside the band, 2%, carries no curvature) and
+4.1299 / 4.0298 / 4.0067 with `psi_min = 1e-4`; parasitic velocities 3.2e-4 / 1.7e-4 / 1.3e-4
+(VOF 4.2e-3 / 2.0e-3 at N = 64 / 128). Capillary wave (`cases/capillary_wave.py`,
+`interface="cls"`): 0.355 / 0.315 / 0.236 at 8 / 16 / 32 points per wavelength (VOF 0.139 /
+0.024 / 0.0064); the wave is slow by 39% / 17% / 7.1% in the half period, set by `k eps` alone
+(the CSF force spread over the interface width). Notes: `docs/notes/15_cls_ns.md`.
+
 ## GPU (cupy)
 
 On the GPU the multigrid hot loops run as fused `cupy.RawKernel`s
