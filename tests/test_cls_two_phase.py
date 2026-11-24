@@ -61,3 +61,27 @@ def test_capillary_wave(backend):
 
     r = cw.run(16, backend, interface="cls")
     assert r["error"] == pytest.approx(0.35541, rel=1e-3)
+
+
+@pytest.mark.parametrize("n,jump,umax", [(32, 4.0091, 3.330e-4), (64, 4.0027, 4.873e-5), (128, 4.0010, 8.574e-6)])
+def test_static_drop_pressure_jump(backend, n, jump, umax):
+    """GFM pressure jump (pressure_jump=True), 10 steps: the jump converges to sigma/R = 4 (CSF:
+    4.3014 / 4.0230 / 3.9410) and the parasitic velocity falls like h^2.5 (CSF 3.6e-4 / 3.2e-4 / 1.7e-4)."""
+    j, u, dm = _static_drop(n, backend, pressure_jump=True)
+    assert j == pytest.approx(jump, abs=2e-4) and u == pytest.approx(umax, rel=0.05) and abs(dm) < 1e-12
+
+
+def test_static_drop_pressure_jump_reaches_rest(backend):
+    """N = 64, 400 steps: parasitic velocity 1.1e-8 (CSF 2.4e-4; VOF 6.1e-8); density ratio 10 at 400 steps: 1.6e-7."""
+    assert _static_drop(64, backend, steps=400, pressure_jump=True)[1] < 2e-8
+    assert _static_drop(64, backend, steps=400, rho2=0.1, pressure_jump=True)[1] < 3e-7
+
+
+def test_capillary_wave_pressure_jump(backend):
+    """capwave.c with the GFM jump, 8 / 16 / 32 / 64 points per wavelength: 0.201 / 0.0933 / 0.0279 /
+    0.0130 (CSF 0.355 / 0.315 / 0.236; VOF 0.139 / 0.0242 / 0.0064 / 0.0023); half period 3.629 / 3.507
+    at 16 / 32 points (Prosperetti 3.456; CSF 4.05 / 3.70)."""
+    from cases import capillary_wave as cw
+
+    r = cw.run(16, backend, interface="cls", pressure_jump=True)
+    assert r["error"] == pytest.approx(0.20122, rel=1e-3)
