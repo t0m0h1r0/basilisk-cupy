@@ -95,3 +95,19 @@ def test_capillary_wave_pressure_jump_corrected_divergence(backend):
 
     r = cw.run(32, backend, interface="cls", pressure_jump=True, divergence="fccd", face_order=6)
     assert r["error"] == pytest.approx(0.06389, rel=1e-3)
+
+
+@pytest.mark.parametrize("rho2,factor,bound", [(0.01, 1.0, None), (0.01, "ccd", 1e-6), (0.001, "ccd", 1e-6)])
+def test_static_drop_high_density_ratio(backend, rho2, factor, bound):
+    """GFM jump, equal viscosities 0.1, N = 64, 400 steps. With tension.h's time step the capillary loop
+    grows at density ratios 100 and 1000 (8.7e-4 and 2.7 here): the CCD curvature answers a grid-scale
+    wiggle with 48/5 instead of 4 per Delta^2. capillary_dt_factor = sqrt(5/12): 4.4e-7 (ratio 1000)."""
+    from basilisk_cupy.interface.cls_two_phase import CCD_CAPILLARY_DT_FACTOR
+
+    f = CCD_CAPILLARY_DT_FACTOR if factor == "ccd" else factor
+    _, u, dm = _static_drop(64, backend, steps=400, rho2=rho2, pressure_jump=True, capillary_dt_factor=f)
+    assert abs(dm) < 1e-12
+    if bound is None:
+        assert not (u < 1e-4)  # grows (or overflows)
+    else:
+        assert u < bound
