@@ -36,3 +36,4 @@
 | [31_ccd_viscous_centered.md](31_ccd_viscous_centered.md) | CenteredNS の粘性項の CCD 化：単相は FCCD の面演算子と合わせて4次。毛管波の減衰は射影が2次のままでは改善しない（#45） |
 | [32_fccd_projection.md](32_fccd_projection.md) | FCCD の射影とジャンプ補正付き面勾配（滑らかな圧力 p − H j_ext を解く）：寄生流は2次と同水準、毛管波は周期が改善（#46） |
 | [33_coupled_stability.md](33_coupled_stability.md) | 毛管ループの連成安定性：粘性で安定限界が下がるのは時間分割の順序のため。粘性演算子は原因でない（layered 形は格子規模で増大）（#47） |
+| [34_coupled_viscous.md](34_coupled_viscous.md) | 表面張力・粘性・射影の連成反復：粘性が安定化に働くようになる（N = 64、μ = 1 で境目 1.0 → 2.6）。密度比 100 では未改善（#48） |
