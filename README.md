@@ -696,6 +696,14 @@ the drop is only a few widths across (N = 32) the curvature error rises to 0.3-0
 does not change (0.064 at 16 points per wavelength for every c) and neither does the grid-scale
 capillary instability. Figure: `docs/figures/eps_width.png`. Notes: `docs/notes/28_eps_width.md`.
 
+The capillary wave's remaining error (CLS + GFM 0.0639 / 0.0109 at 16 / 32 points per wavelength against
+VOF's 0.0243 / 0.0064) is under-damping: decay per period 0.7247 / 0.6992 against Prosperetti's 0.692,
+converging at 2nd order (CLS is better than VOF at 64 points, 0.0021 / 0.0023). The amplitude reading,
+mass closure, clipping, time step, jump position and curvature (even an exact one) do not change it.
+Inviscid, VOF's transport damps the wave by 2.9 % per period and CLS's by 0.6 %: the interfacial vorticity
+layer (sqrt(2 nu / omega) = 0.057, 0.9 / 1.8 cells) is under-resolved, and VOF's numerical dissipation
+happens to make up for it. Figure: `docs/figures/capwave_damping.png`. Notes: `docs/notes/29_capwave_damping.md`.
+
 ## GPU (cupy)
 
 On the GPU the multigrid hot loops run as fused `cupy.RawKernel`s
