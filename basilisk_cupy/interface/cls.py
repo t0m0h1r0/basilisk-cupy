@@ -87,7 +87,7 @@ class CLSInterface:
         self.ops = ops or FCCDFaceComplex()
         self.ccd = self.ops.ccd if hasattr(self.ops, "ccd") else CCDCellDerivative()
         self.mass_closure = mass_closure
-        if divergence not in ("plain", "fccd"):
+        if divergence not in ("plain", "fccd", "full"):
             raise ValueError("divergence is 'plain' (the paper's D_f) or 'fccd' (D_f of the corrected flux)")
         self.divergence = divergence
         self._d1_cache: dict = {}
@@ -126,6 +126,13 @@ class CLSInterface:
             psi_f = self.ops.interp_f(f, ax)
             flux = psi_f * uf[ax]
             n = grid.n[ax]
+            if self.divergence == "full":  # D_f of FCCD's corrected flux: consistent with an FCCD projection
+                periodic = self.psi.bc.is_periodic(ax)
+                flux = self.ops.face_flux(flux, ax, periodic)
+                if not periodic:
+                    w = [slice(None)] * 2
+                    w[ax] = [0, n]
+                    flux[tuple(w)] = 0.0
             if self.divergence == "fccd":
                 flux = flux - self._flux_correction(psi_f, uf[ax], ax)
             lo = [slice(None)] * 2

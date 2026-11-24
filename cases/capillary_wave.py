@@ -54,13 +54,13 @@ def _cls_amplitude(xp, psi, grid):
 
 def run(n: int, backend: str = "numpy", tolerance: float = 1e-6, interface: str = "vof",
         divergence: str = "plain", face_order: int = 4, eps_factor: float | None = None, viscous=None,
-        **cls_kw):
+        ops_ns=None, **cls_kw):
     """``interface="cls"``: TwoPhaseFlow's CLS (:class:`TwoPhaseCLS`, keywords ``cls_kw``), the
     amplitude from the ``psi = 1/2`` crossings."""
     grid = CartesianGrid((n, n), length=(2.0, 2.0), origin=(0.0, -1.0), backend=backend)
     xp = grid.xp
     walls = ("left", "right", "bottom", "top")
-    ns = CenteredNS(grid, uf_normal={w: 0.0 for w in walls}, tolerance=tolerance, viscous=viscous)
+    ns = CenteredNS(grid, uf_normal={w: 0.0 for w in walls}, tolerance=tolerance, viscous=viscous, ops=ops_ns)
     if interface == "cls":
         x, y = grid.meshgrid()
         k = 2.0 * PI
