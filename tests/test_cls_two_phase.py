@@ -85,3 +85,13 @@ def test_capillary_wave_pressure_jump(backend):
 
     r = cw.run(16, backend, interface="cls", pressure_jump=True)
     assert r["error"] == pytest.approx(0.20122, rel=1e-3)
+
+
+def test_capillary_wave_pressure_jump_corrected_divergence(backend):
+    """GFM jump + corrected divergence + 6th-order face values, 8 / 16 / 32 / 64 points per wavelength:
+    0.188 / 0.0639 / 0.0109 / 0.00209 (plain divergence 0.201 / 0.0933 / 0.0279 / 0.0130; VOF 0.139 /
+    0.0242 / 0.0064 / 0.0023). 4th-order face values: 0.188 / 0.0654 / 0.0126 / 0.00348."""
+    from cases import capillary_wave as cw
+
+    r = cw.run(32, backend, interface="cls", pressure_jump=True, divergence="fccd", face_order=6)
+    assert r["error"] == pytest.approx(0.06389, rel=1e-3)

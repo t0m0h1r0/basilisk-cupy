@@ -87,3 +87,24 @@ def test_after_transport(backend, reinit, every, expected):
     xn, yn = to_numpy(x), to_numpy(y)
     r = np.sqrt(xn * xn + (((yn + 1.0) % 1.0) - 0.5) ** 2)
     assert _core_error(cls, r) == pytest.approx(expected, rel=0.02)
+
+
+@pytest.mark.parametrize("order,expected", [(4, 0.1042), (6, 0.00850)])
+def test_after_transport_corrected_divergence(backend, order, expected):
+    """The translation above with the corrected divergence (``divergence="fccd"``), no re-initialisation:
+    0.0788 / 0.104 / 0.119 (4th-order face values), 0.0221 / 0.00850 / 0.00881 (6th order) at
+    N = 32 / 64 / 128 (plain: 0.394 / 0.611 / 0.805)."""
+    from basilisk_cupy.discretization.ccd import FCCDFaceComplex
+
+    n = 64
+    grid = CartesianGrid((n, n), origin=(-0.5, -0.5), backend=backend)
+    xp = grid.xp
+    x, y = grid.meshgrid()
+    cls = CLSInterface.from_level_set(grid, R - xp.sqrt(x * x + y * y), BoundaryConditions.periodic(2),
+                                      divergence="fccd", ops=FCCDFaceComplex(order=order))
+    uf = FaceField(grid, [xp.ones(grid.face_shape(0)), 0.5 * xp.ones(grid.face_shape(1))])
+    for _ in range(4 * n):
+        cls.advect(uf, 1.0 / (4 * n))
+    xn, yn = to_numpy(x), to_numpy(y)
+    r = np.sqrt(xn * xn + (((yn + 1.0) % 1.0) - 0.5) ** 2)
+    assert _core_error(cls, r) == pytest.approx(expected, rel=0.02)

@@ -10,6 +10,12 @@ positive inside, ``psi = H_eps(Phi)``), ``eps = C_eps Delta`` with ``C_eps = 1.5
   ``fccd_flux`` mode), the plain face difference ``D_f`` and ``psi`` clipped to ``[0, 1]`` after
   every stage (TwoPhaseFlow's ``clip_bounds``). ``u_f`` must be divergence-free for ``D_f``: with
   FCCD operators pass ``ops.wall_free_flux(uf, periodic)``.
+  ``divergence="fccd"`` corrects the flux by ``-(h^2/24)(psi_xx u + 2 psi_x u_x)`` (face-line CCD
+  derivatives of ``psi_f`` and ``u_f``): the plain ``D_f`` is 2nd order on point values and its
+  error ``-(h^2/24) psi_xxx`` is a fixed fraction of ``psi_x`` because ``eps = 1.5 Delta``
+  (-0.93% at the ``psi = 1/2`` crossing), so the interface lags by that fraction of the distance
+  travelled at every N. The ``psi u_xxx`` part is left out, so a ``u_f`` divergence-free for the
+  plain ``D_f`` (a projected one) keeps ``psi = 1`` exactly; on walls the correction is zero.
 * **B, mass closure**: ``psi += (M - sum psi dV) / sum w dV * w``, ``w = 4 psi (1 - psi)``
   (interface-localised), then clipped (TwoPhaseFlow ``apply_mass_correction``).
 
@@ -60,11 +66,17 @@ def mass_correction(psi, dv, target):
     return xp.clip(psi + (gate * ratio) * w, 0.0, 1.0)
 
 
+def _take_first(a, ax):
+    idx = [slice(None)] * a.ndim
+    idx[ax] = slice(0, 1)
+    return a[tuple(idx)]
+
+
 class CLSInterface:
     """``psi`` (a :class:`CellField`, boundary conditions of a volume fraction) and its width ``eps``."""
 
     def __init__(self, psi: CellField, eps: float | None = None, *, ops: FCCDFaceComplex | None = None,
-                 mass_closure: bool = True) -> None:
+                 mass_closure: bool = True, divergence: str = "plain") -> None:
         grid = psi.grid
         if grid.ndim != 2 or not grid.is_uniform:
             raise NotImplementedError("CLS is implemented on uniform 2-D grids")
@@ -73,6 +85,10 @@ class CLSInterface:
         self.ops = ops or FCCDFaceComplex()
         self.ccd = self.ops.ccd if hasattr(self.ops, "ccd") else CCDCellDerivative()
         self.mass_closure = mass_closure
+        if divergence not in ("plain", "fccd"):
+            raise ValueError("divergence is 'plain' (the paper's D_f) or 'fccd' (D_f of the corrected flux)")
+        self.divergence = divergence
+        self._d1_cache: dict = {}
         self.dv = float(grid.h[0] * grid.h[1])
 
     @classmethod
@@ -97,14 +113,55 @@ class CLSInterface:
         grid = self.psi.grid
         out = None
         for ax in range(2):
-            flux = self.ops.interp_f(f, ax) * uf[ax]
+            psi_f = self.ops.interp_f(f, ax)
+            flux = psi_f * uf[ax]
             n = grid.n[ax]
+            if self.divergence == "fccd":
+                flux = flux - self._flux_correction(psi_f, uf[ax], ax)
             lo = [slice(None)] * 2
             hi = [slice(None)] * 2
             lo[ax], hi[ax] = slice(0, n), slice(1, n + 1)
             d = (flux[tuple(hi)] - flux[tuple(lo)]) / float(grid.h[ax])
             out = -d if out is None else out - d
         return out
+
+    def _flux_correction(self, psi_f, un, ax):
+        """``(h^2/24)(psi_xx u + 2 psi_x u_x)`` on the faces normal to ``ax`` (zero on walls).
+
+        ``D_f`` of the point flux ``psi_f u_f`` is ``d(psi u)/dx + (h^2/24) d^3(psi u)/dx^3``; the
+        terms of ``d^3(psi u)`` with derivatives of ``psi`` grow like ``1/eps^2`` (the profile is
+        3 cells wide at every N) and are removed here. ``psi u_xxx`` is kept: the projected ``u_f``
+        is divergence-free for the plain ``D_f``, so ``psi = 1`` stays exactly 1. The derivatives
+        are face-line CCD derivatives of the face values ``psi_f`` and ``u_f`` (as in
+        :meth:`.FCCDFaceComplex.face_flux`, which this equals for a uniform ``u``)."""
+        from ..discretization.reconstruction import face_ccd_matrices  # noqa: PLC0415
+
+        grid = self.psi.grid
+        xp = grid.xp
+        h = float(grid.h[ax])
+        n = grid.n[ax]
+        periodic = self.psi.bc.is_periodic(ax)
+        key = ("cls_d", xp.__name__, n, periodic, str(un.dtype))
+        D = self._d1_cache.get(key)
+        if D is None:
+            D1, D2 = face_ccd_matrices(n, 1.0, periodic)
+            D = self._d1_cache[key] = (xp.asarray(D1.T, dtype=un.dtype), xp.asarray(D2.T, dtype=un.dtype))
+
+        def line(v, M):
+            moved = xp.moveaxis(v, ax, -1)
+            if periodic:
+                d = moved[..., :n] @ M
+                d = xp.concatenate([d, d[..., :1]], axis=-1)
+            else:
+                d = moved @ M
+            return xp.moveaxis(d, -1, ax)
+
+        corr = (1.0 / 24.0) * (line(psi_f, D[1]) * un + 2.0 * line(psi_f, D[0]) * line(un, D[0]))
+        if not periodic:
+            w = [slice(None)] * 2
+            w[ax] = [0, n]
+            corr[tuple(w)] = 0.0
+        return corr
 
     def advect(self, uf: FaceField, dt: float) -> None:
         """One TVD-RK3 step with the face velocity ``uf`` (frozen), clipping each stage, then stage B."""

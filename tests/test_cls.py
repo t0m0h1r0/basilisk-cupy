@@ -148,3 +148,43 @@ def test_reversed_vortex_with_compression_every_step(backend):
 
     r = reversed_cls.run(32, backend, reinit_every=1, method="compression")
     assert r["sharp"][0] == pytest.approx(0.17099, rel=0.01) and abs(r["mass_change"]) < 1e-12
+
+
+def _slab_crossings(n, backend, **kw):
+    """A slab |x| < 0.2 (periodic, 4 cells high) carried once around the domain at u = 1, CFL 0.25."""
+    from basilisk_cupy.discretization.ccd import FCCDFaceComplex
+
+    grid = CartesianGrid((n, 4), length=(1.0, 4.0 / n), origin=(-0.5, 0.0), backend=backend)
+    xp = grid.xp
+    x, _ = grid.meshgrid()
+    order = kw.pop("face_order", 4)
+    cls = CLSInterface.from_level_set(grid, 0.2 - xp.abs(x), BoundaryConditions.periodic(2),
+                                      ops=FCCDFaceComplex(order=order), **kw)
+    uf = FaceField(grid, [xp.ones(grid.face_shape(0)), xp.zeros(grid.face_shape(1))])
+    for _ in range(4 * n):
+        cls.advect(uf, 1.0 / (4 * n))
+    q = to_numpy(cls.psi.interior[:, 0])
+    xs = to_numpy(x[:, 0])
+    h = 1.0 / n
+    return [xs[i] + (q[i] - 0.5) / (q[i] - q[i + 1]) * h for i in range(n - 1) if (q[i] - 0.5) * (q[i + 1] - 0.5) < 0]
+
+
+@pytest.mark.parametrize("kw,lag", [({}, 5.94e-3), ({"divergence": "fccd"}, 1.16e-3),
+                                    ({"divergence": "fccd", "face_order": 6}, 2.0e-4)])
+def test_slab_lag(backend, kw, lag):
+    """N = 64: the psi = 1/2 crossings lag by 5.94e-3 with the paper's plain face difference (2nd order on
+    point values: -h^2/24 psi''' is -0.93% of psi' at the crossing for eps = 1.5 h, at every N; N = 32 / 128:
+    7.0e-3 / 4.7e-3), 1.16e-3 with the corrected divergence, 2.0e-4 with it and 6th-order face values;
+    the centroid moves exactly in all three."""
+    c = _slab_crossings(64, backend, **kw)
+    assert len(c) == 2 and abs(-0.2 - c[0]) == pytest.approx(lag, rel=0.05)
+
+
+def test_reversed_vortex_corrected_divergence(backend):
+    """Corrected divergence + 6th-order face values, N = 32 / 64 / 128: 0.0554 / 0.0263 / 0.0105
+    (plain: 0.0707 / 0.0306 / 0.0139; VOF 0.0606 / 0.0099 / 0.0014); psi = 1 kept, mass to round-off."""
+    from cases import reversed_cls
+
+    r = reversed_cls.run(32, backend, divergence="fccd", face_order=6)
+    assert r["sharp"][0] == pytest.approx(0.05544, rel=0.01) and abs(r["mass_change"]) < 1e-13
+    assert r["psi_range"][0] >= 0.0 and r["psi_range"][1] <= 1.0
