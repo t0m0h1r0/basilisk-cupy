@@ -39,6 +39,8 @@ from ..discretization.ccd import CCDCellDerivative, FCCDFaceComplex
 from ..fields import CellField, FaceField
 
 EPSILON_FACTOR = 1.5
+#: Pseudo-time step of the ACLS re-initialisations relative to the compression--diffusion one.
+ACLS_DTAU_FACTOR = {"acls2008": 1.0, "acls2017": 0.25}
 
 
 def psi_from_phi(phi, eps: float):
@@ -190,6 +192,12 @@ class CLSInterface:
         """Re-initialise ``psi``: ``method="xi_sdf"`` (the paper's standard stage D on uniform grids) or
         ``"compression"`` (Olsson--Kreiss compression--diffusion, ``n_steps`` pseudo-steps).
 
+        ``"acls2008"`` / ``"acls2017"``: accurate conservative level set re-initialisation with the
+        normal of a reconstructed distance (:meth:`_reinit_acls`). Its differences are local on
+        purpose: ``phi_map`` amplifies a change of ``psi`` by ``1/(psi(1 - psi))`` towards the
+        saturated cells, and CCD's global coupling carries that back to the interface (FCCD/CCD
+        derivatives of ``phi_map`` diverged after 700 re-initialisations, N = 128; docs/notes/24).
+
         ``distance`` (xi-SDF): ``"points"`` is the paper's distance to the nearest crossing point;
         ``"segments"`` the distance to the polyline through the crossings (marching squares on the
         dual cells), which an oblique interface needs (see :func:`_distance_to_crossings`)."""
@@ -197,8 +205,10 @@ class CLSInterface:
             self._reinit_xi_sdf(code_variant, distance)
         elif method == "compression":
             self._reinit_compression(n_steps)
+        elif method in ("acls2008", "acls2017"):
+            self._reinit_acls(n_steps, method)
         else:
-            raise ValueError("method is 'xi_sdf' or 'compression'")
+            raise ValueError("method is 'xi_sdf', 'compression', 'acls2008' or 'acls2017'")
 
     def _reinit_xi_sdf(self, code_variant: bool, distance: str = "points") -> None:
         """Ridge--Eikonal distance reconstruction, uniform-grid form (paper 05a, xi-SDF algorithm):
@@ -245,6 +255,39 @@ class CLSInterface:
         self.psi.fill_ghosts()
 
     # -- re-initialisation (compression--diffusion) --------------------------------------------------
+    def _reinit_acls(self, n_steps: int, form: str) -> None:
+        """ACLS re-initialisation, ``d_tau psi = div F`` (``F`` in :func:`_acls_flux_divergence`).
+
+        The normal ``n = grad d / |grad d|`` (central differences) comes from a reconstructed signed
+        distance ``d``, here the distance to the polyline through the ``psi = 1/2`` crossings (the
+        ``distance="segments"`` of the xi-SDF re-initialisation, in place of ACLS's fast marching),
+        computed once per call. ``n_steps`` explicit pseudo-steps of the compression--diffusion
+        ``dtau`` times :data:`ACLS_DTAU_FACTOR` (the 2017 flux diverged with the full step: across a
+        steep cell ``psi (1 - psi)`` on the face exceeds that of the cells, which raises the effective
+        diffusion above ``eps``; docs/notes/24), then clipping and the stage-B mass closure."""
+        grid = self.psi.grid
+        xp = grid.xp
+        h = float(min(grid.h))
+        q = self.psi.interior
+        m0 = xp.sum(q) * self.dv
+        phi = phi_from_psi(q, self.eps)
+        d = _distance_to_segments(phi, self.psi.bc)
+        if d is None:
+            return
+        d = xp.where(phi < 0.0, -1.0, 1.0) * d * h
+        dp = _pad1(d, self.psi.bc)
+        gx = (dp[2:, 1:-1] - dp[:-2, 1:-1]) / (2.0 * h)
+        gy = (dp[1:-1, 2:] - dp[1:-1, :-2]) / (2.0 * h)
+        gn = xp.maximum(xp.sqrt(gx * gx + gy * gy), 1e-12)
+        nx, ny = gx / gn, gy / gn
+        dtau = min(0.5 * h * h / (2.0 * 2 * self.eps), 0.5 * h) * ACLS_DTAU_FACTOR[form]
+        for _ in range(n_steps):
+            q = xp.clip(q + dtau * _acls_flux_divergence(q, nx, ny, self.eps, h, form, self.psi.bc), 0.0, 1.0)
+        if self.mass_closure:
+            q = mass_correction(q, self.dv, m0)
+        self.psi.interior = q
+        self.psi.fill_ghosts()
+
     def _reinit_compression(self, n_steps: int = 4) -> None:
         grid = self.psi.grid
         xp = grid.xp
@@ -277,6 +320,70 @@ class CLSInterface:
             q = mass_correction(q, self.dv, m0)
         self.psi.interior = q
         self.psi.fill_ghosts()
+
+
+def _pad1(a, bc):
+    """One ghost layer: periodic wrap or edge copy (zero normal derivative) per axis."""
+    xp = array_module(a)
+    for ax in range(2):
+        mode = "wrap" if bc.get(ax, 0).periodic else "edge"
+        width = [(0, 0), (0, 0)]
+        width[ax] = (1, 1)
+        a = xp.pad(a, width, mode=mode)
+    return a
+
+
+def _acls_flux_divergence(q, nx, ny, eps, h, form, bc, delta=1e-12):
+    """Divergence of the ACLS re-initialisation flux (conservative, zero through walls).
+
+    ``form="acls2008"`` (Desjardins, Moureau & Pitsch 2008): ``F = (eps grad psi . n - psi (1 - psi)) n``.
+    ``form="acls2017"`` (Chiodi & Desjardins 2017): ``F = psi (1 - psi) (|grad phi_map . n| - 1) n`` with
+    ``phi_map = eps ln(psi / (1 - psi))`` and ``psi (1 - psi) = 1 / (4 cosh^2(phi_map / 2 eps))``; the
+    face gradient of the mapped distance is exact for a planar profile, so the two terms cancel there.
+    On each face the normal derivative is the two-point difference, the tangential one the average of
+    the two cells' central differences, ``n`` the normalised average of the cell normals."""
+    xp = array_module(q)
+    if form == "acls2017":
+        qc = xp.minimum(xp.maximum(q, delta), 1.0 - delta)
+        g = eps * xp.log(qc / (1.0 - qc))
+    else:
+        g = q
+    gp = _pad1(g, bc)
+    np_ = [_pad1(nx, bc), _pad1(ny, bc)]
+    n0, n1 = q.shape
+    div = 0.0
+    for ax in range(2):
+        lo = [slice(1, n0 + 1), slice(1, n1 + 1)]
+        lo[ax] = slice(0, (n0, n1)[ax] + 1)
+        hi = list(lo)
+        hi[ax] = slice(1, (n0, n1)[ax] + 2)
+        gl, gr = gp[tuple(lo)], gp[tuple(hi)]
+        dn = (gr - gl) / h
+        t = 1 - ax  # tangential axis: central differences in the two cells, averaged
+        cd = (xp.roll(gp, -1, t) - xp.roll(gp, 1, t)) / (2.0 * h)
+        dt = 0.5 * (cd[tuple(lo)] + cd[tuple(hi)])
+        nfx = 0.5 * (np_[0][tuple(lo)] + np_[0][tuple(hi)])
+        nfy = 0.5 * (np_[1][tuple(lo)] + np_[1][tuple(hi)])
+        nn = xp.maximum(xp.sqrt(nfx * nfx + nfy * nfy), 1e-12)
+        nfx, nfy = nfx / nn, nfy / nn
+        n_ax, n_t = (nfx, nfy) if ax == 0 else (nfy, nfx)
+        gn = dn * n_ax + dt * n_t
+        if form == "acls2017":
+            gf = 0.5 * (gl + gr)
+            w = 1.0 / (4.0 * xp.cosh(gf / (2.0 * eps)) ** 2)
+            flux = w * (xp.abs(gn) - 1.0) * n_ax
+        else:
+            qf = 0.5 * (gl + gr)
+            flux = (eps * gn - qf * (1.0 - qf)) * n_ax
+        if not bc.get(ax, 0).periodic:
+            w0 = [slice(None)] * 2
+            w0[ax] = [0, (n0, n1)[ax]]
+            flux[tuple(w0)] = 0.0
+        a0 = [slice(None)] * 2
+        a1 = [slice(None)] * 2
+        a0[ax], a1[ax] = slice(0, (n0, n1)[ax]), slice(1, (n0, n1)[ax] + 1)
+        div = div + (flux[tuple(a1)] - flux[tuple(a0)]) / h
+    return div
 
 
 def _odd_bc(bc, axis):
