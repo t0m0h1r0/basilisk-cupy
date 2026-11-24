@@ -718,6 +718,15 @@ faces) it does not change the damping: FCCD faces would be needed, and they cann
 without the paper's jump-corrected gradient and HFE. Figure: `docs/figures/ccd_viscous.png`.
 Notes: `docs/notes/31_ccd_viscous_centered.md`.
 
+The paper's jump-corrected face gradient `G_Gamma(p; j) = G p - B(j)` in its smooth-pressure form:
+`TwoPhaseCLS(..., jump_mode="smooth")` solves for `p~ = p - H j_ext` (`j_ext` the jump at the nearest
+crossing, so `p~` and its normal derivative are continuous for equal densities) with the face acceleration
+`alpha_f (B(j) - D_f(H j_ext))`, so that FCCD faces (`CenteredNS(ops=FCCDFaceComplex(), viscous=CCDViscosity())`,
+CLS `divergence="full"`) never cross the jump. Static drop (N = 64): parasitic velocity 4.1e-5 against 4.0e-3
+with FCCD across the jump (fd2: 4.4e-5). Capillary wave: 0.0419 / 0.0082 at 16 / 32 points per wavelength
+(fd2 faces 0.0639 / 0.0109), mostly from the period; the damping error barely moves. Figure:
+`docs/figures/fccd_projection.png`. Notes: `docs/notes/32_fccd_projection.md`.
+
 ## GPU (cupy)
 
 On the GPU the multigrid hot loops run as fused `cupy.RawKernel`s

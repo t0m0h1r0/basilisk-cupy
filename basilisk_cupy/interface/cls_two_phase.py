@@ -145,7 +145,7 @@ class TwoPhaseCLS(TwoPhase):
                  mu2: float = 0.0, vof_first: bool = False, reinit_every: int = 0,
                  reinit_method: str = "xi_sdf", curvature_kw: dict | None = None,
                  pressure_jump: bool = False, capillary_dt_factor: float | None = None,
-                 surface_viscosity: float = 0.0, implicit_tension: float = 0.0) -> None:
+                 surface_viscosity: float = 0.0, implicit_tension: float = 0.0, jump_mode: str = "sharp") -> None:
         f: CellField = cls.psi
         if f.grid.ndim != 2:
             raise NotImplementedError("two-phase flows are implemented in 2-D")
@@ -158,6 +158,10 @@ class TwoPhaseCLS(TwoPhase):
         self.pressure_jump = pressure_jump
         self.surface_viscosity = float(surface_viscosity)
         self.implicit_tension = float(implicit_tension)
+        if jump_mode not in ("sharp", "smooth"):
+            raise ValueError("jump_mode is 'sharp' (the pressure jumps) or 'smooth' (p - H j_ext is solved for)")
+        self.jump_mode = jump_mode
+        self.j_ext = None
         self.cg_stats = []
         self.capillary_dt_factor = CCD_CAPILLARY_DT_FACTOR if capillary_dt_factor is None else float(capillary_dt_factor)
         self._steps = 0
@@ -338,9 +342,83 @@ class TwoPhaseCLS(TwoPhase):
             phi = v if phi is None else phi + v
         h = float(self.f.grid.h[0])
         ns.a_is_constant = False
+        if self.jump_mode == "smooth":
+            self._smooth_jump_force(ns, phi)
+            return
         for ax in range(2):
             hl, hr, cut, theta = self._cut(ax)
             jl, jr = self._faces(phi, ax)
             j = (1.0 - theta) * jl + theta * jr
             sign = hr.astype(phi.dtype) - hl.astype(phi.dtype)
             ns.a[ax] = ns.a[ax] + xp.where(cut, ns.alpha[ax] * j * sign / h, 0.0)
+
+    # -- smooth-pressure form of the jump (paper 09b1: G_Gamma(p; j) = G p - B(j)) ----------------------
+    def _crossings(self, phi):
+        """Crossing points of every cut face (coordinates) and the jump there (theta-interpolated)."""
+        xp = self.f.grid.xp
+        grid = self.f.grid
+        h = [float(v) for v in grid.h]
+        o = [float(v) for v in grid.origin]
+        pts, vals = [], []
+        for ax in range(2):
+            hl, hr, cut, theta = self._cut(ax)
+            jl, jr = self._faces(phi, ax)
+            j = (1.0 - theta) * jl + theta * jr
+            idx = xp.nonzero(cut)
+            i, k = idx
+            if ax == 0:
+                cx = o[0] + (i - 0.5 + theta[cut]) * h[0]
+                cy = o[1] + (k + 0.5) * h[1]
+            else:
+                cx = o[0] + (i + 0.5) * h[0]
+                cy = o[1] + (k - 0.5 + theta[cut]) * h[1]
+            pts.append(xp.stack([cx, cy], axis=1))
+            vals.append(j[cut])
+        return xp.concatenate(pts), xp.concatenate(vals)
+
+    def extend_jump(self, phi, chunk: int = 4096):
+        """``j_ext``: the jump at the nearest crossing point (closest-point extension, constant along the
+        normal), at every cell centre (minimum image on periodic axes)."""
+        xp = self.f.grid.xp
+        grid = self.f.grid
+        pts, vals = self._crossings(phi)
+        if pts.shape[0] == 0:
+            return xp.zeros(grid.n)
+        x, y = grid.meshgrid()
+        X = xp.stack([x.ravel(), y.ravel()], axis=1)
+        L = [float(v) for v in grid.length]
+        per = [self.f.bc.is_periodic(ax) for ax in range(2)]
+        out = xp.empty(X.shape[0])
+        for s0 in range(0, X.shape[0], chunk):
+            d = X[s0:s0 + chunk, None, :] - pts[None, :, :]
+            for ax in range(2):
+                if per[ax]:
+                    d[..., ax] = d[..., ax] - L[ax] * xp.round(d[..., ax] / L[ax])
+            k = xp.argmin((d * d).sum(axis=2), axis=1)
+            out[s0:s0 + chunk] = vals[k]
+        return out.reshape(grid.n)
+
+    def _smooth_jump_force(self, ns, phi) -> None:
+        """Face acceleration ``alpha_f (B(j) - D_f(H j_ext))``: the projection then solves for the
+        pressure without the jump, ``p~ = p - H j_ext`` (continuous, with a continuous normal derivative
+        for equal densities), so that FCCD's face gradient never crosses the jump. ``B(j) = j_Gamma
+        (H_R - H_L)/Delta`` on cut faces as in the sharp form; ``D_f(H j_ext) = (H_R j_R - H_L j_L)/Delta``."""
+        xp = self.f.grid.xp
+        h = float(self.f.grid.h[0])
+        jext = self.extend_jump(phi)
+        self.j_ext = jext
+        for ax in range(2):
+            hl, hr, cut, theta = self._cut(ax)
+            jl, jr = self._faces(phi, ax)
+            jg = (1.0 - theta) * jl + theta * jr
+            el, er = self._faces(jext, ax)
+            Hl, Hr = hl.astype(jext.dtype), hr.astype(jext.dtype)
+            b = xp.where(cut, jg * (Hr - Hl), 0.0)
+            d = Hr * er - Hl * el
+            ns.a[ax] = ns.a[ax] + ns.alpha[ax] * (b - d) / h
+
+    def full_pressure(self, ns):
+        """The pressure with its jump, ``p~ + H j_ext`` (smooth mode), or ``ns.p`` itself (sharp mode)."""
+        if self.jump_mode != "smooth" or self.j_ext is None:
+            return ns.p.interior
+        return ns.p.interior + (self.f.interior > 0.5) * self.j_ext
