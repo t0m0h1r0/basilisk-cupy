@@ -55,11 +55,97 @@ from .two_phase import TwoPhase
 CCD_CAPILLARY_DT_FACTOR = math.sqrt(5.0 / 12.0)
 
 
+def _pad_like(xp, q, bc):
+    from .heights import pad_bc  # noqa: PLC0415
+
+    return pad_bc(q, bc, 1)
+
+
+def _cg_face(xp, rhs_u, beta, alpha, ax, per, h, tol=1e-10, maxit=500):
+    """Solve ``u / alpha - div(beta grad u) = rhs_u / alpha`` on a face grid by conjugate gradients.
+
+    Along ``ax`` the unknowns are the interior faces (zero beyond: wall faces) unless periodic; along
+    the other axis the boundary is a mirror (zero normal derivative) unless periodic. ``beta`` at an
+    edge between two unknowns is their average."""
+    t = 1 - ax
+
+    def edge(b, axis, periodic):
+        nb = xp.roll(b, -1, axis)
+        e = 0.5 * (b + nb)
+        if not periodic:
+            idx = [slice(None)] * 2
+            idx[axis] = -1
+            e[tuple(idx)] = 0.0  # no edge beyond the last unknown (handled by the boundary terms)
+        return e
+
+    ea = edge(beta, ax, per[ax])
+    et = edge(beta, t, per[t])
+    op = _face_operator(xp, beta, alpha, ax, per, h, ea, et)
+    return _cg(xp, op, rhs_u, alpha, tol, maxit)
+
+
+def _face_operator(xp, beta, alpha, ax, per, h, ea, et):
+    t = 1 - ax
+
+    def op(u):
+        out = u / alpha
+        for axis, e, periodic, hh in ((ax, ea, per[ax], h[ax]), (t, et, per[t], h[t])):
+            un = xp.roll(u, -1, axis)
+            flux = e * (un - u) / (hh * hh)  # flux to the +neighbour
+            if not periodic:
+                idx = [slice(None)] * 2
+                idx[axis] = -1
+                flux[tuple(idx)] = 0.0
+            out = out - flux + xp.roll(flux, 1, axis) * _mask_first(xp, u.shape, axis, periodic)
+            if axis == ax and not periodic:  # Dirichlet 0 beyond both ends: beta at the end unknowns
+                b0 = [slice(None)] * 2
+                b0[axis] = slice(0, 1)
+                b1 = [slice(None)] * 2
+                b1[axis] = slice(-1, None)
+                out[tuple(b0)] = out[tuple(b0)] + beta[tuple(b0)] * u[tuple(b0)] / (hh * hh)
+                out[tuple(b1)] = out[tuple(b1)] + beta[tuple(b1)] * u[tuple(b1)] / (hh * hh)
+        return out
+
+    return op
+
+
+def _cg(xp, op, rhs_u, alpha, tol, maxit):
+    b = rhs_u / alpha
+    x = rhs_u.copy()
+    r = b - op(x)
+    pvec = r.copy()
+    rr = float(xp.sum(r * r))
+    bnorm = float(xp.sqrt(xp.sum(b * b))) or 1.0
+    it = 0
+    while rr ** 0.5 > tol * bnorm and it < maxit:
+        Ap = op(pvec)
+        a = rr / float(xp.sum(pvec * Ap))
+        x = x + a * pvec
+        r = r - a * Ap
+        rr_new = float(xp.sum(r * r))
+        pvec = r + (rr_new / rr) * pvec
+        rr = rr_new
+        it += 1
+    return x, it
+
+
+def _mask_first(xp, shape, axis, periodic):
+    """1 everywhere except the first row along ``axis`` when not periodic (no flux from beyond)."""
+    if periodic:
+        return 1.0
+    m = xp.ones(shape)
+    idx = [slice(None)] * 2
+    idx[axis] = 0
+    m[tuple(idx)] = 0.0
+    return m
+
+
 class TwoPhaseCLS(TwoPhase):
     def __init__(self, ns, cls: CLSInterface, *, rho1: float = 1.0, rho2: float = 1.0, mu1: float = 0.0,
                  mu2: float = 0.0, vof_first: bool = False, reinit_every: int = 0,
                  reinit_method: str = "xi_sdf", curvature_kw: dict | None = None,
-                 pressure_jump: bool = False, capillary_dt_factor: float | None = None) -> None:
+                 pressure_jump: bool = False, capillary_dt_factor: float | None = None,
+                 surface_viscosity: float = 0.0, implicit_tension: float = 0.0) -> None:
         f: CellField = cls.psi
         if f.grid.ndim != 2:
             raise NotImplementedError("two-phase flows are implemented in 2-D")
@@ -70,13 +156,17 @@ class TwoPhaseCLS(TwoPhase):
         self.curvature_kw = curvature_kw or {}
         self.potentials = []
         self.pressure_jump = pressure_jump
+        self.surface_viscosity = float(surface_viscosity)
+        self.implicit_tension = float(implicit_tension)
+        self.cg_stats = []
         self.capillary_dt_factor = CCD_CAPILLARY_DT_FACTOR if capillary_dt_factor is None else float(capillary_dt_factor)
         self._steps = 0
         ns.cfl = min(ns.cfl, 0.5)
         ns.on("set_dtmax" if vof_first else "vof", self._vof)
         ns.on("properties", self._properties)
         ns.on("acceleration", self._interfacial_force)
-        if mu1 or mu2:
+        ns.on("end_timestep", self._implicit_capillary)
+        if mu1 or mu2 or surface_viscosity:
             ns.mu = FaceField(f.grid, name="mu")
 
     def _vof(self, ns) -> None:
@@ -133,6 +223,8 @@ class TwoPhaseCLS(TwoPhase):
 
     def _properties(self, ns) -> None:
         super()._properties(ns)
+        if self.surface_viscosity and getattr(self, "sigma", 0.0):
+            self._add_surface_viscosity(ns)
         if not self.pressure_jump:
             return
         xp = self.f.grid.xp
@@ -141,6 +233,98 @@ class TwoPhaseCLS(TwoPhase):
             rl = xp.where(hl, self.rho1, self.rho2)
             rr = xp.where(hr, self.rho1, self.rho2)
             ns.alpha[ax] = 1.0 / (theta * rl + (1.0 - theta) * rr)
+
+    def _add_surface_viscosity(self, ns) -> None:
+        """Surface viscosity ``c dt sigma |grad psi|_f`` added to the implicit viscous solve (the term
+        ``dt sigma Delta_s u`` of Hysing 2006 in the predictor). Measured: it does not stabilise the
+        capillary loop here, the jump acts after the viscous step (docs/notes/27); kept for comparison."""
+        xp = self.f.grid.xp
+        q = self.f.interior
+        h = [float(v) for v in self.f.grid.h]
+        n = q.shape
+        coeff = self.surface_viscosity * float(ns.clock.dt) * self.sigma
+        if not (self.mu1 or self.mu2):  # two-phase.h leaves mu untouched then: start from zero every step
+            for ax in range(2):
+                ns.mu[ax] = 0.0 * ns.mu[ax]
+        for ax in range(2):
+            pl, pr = self._faces(q, ax)
+            gn = (pr - pl) / h[ax]
+            t = 1 - ax
+            qp = _pad_like(xp, q, self.f.bc)
+            ct = (xp.roll(qp, -1, t) - xp.roll(qp, 1, t)) / (2.0 * h[t])
+            lo = [slice(1, 1 + n[0]), slice(1, 1 + n[1])]
+            lo[ax] = slice(0, n[ax] + 1)
+            hi = list(lo)
+            hi[ax] = slice(1, n[ax] + 2)
+            gt = 0.5 * (ct[tuple(lo)] + ct[tuple(hi)])
+            ns.mu[ax] = ns.mu[ax] + coeff * xp.sqrt(gn * gn + gt * gt)
+
+    def _implicit_capillary(self, ns) -> None:
+        """Semi-implicit surface tension on the transport velocity (after Hysing 2006, isotropic form).
+
+        After the projection, every component ``u`` of ``uf`` (the velocity that moves ``psi`` at the
+        next step) solves
+
+            u / alpha_f - div(beta grad u) = u* / alpha_f,   beta = theta dt^2 sigma |grad psi|
+
+        (``theta = implicit_tension``; the momentum form ``rho (u - u*) = dt^2 sigma Delta_s u delta`` with
+        the full gradient for the surface one) on the grid of that component's faces (wall faces stay
+        zero, the other walls are mirrors, periodic axes wrap; conjugate gradients, relative residual
+        1e-10), and is projected again with a pressure of its own. The cell velocity is not changed.
+        Applying the same operator before the projection, to ``uf`` with the jump acceleration in it,
+        breaks the balance of the jump and the pressure gradient (parasitic velocities of 0.1, and no
+        stabilisation at density ratio 100; docs/notes/27)."""
+        if not self.implicit_tension or not getattr(self, "sigma", 0.0):
+            return
+        xp = self.f.grid.xp
+        q = self.f.interior
+        h = [float(v) for v in self.f.grid.h]
+        n = q.shape
+        dt = float(ns.clock.dt)
+        theta = self.implicit_tension
+        per = [self.f.bc.is_periodic(ax) for ax in range(2)]
+        for ax in range(2):
+            # |grad psi| on the faces normal to ax
+            pl, pr = self._faces(q, ax)
+            gn = (pr - pl) / h[ax]
+            t = 1 - ax
+            qp = _pad_like(xp, q, self.f.bc)
+            ct = (xp.roll(qp, -1, t) - xp.roll(qp, 1, t)) / (2.0 * h[t])
+            lo = [slice(1, 1 + n[0]), slice(1, 1 + n[1])]
+            lo[ax] = slice(0, n[ax] + 1)
+            hi = list(lo)
+            hi[ax] = slice(1, n[ax] + 2)
+            delta = xp.sqrt(gn * gn + (0.5 * (ct[tuple(lo)] + ct[tuple(hi)])) ** 2)
+            beta = theta * dt * dt * self.sigma * delta
+            u0 = ns.uf[ax]
+            alpha = ns.alpha[ax]
+            if per[ax]:
+                sl = [slice(None)] * 2
+                sl[ax] = slice(0, n[ax])
+                U, B, A = u0[tuple(sl)], beta[tuple(sl)], alpha[tuple(sl)]
+            else:
+                sl = [slice(None)] * 2
+                sl[ax] = slice(1, n[ax])
+                U, B, A = u0[tuple(sl)], beta[tuple(sl)], alpha[tuple(sl)]
+            sol, it = _cg_face(xp, U, B, A, ax, per, h)
+            self.cg_stats.append(it)
+            new = u0.copy()
+            new[tuple(sl)] = sol
+            if per[ax]:
+                last = [slice(None)] * 2
+                last[ax] = slice(n[ax], n[ax] + 1)
+                first = [slice(None)] * 2
+                first[ax] = slice(0, 1)
+                new[tuple(last)] = new[tuple(first)]
+            ns.uf[ax] = new
+        # the smoothed transport velocity is projected again (divergence-free for the psi transport)
+        from ..fields import CellField  # noqa: PLC0415
+        from ..projection.approximate import project  # noqa: PLC0415
+
+        if not hasattr(self, "_p_si"):
+            self._p_si = CellField(self.f.grid, bc=ns.p.bc, name="p_si")
+        project(ns.uf, self._p_si, ns.alpha, dt, ops=ns.ops, tolerance=ns.tolerance, basilisk_tolerance=True)
+        ns._apply_uf_bc(ns.uf)
 
     def _interfacial_force(self, ns) -> None:
         if not self.pressure_jump:

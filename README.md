@@ -679,6 +679,15 @@ explicit pseudo-steps are stable up to twice the usual step; backward Euler by d
 (isotropic diffusion), not by ACLS (diffusion along `n` only). Figures: `docs/figures/reinit_*.png`.
 Notes: `docs/notes/26_acls_fccd.md`.
 
+`TwoPhaseCLS(..., implicit_tension=theta)`: semi-implicit surface tension (Hysing 2006, isotropic
+surface Laplacian) on the transport velocity: after the projection each component of `uf` solves
+`u/alpha - div(theta dt^2 sigma |grad psi| grad u) = u*/alpha` (conjugate gradients on the face grid)
+and is projected again. The GFM drop at density ratio 100 is then stable at tension.h's step
+(factor 1, where the explicit loop grows) for N = 64-256 with theta = 4 (theta = 1: N = 64 and 128);
+adding the same term to the predictor's viscous solve, or smoothing `uf` before the projection, does
+not work. The capillary wave loses some accuracy (16 points per wavelength: 0.0639 -> 0.0660 / 0.0718
+for theta = 1 / 4). Figure: `docs/figures/implicit_tension.png`. Notes: `docs/notes/27_implicit_tension.md`.
+
 ## GPU (cupy)
 
 On the GPU the multigrid hot loops run as fused `cupy.RawKernel`s
