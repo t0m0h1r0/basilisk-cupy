@@ -130,3 +130,15 @@ def test_capillary_stability_threshold(backend, factor, stable):
 
     r = growth(64, 0.01, factor, steps=800 if stable else 700, backend=backend)
     assert r["stable"] == stable
+
+
+@pytest.mark.parametrize("reinit,stable", [(False, False), (True, True)])
+def test_capillary_stability_with_compression_every_step(backend, reinit, stable):
+    """N = 32, density ratio 100, mu = 0.1, 1.4 times tension.h's bound: unstable without re-initialisation
+    (limit 1.05-1.1), stable with compression--diffusion after every step (limits >= 1.6 / 1.6 / 1.6 / 1.4
+    at N = 32 / 64 / 128 / 256: they no longer fall with N; docs/notes/21)."""
+    from cases.capillary_dt_scan import growth
+
+    kw = {"reinit_every": 1, "reinit_method": "compression"} if reinit else {}
+    r = growth(32, 0.01, 1.4, steps=800, backend=backend, **kw)
+    assert r["stable"] == stable
