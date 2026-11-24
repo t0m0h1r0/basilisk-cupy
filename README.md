@@ -633,6 +633,16 @@ ratio), which `omega dt <= 2` does not explain; Basilisk's VOF stays at 1.2-1.4 
 256. sqrt(5/12) is below every limit measured (lowest 0.82-0.85). Notes:
 `docs/notes/20_capillary_dt_check.md`.
 
+### Static drop against Basilisk (figures)
+
+`cases/static_drop_compare.py` runs the static drop (R = 0.25, sigma = 1, mu = 0.1, densities 1 / 0.1,
+64^2) with VOF, CLS + CSF and CLS + GFM and plots density, velocity and pressure at t = 0.2 next
+to Basilisk's own fields (`tools/basilisk/static_drop.c`): `docs/figures/static_drop_compare.png`
+and `docs/figures/static_drop_compare_lines.png`. The VOF port differs from Basilisk by 2.5e-10 in
+velocity (parasitic velocity 5.3e-7) and 5.1e-9 in pressure; CLS + CSF keeps parasitic velocities
+of 4e-4, CLS + GFM decays like Basilisk (7.5e-7) with a pressure jump of 4.0030.
+Notes: `docs/notes/22_static_drop_figures.md`.
+
 ## GPU (cupy)
 
 On the GPU the multigrid hot loops run as fused `cupy.RawKernel`s
