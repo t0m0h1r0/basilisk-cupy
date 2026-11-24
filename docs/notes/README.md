@@ -28,3 +28,4 @@
 | [22_static_drop_figures.md](22_static_drop_figures.md) | 静止液滴の可視化：Basilisk（C）・VOF・CLS＋CSF・CLS＋GFM の密度・速度・圧力（#37） |
 | [24_acls.md](24_acls.md) | ACLS（2008、Chiodi–Desjardins 2017）の再初期化：平らな界面で厳密に釣り合うが、FCCD の圧縮・拡散を上回らない（#38） |
 | [25_height_curvature.md](25_height_curvature.md) | ψ の高さ関数による曲率：交差の高さ＋CCD は正確なプロファイルで最良、流れでは2次差分の高さが静止液滴に強い（#39） |
+| [26_acls_fccd.md](26_acls_fccd.md) | CCD＋ACLS：2008 年の形の FCCD 化（静止界面で最良）、陰的擬似時間は刻み 4 倍まで。格子規模の毛管波を抑えるのは等方拡散だけ（#40） |
