@@ -65,11 +65,15 @@ def test_periodic_shift_by_whole_cells(backend):
     np.testing.assert_allclose(np.roll(ka, (n // 2, 13), axis=(0, 1)), kb, atol=1e-9)
 
 
-@pytest.mark.parametrize("reinit,expected", [(None, 0.611), ("xi_sdf", 11.2), ("compression", 0.0372)])
-def test_after_transport(backend, reinit, expected):
+@pytest.mark.parametrize("reinit,every,expected", [(None, 0, 0.611), ("xi_sdf", 10, 11.2), ("compression", 10, 0.0372),
+                                                   ("compression", 1, 0.01388)])
+def test_after_transport(backend, reinit, every, expected):
     """Periodic translation by (1, 0.5) over t = 1 (CLS stage A + B), N = 32 / 64 / 128, max error over
     |phi| < eps: 0.394 / 0.611 / 0.805 without re-initialisation (no convergence); every 10 steps
-    with xi-SDF 4.12 / 11.2 / 33.6, with compression--diffusion 0.134 / 0.0372 / 0.0167."""
+    with xi-SDF 4.12 / 11.2 / 33.6, with compression--diffusion 0.134 / 0.0372 / 0.0167; every step
+    with compression--diffusion 0.202 / 0.0139 / 0.00305. The error comes from the transported
+    interface (grid-scale position noise 2.2e-4 at every N without re-initialisation), not from the
+    curvature formula (docs/notes/17)."""
     n = 64
     grid = CartesianGrid((n, n), origin=(-0.5, -0.5), backend=backend)
     xp = grid.xp
@@ -78,7 +82,7 @@ def test_after_transport(backend, reinit, expected):
     uf = FaceField(grid, [xp.ones(grid.face_shape(0)), 0.5 * xp.ones(grid.face_shape(1))])
     for s in range(4 * n):
         cls.advect(uf, 1.0 / (4 * n))
-        if reinit and (s + 1) % 10 == 0:
+        if reinit and (s + 1) % every == 0:
             cls.reinitialize(method=reinit)
     xn, yn = to_numpy(x), to_numpy(y)
     r = np.sqrt(xn * xn + (((yn + 1.0) % 1.0) - 0.5) ** 2)

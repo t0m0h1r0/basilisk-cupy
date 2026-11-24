@@ -599,6 +599,14 @@ diverges after 200 steps; half the step is stable). Capillary wave: 0.201 / 0.09
 0.0130 at 8 / 16 / 32 / 64 points per wavelength (CSF 0.355 / 0.315 / 0.236; VOF 0.139 /
 0.024 / 0.0064 / 0.0023). Notes: `docs/notes/16_split_ppe.md`.
 
+The curvature error after transport comes from the transported interface, not from the curvature
+formula: without re-initialisation the `psi = 1/2` crossings carry a grid-scale scatter of 2.2e-4
+at every N. Compression--diffusion after every step makes the curvature converge (translation,
+max error 0.202 / 0.0139 / 0.00305 at N = 32 / 64 / 128) but thins filaments (reversed vortex
+0.171 / 0.137 / 0.0687). Height functions of `psi` or a smoothed copy do not help, and the
+capillary wave with the GFM jump does not improve with an ideal curvature (0.193 / 0.107 /
+0.0448). Notes: `docs/notes/17_curvature_transport.md`.
+
 ## GPU (cupy)
 
 On the GPU the multigrid hot loops run as fused `cupy.RawKernel`s
