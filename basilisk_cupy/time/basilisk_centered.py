@@ -42,6 +42,9 @@ Hook = Callable[["CenteredNS"], None]
 
 
 class CenteredNS:
+    #: Reproduce Basilisk's first step (init's ``dtnext`` without event times, see ``start``).
+    basilisk_init_dt = True
+
     def __init__(self, grid: CartesianGrid, *, periodic: tuple[int, ...] = (),
                  normal: dict | None = None, tangential: dict | None = None,
                  uf_normal: dict | None = None,
@@ -84,10 +87,15 @@ class CenteredNS:
         self._hooks: dict[str, list[Hook]] = defaultdict(list)
 
     # -- extension points ------------------------------------------------------
-    def on(self, stage: str, hook: Hook) -> None:
+    def on(self, stage: str, hook: Hook, *, after: bool = False) -> None:
+        """Run ``hook`` at ``stage``: before the hooks registered earlier (Basilisk: a later
+        definition of an event runs first), or after them with ``after=True``."""
         if stage not in STAGES:
             raise ValueError(f"unknown stage {stage!r}; stages are {STAGES}")
-        self._hooks[stage].insert(0, hook)
+        if after:
+            self._hooks[stage].append(hook)
+        else:
+            self._hooks[stage].insert(0, hook)
 
     def _run_hooks(self, stage: str) -> None:
         for hook in self._hooks.get(stage, ()):
@@ -131,7 +139,16 @@ class CenteredNS:
         self.uf = self.face_velocity()
         self._run_hooks("properties")
         self.dtmax = self.DT
-        self._stability()
+        self._run_hooks("stability")  # Basilisk's init calls event ("stability")
+        # Basilisk's init runs dtnext() before any event time is known (tnext = HUGE): the step is
+        # kept and tnext = t + dt0, which the first step then also aligns to.
+        if self.basilisk_init_dt:
+            dt0 = self.dtmax if self.stokes else timestep(self.uf, self.dtmax, self.cfl, self.clock)
+            self.clock.dt = dt0
+            if dt0 < 1e29:
+                self.clock.events = sorted(self.clock.events + [self.clock.t + dt0])
+        else:
+            self._stability()
 
     # -- stages ------------------------------------------------------------------------
     def _stability(self) -> None:
@@ -153,7 +170,8 @@ class CenteredNS:
             self.uf = prediction(self.u, self.g, dt)
             self._apply_uf_bc(self.uf)
             self.mgpf = project(self.uf, self.pf, self.alpha, dt / 2.0, ops=self.ops,
-                                nrelax=self.mgpf.nrelax or 4, tolerance=self.tolerance)
+                                nrelax=self.mgpf.nrelax or 4, tolerance=self.tolerance,
+                                basilisk_tolerance=True)
             self._apply_uf_bc(self.uf)
             advection(list(self.u), self.uf, dt, list(self.g), ops=self.ops)
 
@@ -175,7 +193,8 @@ class CenteredNS:
 
         self._run_hooks("projection")
         self.mgp = project(self.uf, self.p, self.alpha, dt, ops=self.ops,
-                           nrelax=self.mgp.nrelax or 4, tolerance=self.tolerance)
+                           nrelax=self.mgp.nrelax or 4, tolerance=self.tolerance,
+                           basilisk_tolerance=True)
         self._apply_uf_bc(self.uf)
         self.centered_gradient()
         self.correction(dt)
