@@ -40,7 +40,8 @@ def _fd_curvature(psi):
 
 
 def growth(n: int, rho2: float, factor: float, steps: int = 800, mu: float = 0.1, curvature: str = "ccd",
-           backend: str = "numpy"):
+           backend: str = "numpy", **tp_kw):
+    """``tp_kw`` go to :class:`TwoPhaseCLS` (e.g. ``reinit_every=1, reinit_method="compression"``)."""
     grid = CartesianGrid((n, n), origin=(-0.5, -0.5), backend=backend)
     xp = grid.xp
     ns = CenteredNS(grid, uf_normal={w: 0.0 for w in ("left", "right", "bottom", "top")}, tolerance=1e-8)
@@ -49,7 +50,7 @@ def growth(n: int, rho2: float, factor: float, steps: int = 800, mu: float = 0.1
     if curvature == "fd":
         cls.curvature = lambda **kw: _fd_curvature(cls.psi)
     tp = TwoPhaseCLS(ns, cls, rho1=1.0, rho2=rho2, mu1=mu, mu2=mu, pressure_jump=True,
-                     capillary_dt_factor=factor)
+                     capillary_dt_factor=factor, **tp_kw)
     tp.add_surface_tension(1.0)
     ns.start()
     us = []

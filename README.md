@@ -633,6 +633,13 @@ ratio), which `omega dt <= 2` does not explain; Basilisk's VOF stays at 1.2-1.4 
 256. sqrt(5/12) is below every limit measured (lowest 0.82-0.85). Notes:
 `docs/notes/20_capillary_dt_check.md`.
 
+The mode that grows is a grid-scale capillary wave (sign alternating cell by cell along the
+interface, velocity confined to the two cells across it). The CLS transport (central FCCD) does
+not damp it; making the transport more accurate makes it worse, and only freezing the interface
+or compression--diffusion after every step (4 pseudo-steps) removes it: the limits are then >= 1.6
+/ 1.6 / 1.6 / 1.4 (N = 32 / 64 / 128 / 256) and no longer fall with N, at the price of parasitic
+velocities that no longer decay and of thinned filaments. Notes: `docs/notes/21_capillary_mode.md`.
+
 ## GPU (cupy)
 
 On the GPU the multigrid hot loops run as fused `cupy.RawKernel`s
