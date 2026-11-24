@@ -509,6 +509,14 @@ it by 3.6e-3 / 1.8e-3 / 9.0e-4 (N = 32 / 64 / 128). In passive transport both ma
 results worse than no re-initialisation (reversed vortex every 10 steps, N = 64: 0.068 and
 0.079 against 0.031). Notes: `docs/notes/13_cls.md`.
 
+`cls.curvature()` is the paper's curvature from the derivatives of `psi` (CCD `psi_x`, `psi_xx`,
+`psi_xy`, zero outside `0.01 < psi < 0.99`). Measured on a circle (max over `|phi| < eps` of
+`|kappa - 1/r| R`): on the exact profile 6.3e-4 / 1.2e-3 / 2.4e-3 / 4.8e-3 (N = 64 / 128 / 256 /
+512; the profile is 3 cells wide at every N, so the error grows like 1/h), 4.9e-7 from
+`phi = H_eps^{-1}(psi)` at N = 128; after a periodic translation 0.39 / 0.61 / 0.81 (N = 32 / 64 /
+128) without re-initialisation, 0.13 / 0.037 / 0.017 with compression--diffusion every 10 steps.
+Notes: `docs/notes/14_psi_curvature.md`.
+
 ## GPU (cupy)
 
 On the GPU the multigrid hot loops run as fused `cupy.RawKernel`s

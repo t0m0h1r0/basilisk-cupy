@@ -17,3 +17,4 @@
 | [11_verification_practice.md](11_verification_practice.md) | 検証のときの注意 |
 | [12_two_phase.md](12_two_phase.md) | 二相流（M4）：計画と VOF 移流（#23） |
 | [13_cls.md](13_cls.md) | CLS（保存型レベルセット）への差し替えと VOF との比較（#27）、Ridge–Eikonal 再初期化（#28） |
+| [14_psi_curvature.md](14_psi_curvature.md) | ψ からの曲率：正確なプロファイルで O(h⁻¹)、輸送後の収束は再初期化しだい（#29） |
