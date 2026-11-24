@@ -20,3 +20,4 @@
 | [14_psi_curvature.md](14_psi_curvature.md) | ψ からの曲率：正確なプロファイルで O(h⁻¹)、輸送後の収束は再初期化しだい（#29） |
 | [15_cls_ns.md](15_cls_ns.md) | CLS の二相 NS への組み込み：静止液滴、毛管波（CSF の周波数ずれ）（#30） |
 | [16_split_ppe.md](16_split_ppe.md) | 分相 PPE と GFM の圧力ジャンプ：静止液滴、毛管波、高密度比の時間刻み（#31） |
+| [17_curvature_transport.md](17_curvature_transport.md) | 移流後の ψ 曲率の誤差は移流した界面から：毎ステップの圧縮・拡散で収束、毛管波は曲率で決まらない（#32） |

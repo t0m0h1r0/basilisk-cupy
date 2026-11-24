@@ -139,3 +139,12 @@ def test_reversed_vortex_with_xi_sdf_reinitialisation(backend):
 
     r = reversed_cls.run(32, backend, reinit_every=10, method="xi_sdf")
     assert r["sharp"][0] == pytest.approx(0.1092, rel=0.02) and abs(r["mass_change"]) < 1e-12
+
+
+def test_reversed_vortex_with_compression_every_step(backend):
+    """Compression--diffusion after every step thins the filaments: N = 32 / 64 / 128 sharp-indicator
+    error 0.171 / 0.137 / 0.0687 (none: 0.0707 / 0.0306 / 0.0139; every 10 steps: 0.0707 / 0.0306 / 0.0080)."""
+    from cases import reversed_cls
+
+    r = reversed_cls.run(32, backend, reinit_every=1, method="compression")
+    assert r["sharp"][0] == pytest.approx(0.17099, rel=0.01) and abs(r["mass_change"]) < 1e-12
