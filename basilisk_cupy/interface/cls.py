@@ -188,7 +188,7 @@ class CLSInterface:
 
     # -- re-initialisation ------------------------------------------------------------------------
     def reinitialize(self, n_steps: int = 4, *, method: str = "xi_sdf", code_variant: bool = False,
-                     distance: str = "points") -> None:
+                     distance: str = "points", acls_options: dict | None = None) -> None:
         """Re-initialise ``psi``: ``method="xi_sdf"`` (the paper's standard stage D on uniform grids) or
         ``"compression"`` (Olsson--Kreiss compression--diffusion, ``n_steps`` pseudo-steps).
 
@@ -207,8 +207,10 @@ class CLSInterface:
             self._reinit_compression(n_steps)
         elif method in ("acls2008", "acls2017"):
             self._reinit_acls(n_steps, method)
+        elif method == "acls-fccd":
+            self._reinit_acls_fccd(n_steps, **(acls_options or {}))
         else:
-            raise ValueError("method is 'xi_sdf', 'compression', 'acls2008' or 'acls2017'")
+            raise ValueError("method is 'xi_sdf', 'compression', 'acls2008', 'acls2017' or 'acls-fccd'")
 
     def _reinit_xi_sdf(self, code_variant: bool, distance: str = "points") -> None:
         """Ridge--Eikonal distance reconstruction, uniform-grid form (paper 05a, xi-SDF algorithm):
@@ -283,6 +285,123 @@ class CLSInterface:
         dtau = min(0.5 * h * h / (2.0 * 2 * self.eps), 0.5 * h) * ACLS_DTAU_FACTOR[form]
         for _ in range(n_steps):
             q = xp.clip(q + dtau * _acls_flux_divergence(q, nx, ny, self.eps, h, form, self.psi.bc), 0.0, 1.0)
+        if self.mass_closure:
+            q = mass_correction(q, self.dv, m0)
+        self.psi.interior = q
+        self.psi.fill_ghosts()
+
+    # -- ACLS with FCCD operators (2008 form), explicit or backward Euler + defect correction ----------
+    def _acls_normals(self):
+        grid = self.psi.grid
+        xp = grid.xp
+        h = float(min(grid.h))
+        q = self.psi.interior
+        phi = phi_from_psi(q, self.eps)
+        d = _distance_to_segments(phi, self.psi.bc)
+        if d is None:
+            return None
+        d = xp.where(phi < 0.0, -1.0, 1.0) * d * h
+        dp = _pad1(d, self.psi.bc)
+        gx = (dp[2:, 1:-1] - dp[:-2, 1:-1]) / (2.0 * h)
+        gy = (dp[1:-1, 2:] - dp[1:-1, :-2]) / (2.0 * h)
+        gn = xp.maximum(xp.sqrt(gx * gx + gy * gy), 1e-12)
+        return gx / gn, gy / gn
+
+    def _acls_face_normals(self, nx, ny):
+        grid = self.psi.grid
+        xp = grid.xp
+        cells = []
+        for ax, c in enumerate((nx, ny)):
+            f = CellField.from_interior(grid, c, _odd_bc(self.psi.bc, ax))
+            f.fill_ghosts()
+            cells.append(f)
+        out = []
+        for ax in range(2):
+            fx, fy = self.ops.interp_f(cells[0], ax), self.ops.interp_f(cells[1], ax)
+            nn = xp.maximum(xp.sqrt(fx * fx + fy * fy), 1e-12)
+            out.append((fx / nn, fy / nn))
+        return out
+
+    def _acls_fccd_divergence(self, q, fn):
+        """div F, F = (eps (grad psi . n) - psi (1 - psi)) n on the faces: FCCD face gradient (normal part),
+        FCCD face value of the CCD cell derivative (tangential part) and of psi (1 - psi); zero on walls."""
+        grid = self.psi.grid
+        f = CellField.from_interior(grid, q, self.psi.bc)
+        f.fill_ghosts()
+        comp = CellField.from_interior(grid, q * (1.0 - q), self.psi.bc)
+        comp.fill_ghosts()
+        dcell = []
+        for ax in range(2):
+            c = CellField.from_interior(grid, self.ccd.d1(f, ax), _odd_bc(self.psi.bc, ax))
+            c.fill_ghosts()
+            dcell.append(c)
+        div = 0.0
+        for ax in range(2):
+            t = 1 - ax
+            fx, fy = fn[ax]
+            n_ax, n_t = (fx, fy) if ax == 0 else (fy, fx)
+            gn = self.ops.grad_f(f, ax) * n_ax + self.ops.interp_f(dcell[t], ax) * n_t
+            flux = (self.eps * gn - self.ops.interp_f(comp, ax)) * n_ax
+            flux = _zero_walls(flux, ax, self.psi.bc)
+            n = grid.n[ax]
+            lo = [slice(None)] * 2
+            hi = [slice(None)] * 2
+            lo[ax], hi[ax] = slice(0, n), slice(1, n + 1)
+            div = div + (flux[tuple(hi)] - flux[tuple(lo)]) / float(grid.h[ax])
+        return div
+
+    def _reinit_acls_fccd(self, n_steps: int, *, implicit: bool = False, dtau_factor: float = 1.0,
+                          dc_iters: int = 4, stats: list | None = None) -> None:
+        """ACLS (2008 form) with FCCD operators, normals from the reconstructed distance, frozen.
+
+        ``implicit=False``: explicit pseudo-steps of the compression--diffusion ``dtau`` times
+        ``dtau_factor``. ``implicit=True``: backward Euler ``q - dtau L(q) = q_old`` by defect
+        correction, ``dc_iters`` corrections ``(I - dtau L_low) delta = r`` per pseudo-step, ``L_low`` the
+        2nd-order operator ``div(eps n_a^2 grad)`` (no cross or compression terms; Basilisk's multigrid),
+        ``r`` the residual with the FCCD operator. ``stats``: appended with the residual history."""
+        from ..fields import FaceField  # noqa: PLC0415
+        from ..linear.poisson import poisson  # noqa: PLC0415
+
+        grid = self.psi.grid
+        xp = grid.xp
+        h = float(min(grid.h))
+        normals = self._acls_normals()
+        if normals is None:
+            return
+        fn = self._acls_face_normals(*normals)
+        q = self.psi.interior
+        m0 = xp.sum(q) * self.dv
+        dtau = min(0.5 * h * h / (2.0 * 2 * self.eps), 0.5 * h) * dtau_factor
+        if implicit:
+            alpha = FaceField(grid, [self.eps * fn[ax][ax] ** 2 for ax in range(2)])
+            for ax in range(2):
+                if not self.psi.bc.is_periodic(ax):
+                    w = [slice(None)] * 2
+                    w[ax] = [0, grid.n[ax]]
+                    alpha[ax][tuple(w)] = 0.0
+            from ..boundary import BoundaryConditions, Neumann, Periodic  # noqa: PLC0415
+
+            dbc = BoundaryConditions()
+            for ax in range(2):
+                for side in (0, 1):
+                    dbc.set((ax, side), Periodic() if self.psi.bc.get(ax, side).periodic else Neumann(0.0))
+        for _ in range(n_steps):
+            if not implicit:
+                q = xp.clip(q + dtau * self._acls_fccd_divergence(q, fn), 0.0, 1.0)
+                continue
+            q_old = q
+            hist = []
+            for _k in range(dc_iters):
+                r = q_old - (q - dtau * self._acls_fccd_divergence(q, fn))
+                hist.append(float(xp.max(xp.abs(r))))
+                delta = CellField(grid, bc=dbc)
+                poisson(delta, -r / dtau, alpha, -1.0 / dtau, tolerance=1e-10)
+                q = q + delta.interior
+            r = q_old - (q - dtau * self._acls_fccd_divergence(q, fn))
+            hist.append(float(xp.max(xp.abs(r))))
+            if stats is not None:
+                stats.append(hist)
+            q = xp.clip(q, 0.0, 1.0)
         if self.mass_closure:
             q = mass_correction(q, self.dv, m0)
         self.psi.interior = q

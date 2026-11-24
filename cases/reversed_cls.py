@@ -57,7 +57,7 @@ def run(n: int, backend: str = "numpy", reinit_every: int = 0, reinit_steps: int
     e = norms(grid, f0 - cls.psi.interior)
     sharp = norms(grid, (cls.psi.interior > 0.5).astype(f0.dtype) - f0)
     return {"initial": e0, "final": e, "sharp": sharp, "mass_change": cls.mass() / m0 - 1.0,
-            "psi_range": (psi_min, psi_max), "steps": clock.i}
+            "psi_range": (psi_min, psi_max), "steps": clock.i, "psi": cls.psi.interior}
 
 
 def main() -> None:
