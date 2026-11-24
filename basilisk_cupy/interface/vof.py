@@ -23,7 +23,7 @@ from ..fields import CellField, FaceField
 from .fractions import reconstruction
 from .geometry import rectangle_fraction
 
-SEPS = 1e-30
+SEPS = 0.0  # Basilisk common.h (without embedded boundaries)
 CMIN = 0.5  # vof_concentration_gradient: switch to one-sided away from the interface
 
 
