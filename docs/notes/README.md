@@ -15,4 +15,4 @@
 | [09_gpu.md](09_gpu.md) | GPU 高速化：融合カーネル、CUDA グラフ、問題の再利用 |
 | [10_paper_errata.md](10_paper_errata.md) | TwoPhaseFlow 論文・実装で見つかった誤りと抜け |
 | [11_verification_practice.md](11_verification_practice.md) | 検証のときの注意 |
-| [12_two_phase.md](12_two_phase.md) | 二相流（M4）：計画と VOF 移流（#23） |
+| [12_two_phase.md](12_two_phase.md) | 二相流（M4）：計画、VOF 移流（#23）、物性・高さ関数・換算重力（#24） |

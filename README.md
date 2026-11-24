@@ -484,6 +484,37 @@ The volume fraction stays in [−1.4e-16, 1 + 4e-16] and the VOF concentration w
 advecting velocity must be `ops.wall_free_flux(uf, periodic)` (see *Face divergence*).
 Plan and notes: `docs/notes/12_two_phase.md`.
 
+### Step M4b: two-phase properties, height functions, reduced gravity
+
+```python
+tp = TwoPhase(ns, f, rho1=1.0, rho2=0.1, mu1=mu, mu2=mu, vof_first=True)   # hooks into CenteredNS
+tp.add_reduced_gravity(G=(0.0, 50.0))
+```
+
+Ports of `two-phase.h` (`alpha = 1/rho(f_face)`, `rho(f)`, `mu(f_face)`), `heights.h`
+(height functions, multigrid version; the column propagation runs as one GPU kernel,
+bitwise equal to the array path), `position()` from `curvature.h`, `iforce.h` and
+`reduced.h`. `cases/gravity_wave.py` (`src/test/gravity.c`), relative RMS error of the
+amplitude against Prosperetti's solution:
+
+| points per wavelength | 8 | 16 | 32 | 64 |
+| --- | --- | --- | --- | --- |
+| lexicographic relaxation (as Basilisk's CPU build) | 0.126711 | 0.031758 | 0.00807759 | 0.00455815 |
+| `gravity.ref` (Basilisk, CPU) | 0.126713 | 0.031758 | 0.00807759 | 0.00455815 |
+| red/black relaxation (default) | 0.126717 | 0.0317753 | 0.0080898 | 0.00455964 |
+| Basilisk built with `-DGAUSS_SEIDEL` (red/black) | 0.126716 | 0.0317752 | 0.00808982 | 0.00455964 |
+
+Matching Basilisk needed three corrections of the port and one constant (found by building
+Basilisk from the mirror and comparing the fields after the first step, which now agree to
+1e-15 for both relaxations; `tests/data/`): Basilisk's `project()` solves to
+`TOLERANCE/dt²` (`project(..., basilisk_tolerance=True)`, used by `CenteredNS`); its red/black
+sweep starts with the odd cells (`i + j`); its CPU build relaxes lexicographically
+(`linear.lexicographic.set_relaxation("lexicographic")`, fronts `2i + j = const`, exact for
+the 9-point viscous stencil too); and its `pi` is 3.14159265358979
+(`basilisk_cupy.constants.PI`), which decides whether a cell cut near a vertex gets a
+volume fraction of exactly 1. A flat interface under reduced gravity stays at rest to 1.4e-17.
+N = 128 (738 steps) takes 37 s with cupy (red/black).
+
 ## GPU (cupy)
 
 On the GPU the multigrid hot loops run as fused `cupy.RawKernel`s

@@ -20,6 +20,8 @@ from ..grid.hierarchy import build_levels
 from ..kernels.residual_gpu import viscosity_residual
 from ..kernels.viscosity_gpu import relax_viscosity_redblack
 from .multigrid import NITERMAX, NITERMIN, TOLERANCE, MGStats, mg_solve, restrict_cell, restrict_face
+from .lexicographic import lexicographic
+from .lexicographic import relax_viscosity as relax_viscosity_lex
 
 
 def _face_lo_hi(face, axis: int, n: int):
@@ -106,7 +108,7 @@ class ViscosityProblem:
         if not self._masks:
             for g in self.levels:
                 idx = g.xp.indices(g.n).sum(axis=0)
-                self._masks.append(((idx % 2) == 0, (idx % 2) == 1))
+                self._masks.append(((idx % 2) == 1, (idx % 2) == 0))  # Basilisk: odd i + j first
         return self._masks
 
     # Basilisk residual_viscosity ("naive" Cartesian version) ------------------------
@@ -160,6 +162,9 @@ class ViscosityProblem:
         mu = self.mu[level]
         rho = self.rho[level]
         dt = self.dt
+        if lexicographic() and grid.is_uniform and ndim == 2 and grid.h[0] == grid.h[1]:
+            relax_viscosity_lex(xp, [c.data for c in da], res, mu, rho, dt, grid.n, float(grid.h[0]), grid.ghosts)
+            return
         if self.fused:
             relax_viscosity_redblack([c.data for c in da], res, mu, rho, grid.n, h2, self.params, grid.ghosts,
                                      frozen=self.frozen[level])
