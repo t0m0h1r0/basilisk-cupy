@@ -484,6 +484,21 @@ The volume fraction stays in [−1.4e-16, 1 + 4e-16] and the VOF concentration w
 advecting velocity must be `ops.wall_free_flux(uf, periodic)` (see *Face divergence*).
 Plan and notes: `docs/notes/12_two_phase.md`.
 
+### TwoPhaseFlow's conservative level set (CLS) against VOF
+
+```python
+from basilisk_cupy.interface.cls import CLSInterface
+cls = CLSInterface.from_level_set(grid, distance, bc)   # psi = H_eps(distance), eps = 1.5 Delta
+cls.advect(uf, dt)          # TVD-RK3, flux (P_f psi) u_f with FCCD face values, clipping, mass closure
+cls.reinitialize(4)         # compression--diffusion (provisional; Ridge--Eikonal next)
+```
+
+On Basilisk's reversed vortex (T = 15) the sharp indicator `psi > 1/2` has an L1 error of
+0.0707 / 0.0306 / 0.0139 at N = 32 / 64 / 128 (re-initialising every 10 steps: 0.0707 /
+0.0306 / 0.0080), against 0.0606 / 0.0099 / 0.0014 for VOF on the same velocity. A periodic
+translation gives a psi L1 error of 6.0e-3 / 5.4e-3 / 4.3e-3 (VOF 1.5e-3 / 3.4e-4 / 8.7e-5).
+Mass is kept to 1e-13. Notes: `docs/notes/13_cls.md`.
+
 ## GPU (cupy)
 
 On the GPU the multigrid hot loops run as fused `cupy.RawKernel`s
