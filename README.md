@@ -650,6 +650,16 @@ velocity (parasitic velocity 5.3e-7) and 5.1e-9 in pressure; CLS + CSF keeps par
 of 4e-4, CLS + GFM decays like Basilisk (7.5e-7) with a pressure jump of 4.0030.
 Notes: `docs/notes/22_static_drop_figures.md`.
 
+`cls.curvature(method="heights", heights_method="ccd" | "fd2")`: height functions of the `psi = 1/2`
+crossings (cubic interpolation of `phi_map` along the columns), differentiated along the interface
+by CCD or central differences. On an exact circle (N = 64 / 128 / 256) the rms error at the
+crossings is 2.4e-3 / 1.7e-4 / 2.4e-5 with CCD, against 9.6e-4 / 3.5e-4 / 2.3e-4 for the curvature
+of `psi`; column sums instead of crossings are off by 1-3% (the diffuse profile is skewed where the
+interface is curved). In flows the gain is small: capillary wave 0.183 / 0.0496 / 0.0100 / 0.00478
+(psi 0.188 / 0.0639 / 0.0109 / 0.00209), and CCD used up to the ends of a run (walls) diverges;
+2nd-order heights let the static drop (density ratio 100) decay to 1e-11 with tension.h's step.
+Notes: `docs/notes/25_height_curvature.md`.
+
 ## GPU (cupy)
 
 On the GPU the multigrid hot loops run as fused `cupy.RawKernel`s

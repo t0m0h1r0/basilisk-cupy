@@ -26,3 +26,4 @@
 | [20_capillary_dt_check.md](20_capillary_dt_check.md) | √(5/12) の検証：曲率の硬さの比は測定と合うが、CLS では境目が N・粘性・密度比で下がる（#35） |
 | [21_capillary_mode.md](21_capillary_mode.md) | 境目が N とともに下がる原因：格子規模の毛管波に対して CLS の移流が散逸を持たない。毎ステップの圧縮・拡散で解消（#36） |
 | [22_static_drop_figures.md](22_static_drop_figures.md) | 静止液滴の可視化：Basilisk（C）・VOF・CLS＋CSF・CLS＋GFM の密度・速度・圧力（#37） |
+| [25_height_curvature.md](25_height_curvature.md) | ψ の高さ関数による曲率：交差の高さ＋CCD は正確なプロファイルで最良、流れでは2次差分の高さが静止液滴に強い（#39） |

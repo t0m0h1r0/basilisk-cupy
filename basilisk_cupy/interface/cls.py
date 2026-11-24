@@ -100,8 +100,16 @@ class CLSInterface:
     def mass(self) -> float:
         return float(self.psi.interior.sum()) * self.dv
 
-    def curvature(self, **kw):
-        """Curvature of the ``psi`` level sets in the interface band (:func:`.cls_curvature.psi_curvature`)."""
+    def curvature(self, method: str = "psi", **kw):
+        """Curvature in the interface band: ``method="psi"`` differentiates ``psi`` (the paper,
+        :func:`.cls_curvature.psi_curvature`); ``"heights"`` uses height functions of the
+        ``psi = 1/2`` crossings (:func:`.cls_heights.height_curvature`, ``method`` there passed as
+        ``heights_method="ccd" | "fd2"``)."""
+        if method == "heights":
+            from .cls_heights import height_curvature  # noqa: PLC0415
+
+            hm = kw.pop("heights_method", "ccd")
+            return height_curvature(self.psi, eps=self.eps, method=hm, **kw)
         from .cls_curvature import psi_curvature  # noqa: PLC0415
 
         return psi_curvature(self.psi, eps=self.eps, ccd=self.ccd, **kw)
