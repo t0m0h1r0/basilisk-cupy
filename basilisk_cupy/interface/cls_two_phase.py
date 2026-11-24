@@ -34,20 +34,32 @@ the face's centre-to-centre segment:
   paper's CCD stencils) has no role here.
 
 Cell densities (momentum, viscosity) and face viscosities stay those of ``psi``.
+
+Capillary time step: tension.h's ``sqrt(rho_m Delta^3 / (pi sigma))`` assumes a curvature whose
+response to a grid-scale wiggle is that of 2nd-order differences, ``4/Delta^2``. CCD's second
+derivative there is ``48/(5 Delta^2)`` (Nyquist symbol of the Chu--Fan scheme), so the explicit
+capillary loop is stiffer by 12/5: the bound is multiplied by ``capillary_dt_factor``, by default
+``sqrt(5/12)`` (:data:`CCD_CAPILLARY_DT_FACTOR`); ``1`` is tension.h's bound (unstable at density
+ratios 100 and 1000 with equal viscosities, N = 64; docs/notes/19).
 """
 
 from __future__ import annotations
 
+import math
+
 from ..fields import CellField, FaceField
 from .cls import CLSInterface
 from .two_phase import TwoPhase
+
+#: sqrt(4 / (48/5)): tension.h's bound for a CCD curvature (Nyquist symbol 48/5 against 4).
+CCD_CAPILLARY_DT_FACTOR = math.sqrt(5.0 / 12.0)
 
 
 class TwoPhaseCLS(TwoPhase):
     def __init__(self, ns, cls: CLSInterface, *, rho1: float = 1.0, rho2: float = 1.0, mu1: float = 0.0,
                  mu2: float = 0.0, vof_first: bool = False, reinit_every: int = 0,
                  reinit_method: str = "xi_sdf", curvature_kw: dict | None = None,
-                 pressure_jump: bool = False) -> None:
+                 pressure_jump: bool = False, capillary_dt_factor: float | None = None) -> None:
         f: CellField = cls.psi
         if f.grid.ndim != 2:
             raise NotImplementedError("two-phase flows are implemented in 2-D")
@@ -58,6 +70,7 @@ class TwoPhaseCLS(TwoPhase):
         self.curvature_kw = curvature_kw or {}
         self.potentials = []
         self.pressure_jump = pressure_jump
+        self.capillary_dt_factor = CCD_CAPILLARY_DT_FACTOR if capillary_dt_factor is None else float(capillary_dt_factor)
         self._steps = 0
         ns.cfl = min(ns.cfl, 0.5)
         ns.on("set_dtmax" if vof_first else "vof", self._vof)
@@ -79,6 +92,13 @@ class TwoPhaseCLS(TwoPhase):
         self.sigma = float(sigma)
         self.potentials.append(lambda tp: tp.sigma * tp.cls.curvature(**tp.curvature_kw))
         self.ns.on("stability", self._capillary_dtmax)
+
+    def _capillary_dtmax(self, ns) -> None:
+        saved = ns.dtmax
+        ns.dtmax = float("inf")
+        super()._capillary_dtmax(ns)
+        dt = ns.dtmax * self.capillary_dt_factor
+        ns.dtmax = min(saved, dt)
 
     def add_reduced_gravity(self, G=(0.0, 0.0), Z=(0.0, 0.0)) -> None:
         d = self.rho2 - self.rho1

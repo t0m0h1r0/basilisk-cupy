@@ -617,6 +617,13 @@ Translation, psi L1 error at N = 32 / 64 / 128: 6.0e-3 / 5.4e-3 / 4.3e-3 (paper)
 Capillary wave with the GFM jump: 0.188 / 0.0639 / 0.0109 / 0.00209 at 8 / 16 / 32 / 64 points
 per wavelength (VOF 0.139 / 0.0242 / 0.0064 / 0.0023). Notes: `docs/notes/18_cls_transport.md`.
 
+At density ratios 100 and 1000 (equal viscosities, N = 64) the GFM drop diverged with tension.h's
+time step: the explicit capillary loop sees CCD's curvature, whose answer to a grid-scale wiggle
+is 48/5 per Delta^2 instead of 4 (2nd-order differences; the bound, also the paper's, has a
+margin of about 1.6 for those and none for CCD). `TwoPhaseCLS(..., capillary_dt_factor=
+CCD_CAPILLARY_DT_FACTOR)` (the default) multiplies the bound by sqrt(5/12); the parasitic velocity then decays
+at every density ratio (3.9e-8 at t = 0.4, ratio 1000, N = 64). Notes: `docs/notes/19_capillary_dt.md`.
+
 ## GPU (cupy)
 
 On the GPU the multigrid hot loops run as fused `cupy.RawKernel`s

@@ -6,11 +6,12 @@ import pytest
 
 from basilisk_cupy import BoundaryConditions, CartesianGrid
 from basilisk_cupy.interface.cls import CLSInterface
-from basilisk_cupy.interface.cls_two_phase import TwoPhaseCLS
+from basilisk_cupy.interface.cls_two_phase import CCD_CAPILLARY_DT_FACTOR, TwoPhaseCLS
 from basilisk_cupy.time.basilisk_centered import CenteredNS
 
 
 def _static_drop(n, backend, steps=10, rho2=1.0, **kw):
+    kw.setdefault("capillary_dt_factor", 1.0)  # the numbers of notes 15-18 (tension.h's bound)
     grid = CartesianGrid((n, n), origin=(-0.5, -0.5), backend=backend)
     xp = grid.xp
     walls = ("left", "right", "bottom", "top")
@@ -59,7 +60,7 @@ def test_capillary_wave(backend):
     omega_0 t) at 8 / 16 / 32 points per wavelength."""
     from cases import capillary_wave as cw
 
-    r = cw.run(16, backend, interface="cls")
+    r = cw.run(16, backend, interface="cls", capillary_dt_factor=1.0)
     assert r["error"] == pytest.approx(0.35541, rel=1e-3)
 
 
@@ -83,7 +84,7 @@ def test_capillary_wave_pressure_jump(backend):
     at 16 / 32 points (Prosperetti 3.456; CSF 4.05 / 3.70)."""
     from cases import capillary_wave as cw
 
-    r = cw.run(16, backend, interface="cls", pressure_jump=True)
+    r = cw.run(16, backend, interface="cls", pressure_jump=True, capillary_dt_factor=1.0)
     assert r["error"] == pytest.approx(0.20122, rel=1e-3)
 
 
@@ -93,5 +94,29 @@ def test_capillary_wave_pressure_jump_corrected_divergence(backend):
     0.0242 / 0.0064 / 0.0023). 4th-order face values: 0.188 / 0.0654 / 0.0126 / 0.00348."""
     from cases import capillary_wave as cw
 
-    r = cw.run(32, backend, interface="cls", pressure_jump=True, divergence="fccd", face_order=6)
+    r = cw.run(32, backend, interface="cls", pressure_jump=True, divergence="fccd", face_order=6, capillary_dt_factor=1.0)
     assert r["error"] == pytest.approx(0.06389, rel=1e-3)
+
+
+@pytest.mark.parametrize("rho2,factor,bound", [(0.01, 1.0, None), (0.01, None, 1e-6), (0.001, None, 1e-6)])
+def test_static_drop_high_density_ratio(backend, rho2, factor, bound):
+    """GFM jump, equal viscosities 0.1, N = 64, 400 steps. With tension.h's time step the capillary loop
+    grows at density ratios 100 and 1000 (8.7e-4 and 2.7 here): the CCD curvature answers a grid-scale
+    wiggle with 48/5 instead of 4 per Delta^2. capillary_dt_factor = sqrt(5/12): 4.4e-7 (ratio 1000)."""
+    f = CCD_CAPILLARY_DT_FACTOR if factor is None else factor
+    _, u, dm = _static_drop(64, backend, steps=400, rho2=rho2, pressure_jump=True, capillary_dt_factor=f)
+    assert abs(dm) < 1e-12
+    if bound is None:
+        assert not (u < 1e-4)  # grows (or overflows)
+    else:
+        assert u < bound
+
+
+def test_default_capillary_factor(backend):
+    """TwoPhaseCLS uses sqrt(5/12) of tension.h's capillary bound unless told otherwise."""
+    grid = CartesianGrid((16, 16), origin=(-0.5, -0.5), backend=backend)
+    ns = CenteredNS(grid, uf_normal={w: 0.0 for w in ("left", "right", "bottom", "top")})
+    x, y = grid.meshgrid()
+    cls = CLSInterface.from_level_set(grid, 0.25 - grid.xp.sqrt(x * x + y * y), BoundaryConditions())
+    tp = TwoPhaseCLS(ns, cls, pressure_jump=True)
+    assert tp.capillary_dt_factor == pytest.approx(math.sqrt(5.0 / 12.0), rel=1e-15)
