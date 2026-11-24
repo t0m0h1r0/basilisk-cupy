@@ -624,6 +624,15 @@ margin of about 1.6 for those and none for CCD). `TwoPhaseCLS(..., capillary_dt_
 CCD_CAPILLARY_DT_FACTOR)` (the default) multiplies the bound by sqrt(5/12); the parasitic velocity then decays
 at every density ratio (3.9e-8 at t = 0.4, ratio 1000, N = 64). Notes: `docs/notes/19_capillary_dt.md`.
 
+Checked by bisection on the static drop (`cases/capillary_dt_scan.py`, density ratio 100, mu = 0.1):
+the stability limit, as a multiple of tension.h's bound, is 1.05-1.1 / 0.95-1.0 / 0.91-0.95 /
+0.85-0.88 with the CCD curvature and 1.4-1.5 / 1.4-1.5 / 1.3-1.4 / 1.2-1.3 with 2nd-order
+differences of `psi` (N = 32 / 64 / 128 / 256): their ratio, 1.45-1.49 for N >= 64, matches the
+stiffness ratio sqrt(12/5) = 1.55, but the limits fall with N (and with viscosity and density
+ratio), which `omega dt <= 2` does not explain; Basilisk's VOF stays at 1.2-1.4 for N = 64 and
+256. sqrt(5/12) is below every limit measured (lowest 0.82-0.85). Notes:
+`docs/notes/20_capillary_dt_check.md`.
+
 ## GPU (cupy)
 
 On the GPU the multigrid hot loops run as fused `cupy.RawKernel`s
