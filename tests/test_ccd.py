@@ -158,7 +158,7 @@ def test_fccd_swaps_into_centered_ns(backend):
         ns.start(events=[2.0])
         ns.run(2.0)
         errs[name] = taylor_green.error_norms(ns)
-        assert ns.max_divergence() < 1e-4
+        assert ns.max_divergence() * ns.clock.dt < ns.tolerance  # Basilisk: |div u| dt <= TOLERANCE
     assert errs["fccd"][1] < errs["fd2"][1] / 3.0
 
 
