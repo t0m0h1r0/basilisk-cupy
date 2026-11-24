@@ -113,8 +113,68 @@ class CLSInterface:
         self.psi.interior = q3
         self.psi.fill_ghosts()
 
-    # -- re-initialisation (compression--diffusion, provisional) -----------------------------------
-    def reinitialize(self, n_steps: int = 4) -> None:
+    # -- re-initialisation ------------------------------------------------------------------------
+    def reinitialize(self, n_steps: int = 4, *, method: str = "xi_sdf", code_variant: bool = False,
+                     distance: str = "points") -> None:
+        """Re-initialise ``psi``: ``method="xi_sdf"`` (the paper's standard stage D on uniform grids) or
+        ``"compression"`` (Olsson--Kreiss compression--diffusion, ``n_steps`` pseudo-steps).
+
+        ``distance`` (xi-SDF): ``"points"`` is the paper's distance to the nearest crossing point;
+        ``"segments"`` the distance to the polyline through the crossings (marching squares on the
+        dual cells), which an oblique interface needs (see :func:`_distance_to_crossings`)."""
+        if method == "xi_sdf":
+            self._reinit_xi_sdf(code_variant, distance)
+        elif method == "compression":
+            self._reinit_compression(n_steps)
+        else:
+            raise ValueError("method is 'xi_sdf' or 'compression'")
+
+    def _reinit_xi_sdf(self, code_variant: bool, distance: str = "points") -> None:
+        """Ridge--Eikonal distance reconstruction, uniform-grid form (paper 05a, xi-SDF algorithm):
+
+        1. logit ``phi = eps ln(psi / (1 - psi))``, ``psi`` limited to ``[1e-6, 1 - 1e-6]``;
+        2. zero crossings between neighbouring cells by linear interpolation (index space);
+        3. ``phi`` = sign times the distance to the nearest crossing (no iteration: the crossings stay);
+        4. ``psi = H_eps(phi)``;
+        5. mass closure by a uniform shift of ``phi`` (``delta = (M - M') / sum psi(1 - psi)/eps dV``,
+           repeated until the total is closed to round-off).
+
+        ``code_variant``: also do what TwoPhaseFlow's ``EikonalReinitializer(xi_sdf=True)`` does and the
+        paper does not state: clip ``|phi|`` to ``2 eps`` before locating the crossings, and after the
+        mass shift keep every cell on its side (``phi`` set to ``+-1e-14``).
+        """
+        grid = self.psi.grid
+        xp = grid.xp
+        h = float(grid.h[0])
+        eps = self.eps
+        q = self.psi.interior
+        m0 = xp.sum(q) * self.dv
+        phi = phi_from_psi(q, eps)
+        sgn = xp.where(phi < 0.0, -1.0, 1.0)
+        if code_variant:
+            phi = sgn * xp.minimum(xp.abs(phi), 2.0 * eps)
+        d = (_distance_to_crossings if distance == "points" else _distance_to_segments)(phi, self.psi.bc)
+        if d is None:
+            return
+        d = d * h
+        phi = sgn * d
+        new = psi_from_phi(phi, eps)
+        if self.mass_closure:
+            for _ in range(8):
+                w = new * (1.0 - new) / eps
+                W = xp.sum(w) * self.dv
+                miss = m0 - xp.sum(new) * self.dv
+                if float(W) <= 1e-14 or abs(float(miss)) <= 1e-14 * max(float(m0), 1e-300):
+                    break
+                phi = phi + miss / W
+                if code_variant:
+                    phi = xp.where(sgn * phi < 0.0, sgn * 1e-14, phi)
+                new = psi_from_phi(phi, eps)
+        self.psi.interior = new
+        self.psi.fill_ghosts()
+
+    # -- re-initialisation (compression--diffusion) --------------------------------------------------
+    def _reinit_compression(self, n_steps: int = 4) -> None:
         grid = self.psi.grid
         xp = grid.xp
         h = float(min(grid.h))
@@ -171,3 +231,107 @@ def _zero_walls(flux, axis, bc):
     flux[tuple(idx0)] = 0.0
     flux[tuple(idx1)] = 0.0
     return flux
+
+
+def _distance_to_crossings(phi, bc, chunk: int = 4096):
+    """Distance (in cells) from every cell centre to the nearest zero crossing of ``phi`` between
+    neighbouring cells (linear interpolation; across a periodic boundary too). ``None`` if no crossing."""
+    xp = array_module(phi)
+    nx, ny = phi.shape
+    pts = []
+    for axis in range(2):
+        a = phi
+        if bc.get(axis, 0).periodic:
+            b = xp.roll(phi, -1, axis=axis)
+        else:
+            a = phi[:-1, :] if axis == 0 else phi[:, :-1]
+            b = phi[1:, :] if axis == 0 else phi[:, 1:]
+        cut = (a * b) < 0.0
+        ii, jj = xp.nonzero(cut)
+        if ii.size == 0:
+            continue
+        pa, pb = xp.abs(a[ii, jj]), xp.abs(b[ii, jj])
+        t = pa / (pa + pb)
+        x = ii.astype(phi.dtype) + (t if axis == 0 else 0.0)
+        y = jj.astype(phi.dtype) + (t if axis == 1 else 0.0)
+        pts.append(xp.stack([x, y], axis=1))
+    if not pts:
+        return None
+    pts = xp.concatenate(pts, axis=0)
+    I, J = xp.meshgrid(xp.arange(nx, dtype=phi.dtype), xp.arange(ny, dtype=phi.dtype), indexing="ij")
+    I, J = I.ravel(), J.ravel()
+    per = (bc.get(0, 0).periodic, bc.get(1, 0).periodic)
+    out = xp.empty(nx * ny, dtype=phi.dtype)
+    for s in range(0, nx * ny, chunk):
+        dx = I[s:s + chunk, None] - pts[None, :, 0]
+        dy = J[s:s + chunk, None] - pts[None, :, 1]
+        if per[0]:
+            dx = dx - nx * xp.round(dx / nx)
+        if per[1]:
+            dy = dy - ny * xp.round(dy / ny)
+        out[s:s + chunk] = xp.sqrt(xp.min(dx * dx + dy * dy, axis=1))
+    return out.reshape(nx, ny)
+
+
+def _distance_to_segments(phi, bc, chunk: int = 2048):
+    """Distance (in cells) from every cell centre to the polyline through the zero crossings: on each
+    dual cell (four neighbouring centres) the crossings of its edges are joined by segments (marching
+    squares; the ambiguous saddle joins them by the sign of the mean). ``None`` if no crossing."""
+    xp = array_module(phi)
+    nx, ny = phi.shape
+    per = (bc.get(0, 0).periodic, bc.get(1, 0).periodic)
+    p = phi
+    if per[0]:
+        p = xp.concatenate([p, p[:1]], axis=0)
+    if per[1]:
+        p = xp.concatenate([p, p[:, :1]], axis=1)
+    a, b, c, d = p[:-1, :-1], p[1:, :-1], p[1:, 1:], p[:-1, 1:]  # corners (i,j), (i+1,j), (i+1,j+1), (i,j+1)
+    I, J = xp.meshgrid(xp.arange(a.shape[0], dtype=phi.dtype), xp.arange(a.shape[1], dtype=phi.dtype),
+                       indexing="ij")
+
+    def cross(u, v):
+        return xp.abs(u) / xp.where((xp.abs(u) + xp.abs(v)) > 0, xp.abs(u) + xp.abs(v), 1.0)
+
+    # crossing points on the four edges of each dual cell (bottom, right, top, left)
+    e = [((a * b) < 0, I + cross(a, b), J),
+         ((b * c) < 0, I + 1.0, J + cross(b, c)),
+         ((d * c) < 0, I + cross(d, c), J + 1.0),
+         ((a * d) < 0, I, J + cross(a, d))]
+    segs = []
+    count = sum(m.astype(xp.int32) for m, _, _ in e)
+    two = count == 2
+    pairs = [(0, 1), (0, 2), (0, 3), (1, 2), (1, 3), (2, 3)]
+    for k, l in pairs:
+        m = two & e[k][0] & e[l][0]
+        ii, jj = xp.nonzero(m)
+        if ii.size:
+            segs.append(xp.stack([e[k][1][ii, jj], e[k][2][ii, jj], e[l][1][ii, jj], e[l][2][ii, jj]], axis=1))
+    four = count == 4
+    if bool(xp.any(four)):
+        mean = (a + b + c + d) / 4.0
+        same = (mean * a) > 0  # centre on the side of corner a: segments (bottom-left) and (top-right) cut it off
+        for (k, l), sel in (((0, 3), ~same), ((1, 2), ~same), ((0, 1), same), ((2, 3), same)):
+            m = four & sel
+            ii, jj = xp.nonzero(m)
+            if ii.size:
+                segs.append(xp.stack([e[k][1][ii, jj], e[k][2][ii, jj], e[l][1][ii, jj], e[l][2][ii, jj]], axis=1))
+    if not segs:
+        return None
+    S = xp.concatenate(segs, axis=0)
+    ax, ay, bx, by = S[:, 0], S[:, 1], S[:, 2], S[:, 3]
+    vx, vy = bx - ax, by - ay
+    L2 = xp.where(vx * vx + vy * vy > 0, vx * vx + vy * vy, 1.0)
+    CI, CJ = xp.meshgrid(xp.arange(nx, dtype=phi.dtype), xp.arange(ny, dtype=phi.dtype), indexing="ij")
+    CI, CJ = CI.ravel(), CJ.ravel()
+    out = xp.empty(nx * ny, dtype=phi.dtype)
+    for s0 in range(0, nx * ny, chunk):
+        px = CI[s0:s0 + chunk, None] - ax[None, :]
+        py = CJ[s0:s0 + chunk, None] - ay[None, :]
+        if per[0]:
+            px = px - nx * xp.round(px / nx)
+        if per[1]:
+            py = py - ny * xp.round(py / ny)
+        t = xp.clip((px * vx[None, :] + py * vy[None, :]) / L2[None, :], 0.0, 1.0)
+        qx, qy = px - t * vx[None, :], py - t * vy[None, :]
+        out[s0:s0 + chunk] = xp.sqrt(xp.min(qx * qx + qy * qy, axis=1))
+    return out.reshape(nx, ny)
