@@ -589,6 +589,16 @@ paper's band `psi_min = 0.01` (the gradient outside the band, 2%, carries no cur
 0.024 / 0.0064); the wave is slow by 39% / 17% / 7.1% in the half period, set by `k eps` alone
 (the CSF force spread over the interface width). Notes: `docs/notes/15_cls_ns.md`.
 
+`TwoPhaseCLS(..., pressure_jump=True)` is the paper's pressure-jump closure in finite-volume form
+(ghost-fluid method): the jump `sigma kappa` enters the face gradient `G p - B(j)` at the
+`psi = 1/2` crossings, and the face coefficients are those of phase-wise constant densities
+(GFM `1/(theta rho_L + (1 - theta) rho_R)` on cut faces). Static drop (N = 32 / 64 / 128): jump
+4.0091 / 4.0027 / 4.0010, parasitic velocity 3.3e-4 / 4.9e-5 / 8.6e-6, 1.1e-8 after 400 steps
+(N = 64; VOF 6.1e-8). At density ratio 1000 tension's time-step bound is too large (it
+diverges after 200 steps; half the step is stable). Capillary wave: 0.201 / 0.0933 / 0.0279 /
+0.0130 at 8 / 16 / 32 / 64 points per wavelength (CSF 0.355 / 0.315 / 0.236; VOF 0.139 /
+0.024 / 0.0064 / 0.0023). Notes: `docs/notes/16_split_ppe.md`.
+
 ## GPU (cupy)
 
 On the GPU the multigrid hot loops run as fused `cupy.RawKernel`s

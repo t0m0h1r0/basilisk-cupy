@@ -19,3 +19,4 @@
 | [13_cls.md](13_cls.md) | CLS（保存型レベルセット）への差し替えと VOF との比較（#27）、Ridge–Eikonal 再初期化（#28） |
 | [14_psi_curvature.md](14_psi_curvature.md) | ψ からの曲率：正確なプロファイルで O(h⁻¹)、輸送後の収束は再初期化しだい（#29） |
 | [15_cls_ns.md](15_cls_ns.md) | CLS の二相 NS への組み込み：静止液滴、毛管波（CSF の周波数ずれ）（#30） |
+| [16_split_ppe.md](16_split_ppe.md) | 分相 PPE と GFM の圧力ジャンプ：静止液滴、毛管波、高密度比の時間刻み（#31） |
