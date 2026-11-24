@@ -30,7 +30,8 @@ def norms(grid, e):
     return float(a.sum()) * dv, math.sqrt(float((a * a).sum()) * dv), float(a.max())
 
 
-def run(n: int, backend: str = "numpy", reinit_every: int = 0, reinit_steps: int = 4, t_end: float = T):
+def run(n: int, backend: str = "numpy", reinit_every: int = 0, reinit_steps: int = 4, t_end: float = T,
+        method: str = "compression", code_variant: bool = False, distance: str = "points"):
     grid = CartesianGrid((n, n), origin=(-0.5, -0.5), backend=backend)
     xp = grid.xp
     x, y = grid.meshgrid()
@@ -46,7 +47,7 @@ def run(n: int, backend: str = "numpy", reinit_every: int = 0, reinit_steps: int
         dt = dtnext(timestep(uf, DT, 0.8 if clock.i == 0 else CFL, clock), clock)
         cls.advect(uf, dt)
         if reinit_every and (clock.i + 1) % reinit_every == 0:
-            cls.reinitialize(reinit_steps)
+            cls.reinitialize(reinit_steps, method=method, code_variant=code_variant, distance=distance)
         psi_min = min(psi_min, float(xp.min(cls.psi.interior)))
         psi_max = max(psi_max, float(xp.max(cls.psi.interior)))
         clock.t = clock.tnext

@@ -43,7 +43,7 @@ def test_reinitialisation_keeps_a_circle(backend):
     sharp0 = float(abs((cls.psi.interior > 0.5) - f0).sum())
     m0 = cls.mass()
     for _ in range(100):
-        cls.reinitialize(4)
+        cls.reinitialize(4, method="compression")
     sharp1 = float(abs((cls.psi.interior > 0.5) - f0).sum())
     assert sharp1 == pytest.approx(sharp0, rel=0.05) and abs(cls.mass() / m0 - 1) < 1e-13
     p = to_numpy(cls.psi.interior)
@@ -85,3 +85,57 @@ def test_two_dimensions_uniform_only():
     grid = CartesianGrid((8, 8, 8))
     with pytest.raises(NotImplementedError):
         CLSInterface(CellField(grid))
+
+
+def _exact_circle(n, backend, bc=None):
+    grid = CartesianGrid((n, n), origin=(-0.5, -0.5), backend=backend)
+    return grid, CLSInterface.from_level_set(grid, _circle(grid), bc or BoundaryConditions())
+
+
+@pytest.mark.parametrize("distance,bounds", [("points", (0.035, 0.05)), ("segments", (0.0, 0.005))])
+def test_xi_sdf_on_an_exact_profile(backend, distance, bounds):
+    """One xi-SDF re-initialisation of the exact H_eps profile of a circle, N = 32 / 64 / 128:
+    the paper's distance to the nearest crossing point changes psi by 4.5e-2 / 4.5e-2 / 4.2e-2 (an
+    oblique interface makes the axis-aligned crossing up to sqrt(2) farther than the interface);
+    the distance to the polyline through the crossings by 3.6e-3 / 1.8e-3 / 9.0e-4."""
+    changes = []
+    for n in (32, 64, 128):
+        grid, cls = _exact_circle(n, backend)
+        p0 = cls.psi.interior.copy()
+        m0 = cls.mass()
+        cls.reinitialize(distance=distance)
+        changes.append(float(abs(cls.psi.interior - p0).max()))
+        assert abs(cls.mass() / m0 - 1) < 1e-12
+    assert all(bounds[0] <= c <= bounds[1] for c in changes)
+    if distance == "segments":
+        assert changes[0] / changes[2] > 3.5  # first order
+
+
+def test_xi_sdf_keeps_the_phase_of_every_cell_and_the_mass(backend):
+    grid, cls = _exact_circle(64, backend)
+    inside = to_numpy(cls.psi.interior > 0.5)
+    m0 = cls.mass()
+    for _ in range(20):
+        cls.reinitialize()
+    assert (to_numpy(cls.psi.interior > 0.5) == inside).mean() > 0.995 and abs(cls.mass() / m0 - 1) < 1e-12
+
+
+def test_xi_sdf_across_a_periodic_boundary(backend):
+    """A circle cut by the periodic boundaries: distances wrap (minimum image)."""
+    grid = CartesianGrid((32, 32), origin=(-0.5, -0.5), backend=backend)
+    xp = grid.xp
+    x, y = grid.meshgrid()
+    dx, dy = x - 0.45, y - 0.45
+    dx, dy = dx - xp.round(dx), dy - xp.round(dy)
+    cls = CLSInterface.from_level_set(grid, 0.2 - xp.sqrt(dx * dx + dy * dy), BoundaryConditions.periodic(2))
+    p0 = cls.psi.interior.copy()
+    cls.reinitialize(distance="segments")
+    assert float(abs(cls.psi.interior - p0).max()) < 5e-3
+
+
+def test_reversed_vortex_with_xi_sdf_reinitialisation(backend):
+    """Every 10 steps, N = 32: sharp-indicator error 0.1092 (no re-initialisation: 0.0707; VOF 0.0606)."""
+    from cases import reversed_cls
+
+    r = reversed_cls.run(32, backend, reinit_every=10, method="xi_sdf")
+    assert r["sharp"][0] == pytest.approx(0.1092, rel=0.02) and abs(r["mass_change"]) < 1e-12

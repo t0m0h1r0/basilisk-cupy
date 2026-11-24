@@ -497,7 +497,17 @@ On Basilisk's reversed vortex (T = 15) the sharp indicator `psi > 1/2` has an L1
 0.0707 / 0.0306 / 0.0139 at N = 32 / 64 / 128 (re-initialising every 10 steps: 0.0707 /
 0.0306 / 0.0080), against 0.0606 / 0.0099 / 0.0014 for VOF on the same velocity. A periodic
 translation gives a psi L1 error of 6.0e-3 / 5.4e-3 / 4.3e-3 (VOF 1.5e-3 / 3.4e-4 / 8.7e-5).
-Mass is kept to 1e-13. Notes: `docs/notes/13_cls.md`.
+Mass is kept to 1e-13.
+
+`cls.reinitialize()` defaults to the paper's standard re-initialisation on uniform grids, the
+Ridge--Eikonal distance reconstruction in its xi-SDF form (zero crossings by linear
+interpolation, distance to the nearest crossing, `psi = H_eps`, mass closed by a uniform shift
+of `phi`). Measured: on an exact profile it moves psi by 4.5e-2 at every resolution (the
+distance to crossing points along the axes overestimates an oblique interface's distance by up
+to sqrt(2)); the distance to the polyline through the crossings (`distance="segments"`) moves
+it by 3.6e-3 / 1.8e-3 / 9.0e-4 (N = 32 / 64 / 128). In passive transport both make the
+results worse than no re-initialisation (reversed vortex every 10 steps, N = 64: 0.068 and
+0.079 against 0.031). Notes: `docs/notes/13_cls.md`.
 
 ## GPU (cupy)
 
