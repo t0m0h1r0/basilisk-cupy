@@ -540,7 +540,15 @@ Taylor–Green, ms per time step (RTX 3080 Ti vs one core of a Ryzen 9 5950X):
 pip install -e ".[dev]"      # add ",gpu" for cupy
 pytest              # fast suite
 pytest -m slow      # full lid-cavity run to steady state (~1 min)
+pytest -n auto --dist loadgroup              # in parallel (pytest-xdist)
+pytest -n auto --dist loadgroup -k "not cupy"  # numpy tests only, in parallel
 ```
+
+In parallel the numpy tests spread over all cores (one BLAS thread per worker), while the
+tests that use the GPU (a `cupy` backend parameter, cupy in the test body, or
+`@pytest.mark.gpu`) stay on one worker (`xdist_group("gpu")`), so they do not compete for
+it. The fast suite takes 4 min 16 s on 28 cores and the GPU (numpy only: 2 min), against 23 min
+serially.
 
 Tests run on numpy; when cupy is importable every backend-parametrised test
 (all solver, Poisson, CCD/FCCD, defect-correction and IMEX-BDF2 tests, and the
