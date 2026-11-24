@@ -710,6 +710,14 @@ viscosity): the CLS damping-rate error depends on delta / h alone (-22 % at 0.65
 from two different grids, within 1 % above 2.5), the period error on the points per wavelength alone.
 Figure: `docs/figures/capwave_layer.png`. Notes: `docs/notes/30_vorticity_layer.md`.
 
+`CenteredNS(..., viscous=CCDViscosity())` solves the implicit viscous step with the CCD full stress (defect
+correction on Basilisk's viscous multigrid). On a Taylor-Green flow with kx != ky it stays 2nd order with
+Basilisk's face operators (the projection and the face interpolation set the order) and becomes 4th order
+with FCCD faces as well (8.5e-4 / 5.7e-5 / 3.6e-6 at N = 16 / 32 / 64). On the capillary wave (GFM, fd2
+faces) it does not change the damping: FCCD faces would be needed, and they cannot cross the pressure jump
+without the paper's jump-corrected gradient and HFE. Figure: `docs/figures/ccd_viscous.png`.
+Notes: `docs/notes/31_ccd_viscous_centered.md`.
+
 ## GPU (cupy)
 
 On the GPU the multigrid hot loops run as fused `cupy.RawKernel`s
