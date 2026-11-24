@@ -2,6 +2,7 @@
 ``two-phase.h``, ``heights.h``, ``curvature.h`` position(), ``iforce.h``, ``reduced.h``)."""
 
 import math
+from pathlib import Path
 
 import numpy as np
 import pytest
@@ -89,19 +90,90 @@ def _gravity_backend():
         return "numpy"
 
 
+def _basilisk_step1(name):
+    ref = {"C": {}, "X": {}, "Y": {}}
+    for line in (Path(__file__).parent / "data" / name).read_text().splitlines():
+        w = line.split()
+        if w[0] in ref:
+            ref[w[0]][(int(w[1]), int(w[2]))] = [float(v) for v in w[3:]]
+        elif w[0] == "mgp":
+            stats = (int(w[1]), float(w[2]), float(w[3]), int(w[4]))
+    return ref, stats
+
+
+@pytest.mark.parametrize("relaxation,data", [("lexicographic", "gravity_step1_basilisk_lexicographic.txt"),
+                                             ("redblack", "gravity_step1_basilisk_redblack.txt")])
+def test_first_step_of_the_gravity_wave_is_basilisks(relaxation, data):
+    """gravity.c, N = 16, after the first step: f, alpha, phi, a, uf and the projection's multigrid
+    statistics as Basilisk (qcc, CPU: lexicographic; -DGAUSS_SEIDEL: red/black) prints them."""
+    from basilisk_cupy.constants import PI
+    from basilisk_cupy.linear.lexicographic import set_relaxation
+
+    ref, (it, resb, resa, nrelax) = _basilisk_step1(data)
+    n = 16
+    grid = CartesianGrid((n, n), length=(2.0, 2.0), origin=(0.0, -1.0))
+    walls = ("left", "right", "bottom", "top")
+    ns = CenteredNS(grid, uf_normal={w: 0.0 for w in walls}, tolerance=1e-6)
+    f = CellField.from_interior(grid, fraction(grid, lambda x, y: y - 0.01 * np.cos(2.0 * PI * x)),
+                                BoundaryConditions())
+    tp = TwoPhase(ns, f, rho1=1.0, rho2=0.1, mu1=0.0182571749236, mu2=0.0182571749236, vof_first=True)
+    tp.add_reduced_gravity(G=(0.0, 50.0))
+    from cases import gravity_wave
+
+    set_relaxation(relaxation)
+    try:
+        ns.start(events=gravity_wave.event_times()[1:])
+        ns.step()
+    finally:
+        set_relaxation("redblack")
+    phi = position(f.interior, f.bc, grid, (0.0, -45.0))
+    cells = {"f": f.interior, "phi": phi, "ux": ns.u[0].interior, "uy": ns.u[1].interior}
+    for k, name in ((0, "f"), (2, "phi"), (4, "ux"), (5, "uy")):
+        a = np.array([[ref["C"][(i, j)][k] for j in range(n)] for i in range(n)])
+        assert float(np.abs(a - cells[name]).max()) < 1e-15, name
+    for ax, key in ((0, "X"), (1, "Y")):
+        for k, field in ((0, ns.alpha[ax]), (1, ns.a[ax]), (2, ns.uf[ax])):
+            a = np.zeros(field.shape)
+            for (i, j), v in ref[key].items():
+                a[i, j] = v[k]
+            assert float(np.abs(a - field).max()) < 1e-14, (key, k)
+    assert ns.mgp.i == it and ns.mgp.nrelax == nrelax and ns.mgp.resb == pytest.approx(resb, rel=1e-13)
+    assert ns.mgp.resa == pytest.approx(resa, rel=1e-12)
+
+
+@pytest.mark.gpu
 def test_gravity_wave_matches_basilisk():
-    """Basilisk src/test/gravity.c, N = 16 (8 points per wavelength): 0.126721 against gravity.ref 0.126713."""
+    """gravity.c, N = 16 (8 points per wavelength), red/black: 0.1267172; Basilisk built with
+    -DGAUSS_SEIDEL gives 0.126716, its CPU reference (lexicographic, gravity.ref) 0.126713."""
     from cases import gravity_wave
 
     r = gravity_wave.run(16, _gravity_backend())
-    assert r["error"] == pytest.approx(gravity_wave.REFERENCE[8], rel=2e-4) and r["steps"] == 738
+    assert r["error"] == pytest.approx(0.126716, rel=2e-5) and r["steps"] == 738
 
 
 @pytest.mark.slow
+@pytest.mark.gpu
 def test_gravity_wave_convergence_matches_basilisk():
-    """N = 32 / 64 / 128: 0.0317969 / 0.00809545 / 0.00455989 against 0.031758 / 0.00807759 / 0.00455815."""
+    """Red/black, N = 32 / 64 / 128: 0.0317753 / 0.0080898 / 0.00455964; Basilisk -DGAUSS_SEIDEL:
+    0.0317752 / 0.00808982 / 0.00455964."""
     from cases import gravity_wave
 
-    for n in (32, 64, 128):
+    for n, value in ((32, 0.0317752), (64, 0.00808982), (128, 0.00455964)):
         r = gravity_wave.run(n, _gravity_backend())
-        assert r["error"] == pytest.approx(gravity_wave.REFERENCE[n // 2], rel=3e-3)
+        assert r["error"] == pytest.approx(value, rel=2e-5)
+
+
+@pytest.mark.slow
+def test_gravity_wave_lexicographic_reproduces_gravity_ref():
+    """Lexicographic relaxation (Basilisk's CPU build): N = 32 gives gravity.ref's 0.031758 to the
+    printed digits (also 0.00807759 at N = 64, 0.00455815 at N = 128; 0.126711 against 0.126713 at
+    N = 16, round-off accumulating after ~70 steps)."""
+    from basilisk_cupy.linear.lexicographic import set_relaxation
+    from cases import gravity_wave
+
+    set_relaxation("lexicographic")
+    try:
+        r = gravity_wave.run(32, "numpy")
+    finally:
+        set_relaxation("redblack")
+    assert f"{r['error']:g}" == f"{gravity_wave.REFERENCE[16]:g}"

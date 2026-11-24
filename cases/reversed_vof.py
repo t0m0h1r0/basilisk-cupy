@@ -13,6 +13,8 @@ from __future__ import annotations
 import argparse
 import math
 
+from basilisk_cupy.constants import PI
+
 from basilisk_cupy import BoundaryConditions, CartesianGrid, CellField, FaceField
 from basilisk_cupy.interface.fractions import fraction
 from basilisk_cupy.interface.vof import VOFInterface, VOFTracer, vof_advection
@@ -34,7 +36,7 @@ def velocity(grid, t):
     """Face velocity from the vertex stream function (exactly divergence-free for the face difference)."""
     xp = grid.xp
     xv, yv = xp.meshgrid(grid.faces(0), grid.faces(1), indexing="ij")
-    psi = -1.5 * math.sin(2.0 * math.pi * t / T) * xp.sin(math.pi * (xv + 0.5)) * xp.sin(math.pi * (yv + 0.5)) / math.pi
+    psi = -1.5 * math.sin(2.0 * PI * t / T) * xp.sin(PI * (xv + 0.5)) * xp.sin(PI * (yv + 0.5)) / PI
     h = float(grid.h[0])
     return FaceField(grid, [-1.0 * (psi[:, 1:] - psi[:, :-1]) / h, 1.0 * (psi[1:, :] - psi[:-1, :]) / h])
 

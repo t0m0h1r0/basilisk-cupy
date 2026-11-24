@@ -158,7 +158,8 @@ class CenteredNS:
             self.uf = prediction(self.u, self.g, dt)
             self._apply_uf_bc(self.uf)
             self.mgpf = project(self.uf, self.pf, self.alpha, dt / 2.0, ops=self.ops,
-                                nrelax=self.mgpf.nrelax or 4, tolerance=self.tolerance)
+                                nrelax=self.mgpf.nrelax or 4, tolerance=self.tolerance,
+                                basilisk_tolerance=True)
             self._apply_uf_bc(self.uf)
             advection(list(self.u), self.uf, dt, list(self.g), ops=self.ops)
 
@@ -180,7 +181,8 @@ class CenteredNS:
 
         self._run_hooks("projection")
         self.mgp = project(self.uf, self.p, self.alpha, dt, ops=self.ops,
-                           nrelax=self.mgp.nrelax or 4, tolerance=self.tolerance)
+                           nrelax=self.mgp.nrelax or 4, tolerance=self.tolerance,
+                           basilisk_tolerance=True)
         self._apply_uf_bc(self.uf)
         self.centered_gradient()
         self.correction(dt)

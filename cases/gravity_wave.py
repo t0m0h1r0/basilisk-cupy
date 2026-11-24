@@ -13,6 +13,8 @@ from __future__ import annotations
 
 import argparse
 import math
+
+from basilisk_cupy.constants import PI
 from pathlib import Path
 
 from basilisk_cupy import BoundaryConditions, CartesianGrid, CellField
@@ -42,7 +44,7 @@ def run(n: int, backend: str = "numpy", log=None, tolerance: float = 1e-6, vof_f
     xp = grid.xp
     walls = ("left", "right", "bottom", "top")
     ns = CenteredNS(grid, uf_normal={w: 0.0 for w in walls}, tolerance=tolerance)
-    f = CellField.from_interior(grid, fraction(grid, lambda x, y: y - 0.01 * xp.cos(2.0 * math.pi * x)),
+    f = CellField.from_interior(grid, fraction(grid, lambda x, y: y - 0.01 * xp.cos(2.0 * PI * x)),
                                 BoundaryConditions())
     tp = TwoPhase(ns, f, rho1=1.0, rho2=0.1, mu1=0.0182571749236, mu2=0.0182571749236, vof_first=vof_first)
     tp.add_reduced_gravity(G=(0.0, 50.0))
