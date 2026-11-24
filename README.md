@@ -650,6 +650,16 @@ velocity (parasitic velocity 5.3e-7) and 5.1e-9 in pressure; CLS + CSF keeps par
 of 4e-4, CLS + GFM decays like Basilisk (7.5e-7) with a pressure jump of 4.0030.
 Notes: `docs/notes/22_static_drop_figures.md`.
 
+`cls.reinitialize(n, method="acls2008" | "acls2017")`: ACLS re-initialisation with the normal of a
+reconstructed distance (the polyline through the `psi = 1/2` crossings, in place of fast
+marching). Chiodi & Desjardins' 2017 form differentiates `phi_map = eps ln(psi/(1 - psi))` and
+balances a planar profile to round-off at any angle (the 2008 form leaves 8e-4 to 2e-3); on a
+static circle of 20 cells, 1000 re-initialisations change psi by 1.1e-3 (2008: 3.2e-2). It needs a
+quarter of the pseudo-time step, and in these tests it does not beat the FCCD compression--
+diffusion: translation curvature 0.066 / 0.015 / 0.007 against 0.202 / 0.014 / 0.003 (N = 32 / 64
+/ 128), reversed vortex every 10 steps 0.118 / 0.097 / 0.063 against 0.071 / 0.030 / 0.0083.
+Notes: `docs/notes/24_acls.md`.
+
 ## GPU (cupy)
 
 On the GPU the multigrid hot loops run as fused `cupy.RawKernel`s
