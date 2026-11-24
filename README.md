@@ -650,6 +650,14 @@ velocity (parasitic velocity 5.3e-7) and 5.1e-9 in pressure; CLS + CSF keeps par
 of 4e-4, CLS + GFM decays like Basilisk (7.5e-7) with a pressure jump of 4.0030.
 Notes: `docs/notes/22_static_drop_figures.md`.
 
+`TwoPhase(..., pressure_jump=True)` puts the ghost-fluid jump on the VOF interface: phases from the
+side of the PLIC line the cell centres are on, the crossing `theta` from the PLIC lines, face
+coefficients `1/(theta rho_L + (1 - theta) rho_R)` and the jump (height-function `sigma kappa`,
+reduced gravity) as the face acceleration. Stable up to density ratio 1000 with tension.h's time
+step; capillary wave 0.1362 / 0.0215 / 0.00668 / 0.00159 (iforce.h 0.1386 / 0.0243 / 0.00638 /
+0.00232), gravity wave 0.1272 / 0.0287 / 0.00701 / 0.00483 (0.1267 / 0.0318 / 0.00809 / 0.00456)
+at 8 / 16 / 32 / 64 points per wavelength. Notes: `docs/notes/23_vof_gfm.md`.
+
 ## GPU (cupy)
 
 On the GPU the multigrid hot loops run as fused `cupy.RawKernel`s

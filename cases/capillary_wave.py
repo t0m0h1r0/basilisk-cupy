@@ -72,7 +72,7 @@ def run(n: int, backend: str = "numpy", tolerance: float = 1e-6, interface: str 
     else:
         f = CellField.from_interior(grid, fraction(grid, lambda x, y: y - 0.01 * xp.cos(2.0 * PI * x)),
                                     BoundaryConditions())
-        tp = TwoPhase(ns, f, rho1=1.0, rho2=1.0, mu1=MU, mu2=MU, vof_first=True)
+        tp = TwoPhase(ns, f, rho1=1.0, rho2=1.0, mu1=MU, mu2=MU, vof_first=True, **cls_kw)
     tp.add_surface_tension(1.0)
     times = event_times()
     amps = []
