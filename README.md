@@ -670,6 +670,15 @@ interface is curved). In flows the gain is small: capillary wave 0.183 / 0.0496 
 2nd-order heights let the static drop (density ratio 100) decay to 1e-11 with tension.h's step.
 Notes: `docs/notes/25_height_curvature.md`.
 
+`cls.reinitialize(n, method="acls-fccd")`: the 2008 ACLS flux `(eps grad psi . n - psi (1 - psi)) n` with
+FCCD face operators (no logarithm, so CCD can be used). On a static circle of 20 cells, 1000
+re-initialisations change psi by 7.2e-4 (compression--diffusion 1.1e-3, 2nd-order ACLS 2008 3.2e-2),
+explicit pseudo-steps are stable up to twice the usual step; backward Euler by defect correction
+(2nd-order `div(eps n_a^2 grad)`, normals frozen) converges only up to four times. With the GFM drop
+(density ratio 100) the grid-scale capillary mode of docs/notes/21 is removed by compression--diffusion
+(isotropic diffusion), not by ACLS (diffusion along `n` only). Figures: `docs/figures/reinit_*.png`.
+Notes: `docs/notes/26_acls_fccd.md`.
+
 `TwoPhaseCLS(..., implicit_tension=theta)`: semi-implicit surface tension (Hysing 2006, isotropic
 surface Laplacian) on the transport velocity: after the projection each component of `uf` solves
 `u/alpha - div(theta dt^2 sigma |grad psi| grad u) = u*/alpha` (conjugate gradients on the face grid)
