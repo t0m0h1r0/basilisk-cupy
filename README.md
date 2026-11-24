@@ -704,6 +704,12 @@ Inviscid, VOF's transport damps the wave by 2.9 % per period and CLS's by 0.6 %:
 layer (sqrt(2 nu / omega) = 0.057, 0.9 / 1.8 cells) is under-resolved, and VOF's numerical dissipation
 happens to make up for it. Figure: `docs/figures/capwave_damping.png`. Notes: `docs/notes/29_capwave_damping.md`.
 
+Confirmed by scaling the viscosity (x0.5 / 1 / 2 / 4) at 16 / 32 / 64 points per wavelength against the normal
+mode of two identical viscous fluids (`cases/capwave_modes.py`, which matches Prosperetti at the original
+viscosity): the CLS damping-rate error depends on delta / h alone (-22 % at 0.65, -5.5 % / -4.8 % at 1.30
+from two different grids, within 1 % above 2.5), the period error on the points per wavelength alone.
+Figure: `docs/figures/capwave_layer.png`. Notes: `docs/notes/30_vorticity_layer.md`.
+
 ## GPU (cupy)
 
 On the GPU the multigrid hot loops run as fused `cupy.RawKernel`s
