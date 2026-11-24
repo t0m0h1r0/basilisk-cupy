@@ -736,6 +736,14 @@ viscosity the model gives `a <= 4 + 2 d dt`. Viscous operators alone: projected 
 fd2 and the CCD split form (E/E0 1.2e-3 after 40 steps), grows with the layered D1 D1 form (7.8).
 Figure: `docs/figures/coupled_stability.png`. Notes: `docs/notes/33_coupled_stability.md`.
 
+`CenteredNS(..., coupled_iterations=K)` computes the new acceleration first and solves the viscosity on
+`u + dt g`, `g` from the new acceleration and the latest pressure, then projects (K outer iterations).
+As the model predicts, the viscosity then raises the stable step instead of lowering it (static drop,
+equal densities, N = 64, multiples of tension.h's step: 1.44-1.66 / 1.66-1.88 / 2.09-2.31 / 2.53-2.75 at
+mu = 0 / 0.01 / 0.1 / 1, against 1.60-1.65 / 1.40-1.45 / 1.15-1.20 / 1.00-1.05), and N = 128 does not lower
+it; the accuracy is unchanged and the capillary wave runs at four times the step. Not at density ratio 100.
+Figure: `docs/figures/coupled_viscous.png`. Notes: `docs/notes/34_coupled_viscous.md`.
+
 ## GPU (cupy)
 
 On the GPU the multigrid hot loops run as fused `cupy.RawKernel`s
