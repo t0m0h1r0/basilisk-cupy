@@ -40,13 +40,15 @@ def _fd_curvature(psi):
 
 
 def growth(n: int, rho2: float, factor: float, steps: int = 800, mu: float = 0.1, curvature: str = "ccd",
-           backend: str = "numpy", **tp_kw):
+           backend: str = "numpy", eps_factor: float | None = None, cls_kw: dict | None = None, **tp_kw):
     """``tp_kw`` go to :class:`TwoPhaseCLS` (e.g. ``reinit_every=1, reinit_method="compression"``)."""
     grid = CartesianGrid((n, n), origin=(-0.5, -0.5), backend=backend)
     xp = grid.xp
     ns = CenteredNS(grid, uf_normal={w: 0.0 for w in ("left", "right", "bottom", "top")}, tolerance=1e-8)
     x, y = grid.meshgrid()
-    cls = CLSInterface.from_level_set(grid, 0.25 - xp.sqrt(x * x + y * y), BoundaryConditions())
+    cls = CLSInterface.from_level_set(grid, 0.25 - xp.sqrt(x * x + y * y), BoundaryConditions(),
+                                      eps=None if eps_factor is None else eps_factor * float(grid.h[0]),
+                                      **(cls_kw or {}))
     if curvature == "fd":
         cls.curvature = lambda **kw: _fd_curvature(cls.psi)
     tp = TwoPhaseCLS(ns, cls, rho1=1.0, rho2=rho2, mu1=mu, mu2=mu, pressure_jump=True,
