@@ -1008,3 +1008,9 @@ Density-ratio projection with FCCD (`docs/notes/55_density_ratio_fccd.md`, manuf
 smooth form `p - H j_ext` is 4th order at equal densities (residual 1.3e-4 -> 5.3e-7, N = 32 -> 128) but does not
 converge from a density ratio of 10; fd2's GFM is 2nd order at any ratio; switching the face gradient to fd2 near
 the interface does not repair FCCD. A phase-wise closure of the CCD line systems (or the paper's HFE) is needed.
+
+Phase 2, static drop compared three ways (`docs/notes/56_phase2_static.md`, `cases/phase2_static.py`): Basilisk's VOF
++ tension.h, `CenteredNS` + CLS/GFM and `TwoPhaseIMEX`, density ratios 1 to 1000, N = 32 and 64, to t = 1. All are
+stable; the GFM jump error is 3.5-3.9 times smaller than VOF's (0.075 % against 0.29 % at N = 64; the paper's CSF
+path reports 1.23 %), the peak parasitic velocity 25-90 times smaller, while VOF's decays further by t = 1; the
+two time integrations differ by 1.5e-4 or less in the jump.
