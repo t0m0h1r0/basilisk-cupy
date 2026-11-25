@@ -59,6 +59,7 @@ class IMEXTableau:
     gamma: float
     imag_limit: float  # explicit part, measured from the stability function
     real_limit: float
+    bI: tuple | None = None  # implicit weights (None: the last row of AI, stiffly accurate)
 
     @property
     def stages(self) -> int:
@@ -67,6 +68,62 @@ class IMEXTableau:
     @property
     def explicit_stiffly_accurate(self) -> bool:
         return np.allclose(self.AE[-1], self.bE)
+
+    @property
+    def implicit_weights(self) -> tuple:
+        return tuple(self.AI[-1]) if self.bI is None else tuple(self.bI)
+
+    @property
+    def implicit_stiffly_accurate(self) -> bool:
+        return np.allclose(self.AI[-1], self.implicit_weights)
+
+
+def axis_limits(AE, bE) -> tuple[float, float]:
+    """Imaginary- and real-axis stability limits of an explicit tableau (``|R(z)| <= 1`` from 0 outwards)."""
+    A = np.array(AE, float)
+    b = np.array(bE, float)
+    s = len(b)
+
+    def R(z):
+        return 1 + z * b @ np.linalg.solve(np.eye(s) - z * A, np.ones(s))
+
+    out = []
+    for direction in (1j, -1.0):
+        x, step = 0.0, 1e-3
+        while x < 10.0 and abs(R((x + step) * direction)) <= 1.0 + 1e-12:
+            x += step
+        out.append(round(x, 3))
+    return out[0], out[1]
+
+
+def _make(name, AE, AI, bE, c, gamma, bI=None) -> IMEXTableau:
+    imag, real = axis_limits(AE, bE)
+    return IMEXTableau(name, AE, AI, bE, c, gamma, imag, real, bI)
+
+
+def _ars111() -> IMEXTableau:
+    """Forward--backward Euler (Ascher, Ruuth & Spiteri 1997, section 2.1)."""
+    return _make("ars111", ((0, 0), (1, 0)), ((0, 0), (0, 1)), (1, 0), (0, 1), 1.0)
+
+
+def _ars121() -> IMEXTableau:
+    """Forward Euler with the implicit midpoint rule (ARS 1997, section 2.2): not stiffly accurate."""
+    return _make("ars121", ((0, 0), (0.5, 0)), ((0, 0), (0, 0.5)), (0, 1), (0, 0.5), 0.5, bI=(0, 1))
+
+
+def _ars222() -> IMEXTableau:
+    """L-stable SDIRK2 with a 2nd-order explicit part (ARS 1997, section 2.6)."""
+    g = 1.0 - 1.0 / np.sqrt(2.0)
+    d = 1.0 - 1.0 / (2.0 * g)
+    return _make("ars222", ((0, 0, 0), (g, 0, 0), (d, 1 - d, 0)), ((0, 0, 0), (0, g, 0), (0, 1 - g, g)),
+                 (d, 1 - d, 0), (0, g, 1), g)
+
+
+def _ars233() -> IMEXTableau:
+    """3rd-order SDIRK, gamma = (3 + sqrt 3)/6 (ARS 1997, section 2.4): not stiffly accurate."""
+    g = (3.0 + np.sqrt(3.0)) / 6.0
+    return _make("ars233", ((0, 0, 0), (g, 0, 0), (g - 1, 2 * (1 - g), 0)), ((0, 0, 0), (0, g, 0), (0, 1 - 2 * g, g)),
+                 (0, 0.5, 0.5), (0, g, 1 - g), g, bI=(0, 0.5, 0.5))
 
 
 def _ars343() -> IMEXTableau:
@@ -87,7 +144,8 @@ def _ars443() -> IMEXTableau:
     return IMEXTableau("ars443", AE, AI, AE[-1], (0, 0.5, 2 / 3, 0.5, 1), 0.5, 1.569, 2.142)
 
 
-TABLEAUX = {"ars343": _ars343, "ars443": _ars443}
+TABLEAUX = {"ars111": _ars111, "ars121": _ars121, "ars222": _ars222, "ars233": _ars233, "ars343": _ars343,
+            "ars443": _ars443}
 
 
 def stability_function(tableau: IMEXTableau, z):
@@ -116,7 +174,9 @@ class IMEXRKNS(IMEXBDF2NS):
             return float("inf")
         imag, real = spectrum(self.u, self.uf)
         t = self.tableau
-        limits = [t.imag_limit / imag if imag > 0 else float("inf"),
+        # no stable interval on the imaginary axis (ars111, ars121, ars222): as EXT2 in IMEXBDF2NS, the
+        # non-dissipative convection is then held stable by viscosity only and no bound is applied
+        limits = [t.imag_limit / imag if imag > 0 and t.imag_limit > 0.01 else float("inf"),
                   t.real_limit / real if real > 0 else float("inf")]
         return self.safety * min(limits)
 
@@ -197,10 +257,25 @@ class IMEXRKNS(IMEXBDF2NS):
                                      for ax in range(ndim)], p_n, cdt)
             else:
                 self._project_stage(ustar, g_n, p_n, cdt)
-            if i < t.stages - 1 or not t.explicit_stiffly_accurate:
+            if i < t.stages - 1 or not t.explicit_stiffly_accurate or not t.implicit_stiffly_accurate:
                 C.append(zero if self.stokes else self.convection.tendency(self.u, self.uf))
 
-        if not t.explicit_stiffly_accurate and not self.stokes and self.face_native:
+        if not t.implicit_stiffly_accurate:
+            # u^{n+1} = u^n + dt sum_j (bE_j C_j + bI_j V_j) (+ dt g^n, removed again by the IPC projection)
+            if self.face_native:
+                raise NotImplementedError("face_native with a tableau whose implicit part is not stiffly accurate")
+            bI = t.implicit_weights
+            final = []
+            for ax in range(ndim):
+                v = u_n[ax] + dt * g_n[ax]
+                for j in range(t.stages):
+                    if t.bE[j] and not self.stokes:
+                        v = v + dt * t.bE[j] * C[j][ax]
+                    if bI[j]:
+                        v = v + dt * bI[j] * V[j][ax]
+                final.append(v)
+            self._project_stage(final, g_n, p_n, dt)
+        elif not t.explicit_stiffly_accurate and not self.stokes and self.face_native:
             s = t.stages - 1
             inc = [sum(dt * (t.bE[j] - t.AE[s][j]) * C[j][ax] for j in range(t.stages) if t.bE[j] != t.AE[s][j])
                    for ax in range(ndim)]

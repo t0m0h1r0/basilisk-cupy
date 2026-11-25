@@ -1,6 +1,7 @@
 """TwoPhaseFlow's standard two-phase step as one combination (paper §11b1, docs/notes/50).
 
-:class:`TwoPhaseIMEX` is :class:`IMEXBDF2NS` with a :class:`TwoPhaseCLS` attached through the hook stages,
+:class:`TwoPhaseIMEX` is :class:`IMEXMultistepNS` (default scheme ``sbdf2`` = :class:`IMEXBDF2NS`) with a
+:class:`TwoPhaseCLS` attached through the hook stages,
 with the paper's choices fixed where this port has them:
 
 ====  ==========================================  ====================================================
@@ -37,93 +38,61 @@ from ..discretization.ccd import FCCDFaceComplex
 from ..interface.cls import CLSInterface
 from ..interface.cls_two_phase import TwoPhaseCLS
 from ..terms.viscous import CCDViscosity
-from .imex_bdf2 import IMEXBDF2NS
+from .imex_multistep import IMEXMultistepNS
+from .schemes import EXPLICIT_RK, ab_beta
 
 WALLS = ("left", "right", "bottom", "top")
 _SIDE_AXIS = {"left": 0, "right": 0, "bottom": 1, "top": 1}
+TRANSPORTS = ("frozen", "ab2", "ab3", "pc")
 
 
-class TwoPhaseIMEX(IMEXBDF2NS):
-    def __init__(self, grid, phi0, *, rho1: float = 1.0, rho2: float = 1.0, mu1: float = 0.0, mu2: float = 0.0,
-                 sigma: float = 0.0, gravity=None, periodic: tuple = (), faces: str = "fd2",
-                 convection: str = "central", eps: float | None = None, reinit_every: int = 0,
-                 reinit_method: str = "xi_sdf", curvature_kw: dict | None = None, jump_mode: str | None = None,
-                 capillary_dt_factor: float | None = None, transport: str = "projected", **kw) -> None:
-        """``phi0``: cell-centred signed distance, positive in phase 1 (``psi = 1``). ``gravity``: ``(G, Z)`` of
-        the reduced gravity (``G`` the acceleration vector). Walls on the non-periodic sides (``uf`` normal
-        zero there). Other keywords go to :class:`IMEXBDF2NS` (``fixed_dt``, ``tolerance``, ``DT``, ...)."""
-        if transport not in ("projected", "ab2"):
-            raise ValueError("transport is 'projected' or 'ab2'")
-        if faces not in ("fd2", "fccd"):
-            raise ValueError("faces is 'fd2' or 'fccd'")
-        if faces == "fccd" and rho1 != rho2:
-            raise NotImplementedError("faces='fccd' solves for p - H j_ext, which assumes equal densities "
-                                      "(docs/notes/32); use faces='fd2' with a density ratio")
-        periodic = tuple(periodic)
-        ops = FCCDFaceComplex() if faces == "fccd" else None
-        kw.setdefault("uf_normal", {w: 0.0 for w in WALLS if _SIDE_AXIS[w] not in periodic})
-        kw.setdefault("viscous", CCDViscosity())
-        super().__init__(grid, periodic=periodic, ops=ops, convection=self._convection(convection), **kw)
-        bc = BoundaryConditions()
-        for ax in range(grid.ndim):
-            for side in (0, 1):
-                bc.set((ax, side), Periodic() if ax in periodic else Neumann(0.0))
-        self.cls = CLSInterface.from_level_set(grid, phi0, bc, eps=eps, ops=FCCDFaceComplex(order=6),
-                                               divergence="full" if faces == "fccd" else "fccd")
-        if jump_mode is None:
-            jump_mode = "smooth" if faces == "fccd" else "sharp"
-        self.tp = TwoPhaseCLS(self, self.cls, rho1=rho1, rho2=rho2, mu1=mu1, mu2=mu2, pressure_jump=True,
-                              jump_mode=jump_mode, reinit_every=reinit_every, reinit_method=reinit_method,
-                              curvature_kw=curvature_kw, capillary_dt_factor=capillary_dt_factor)
-        if sigma:
-            self.tp.add_surface_tension(sigma)
-        if gravity is not None:
-            G, Z = gravity
-            self.tp.add_reduced_gravity(G, Z)
-        self.faces, self.convection_name = faces, convection
-        self.transport = transport
-        self._uf_latest = self._uf_transport_prev = None  # u_f^n and u_f^{n-1} at the next transport
-        if transport == "ab2":
-            # registered after TwoPhaseCLS's transport hook, so it runs first; the second one restores uf
-            self.on("vof", self._extrapolate_uf)
-            self.on("vof", self._restore_uf, after=True)
-            self.on("end_timestep", self._remember_uf, after=True)
+def _check_faces(faces: str, rho1: float, rho2: float) -> None:
+    if faces not in ("fd2", "fccd"):
+        raise ValueError("faces is 'fd2' or 'fccd'")
+    if faces == "fccd" and rho1 != rho2:
+        raise NotImplementedError("faces='fccd' solves for p - H j_ext, which assumes equal densities "
+                                  "(docs/notes/32); use faces='fd2' with a density ratio")
 
-    # -- AB2 transport velocity --------------------------------------------------------------------
-    def _extrapolate_uf(self, ns) -> None:
-        self._uf_saved = None
-        if self._uf_transport_prev is None or not self.clock.dt:
-            return
-        from ..fields import FaceField  # noqa: PLC0415
 
-        w = self.clock.dt / self._dt_prev
-        self._uf_saved = self.uf
-        self.uf = FaceField(self.grid, [(1.0 + 0.5 * w) * self.uf[ax] - 0.5 * w * self._uf_transport_prev[ax]
-                                        for ax in range(self.grid.ndim)], "uf")
+def _convection(name: str):
+    if name == "central":
+        return None  # IMEXBDF2NS's CentralFluxConvection on the shared face operators
+    if name == "fuccd":
+        from ..terms.convection.fuccd import FUCCDConvection  # noqa: PLC0415
 
-    def _restore_uf(self, ns) -> None:
-        if self._uf_saved is not None:
-            self.uf = self._uf_saved
-            self._uf_saved = None
+        return FUCCDConvection(r=4)
+    if name == "uccd6":
+        from ..terms.convection.uccd6 import UCCD6Convection  # noqa: PLC0415
 
-    def _remember_uf(self, ns) -> None:
-        self._uf_transport_prev = self._uf_latest
-        self._uf_latest = [self.uf[ax].copy() for ax in range(self.grid.ndim)]
+        return UCCD6Convection()
+    raise ValueError("convection is 'central', 'fuccd' or 'uccd6'")
 
-    def _convection(self, name: str):
-        if name == "central":
-            return None  # IMEXBDF2NS's CentralFluxConvection on the shared face operators
-        if name == "fuccd":
-            from ..terms.convection.fuccd import FUCCDConvection  # noqa: PLC0415
 
-            return FUCCDConvection(r=4)
-        if name == "uccd6":
-            from ..terms.convection.uccd6 import UCCD6Convection  # noqa: PLC0415
+def _attach_two_phase(ns, phi0, *, periodic, faces, rho1, rho2, mu1, mu2, sigma, gravity, eps, reinit_every,
+                      reinit_method, curvature_kw, jump_mode, capillary_dt_factor) -> None:
+    """CLS (FCCD face values of order 6, corrected divergence) and TwoPhaseCLS with the GFM pressure jump."""
+    grid = ns.grid
+    bc = BoundaryConditions()
+    for ax in range(grid.ndim):
+        for side in (0, 1):
+            bc.set((ax, side), Periodic() if ax in periodic else Neumann(0.0))
+    ns.cls = CLSInterface.from_level_set(grid, phi0, bc, eps=eps, ops=FCCDFaceComplex(order=6),
+                                         divergence="full" if faces == "fccd" else "fccd")
+    if jump_mode is None:
+        jump_mode = "smooth" if faces == "fccd" else "sharp"
+    ns.tp = TwoPhaseCLS(ns, ns.cls, rho1=rho1, rho2=rho2, mu1=mu1, mu2=mu2, pressure_jump=True,
+                        jump_mode=jump_mode, reinit_every=reinit_every, reinit_method=reinit_method,
+                        curvature_kw=curvature_kw, capillary_dt_factor=capillary_dt_factor)
+    if sigma:
+        ns.tp.add_surface_tension(sigma)
+    if gravity is not None:
+        G, Z = gravity
+        ns.tp.add_reduced_gravity(G, Z)
 
-            return UCCD6Convection()
-        raise ValueError("convection is 'central', 'fuccd' or 'uccd6'")
 
-    # -- diagnostics -----------------------------------------------------------------------------
+class _TwoPhaseMixin:
+    """Diagnostics shared by the two-phase steppers."""
+
     @property
     def psi(self):
         return self.cls.psi.interior
@@ -150,3 +119,139 @@ class TwoPhaseIMEX(IMEXBDF2NS):
     def max_velocity(self) -> float:
         xp = self.grid.xp
         return max(float(xp.max(xp.abs(c.interior))) for c in self.u)
+
+
+
+class TwoPhaseIMEX(_TwoPhaseMixin, IMEXMultistepNS):
+    def __init__(self, grid, phi0, *, rho1: float = 1.0, rho2: float = 1.0, mu1: float = 0.0, mu2: float = 0.0,
+                 sigma: float = 0.0, gravity=None, periodic: tuple = (), faces: str = "fd2",
+                 convection: str = "central", eps: float | None = None, reinit_every: int = 0,
+                 reinit_method: str = "xi_sdf", curvature_kw: dict | None = None, jump_mode: str | None = None,
+                 capillary_dt_factor: float | None = None, transport: str = "frozen",
+                 psi_integrator: str = "ssprk3", scheme="sbdf2", **kw) -> None:
+        """``phi0``: cell-centred signed distance, positive in phase 1 (``psi = 1``). ``gravity``: ``(G, Z)`` of
+        the reduced gravity (``G`` the acceleration vector). Walls on the non-periodic sides (``uf`` normal
+        zero there). ``scheme``: the momentum's multistep IMEX scheme (:class:`~.schemes.MultistepScheme`,
+        default ``"sbdf2"``, the paper's BDF2 + EXT2). Other keywords go to :class:`IMEXMultistepNS`
+        (``fixed_dt``, ``tolerance``, ``DT``, ...).
+
+        ``transport``: the velocity that moves ``psi`` over the step (frozen through the integrator's stages):
+
+        * ``"frozen"`` (``"projected"``): the paper's ``u_f^n`` (first order in time);
+        * ``"ab2"`` / ``"ab3"``: Adams--Bashforth mean of ``u_f^n, u_f^{n-1}, ...`` over the step (variable steps);
+        * ``"pc"``: predictor--corrector (Heun on the kinematics): the step is taken with ``u_f^n``, then
+          repeated from the same state with ``(u_f^n + u_f^{n+1})/2`` (twice the cost).
+
+        ``psi_integrator``: ``"ssprk3"`` (the paper's TVD-RK3), ``"ssprk2"``, ``"rk4"``, ``"heun3"``, ``"euler"``."""
+        if transport == "projected":
+            transport = "frozen"
+        if transport not in TRANSPORTS:
+            raise ValueError(f"transport is one of {TRANSPORTS}")
+        if psi_integrator not in EXPLICIT_RK:
+            raise ValueError(f"psi_integrator is one of {sorted(EXPLICIT_RK)}")
+        periodic = tuple(periodic)
+        _check_faces(faces, rho1, rho2)
+        kw.setdefault("uf_normal", {w: 0.0 for w in WALLS if _SIDE_AXIS[w] not in periodic})
+        kw.setdefault("viscous", CCDViscosity())
+        super().__init__(grid, scheme=scheme, periodic=periodic, ops=FCCDFaceComplex() if faces == "fccd" else None,
+                         convection=_convection(convection), **kw)
+        _attach_two_phase(self, phi0, periodic=periodic, faces=faces, rho1=rho1, rho2=rho2, mu1=mu1, mu2=mu2,
+                          sigma=sigma, gravity=gravity, eps=eps, reinit_every=reinit_every,
+                          reinit_method=reinit_method, curvature_kw=curvature_kw, jump_mode=jump_mode,
+                          capillary_dt_factor=capillary_dt_factor)
+        self.cls.integrator = psi_integrator
+        self.faces, self.convection_name = faces, convection
+        self.transport, self.psi_integrator = transport, psi_integrator
+        self._uf_hist: list = []  # u_f^n, u_f^{n-1}, ... (after the steps taken)
+        self._uf_saved = None
+        self._pc_velocity = None
+        # registered after TwoPhaseCLS's transport hook, so it runs first; the second one restores uf
+        self.on("vof", self._transport_velocity)
+        self.on("vof", self._restore_uf, after=True)
+        self.on("end_timestep", self._remember_uf, after=True)
+
+    # -- transport velocity --------------------------------------------------------------------------
+    def _transport_velocity(self, ns) -> None:
+        from ..fields import FaceField  # noqa: PLC0415
+
+        self._uf_saved = None
+        if not self.clock.dt:
+            return
+        nd = self.grid.ndim
+        if self._pc_velocity is not None:
+            faces = self._pc_velocity
+        elif self.transport in ("ab2", "ab3") and self._uf_hist:
+            k = min(int(self.transport[-1]), len(self._uf_hist))
+            if k == 1:
+                return
+            steps = [self.clock.dt] + self._dts[:k - 1]
+            offsets = [sum(steps[:i + 1]) / steps[0] for i in range(k)]
+            w = ab_beta(k, offsets)
+            faces = [sum(float(w[j]) * self._uf_hist[j][ax] for j in range(k)) for ax in range(nd)]
+        else:
+            return
+        self._uf_saved = self.uf
+        self.uf = FaceField(self.grid, faces, "uf")
+
+    def _restore_uf(self, ns) -> None:
+        if self._uf_saved is not None:
+            self.uf = self._uf_saved
+            self._uf_saved = None
+
+    def _remember_uf(self, ns) -> None:
+        self._uf_hist = ([[self.uf[ax].copy() for ax in range(self.grid.ndim)]] + self._uf_hist)[:3]
+
+    # -- predictor--corrector ------------------------------------------------------------------------
+    def step(self) -> None:
+        if self.transport != "pc":
+            return super().step()
+        snap = self._snapshot()
+        uf_n = [self.uf[ax].copy() for ax in range(self.grid.ndim)]
+        super().step()
+        uf_pred = [self.uf[ax].copy() for ax in range(self.grid.ndim)]
+        self._restore(snap)
+        self._pc_velocity = [0.5 * (uf_n[ax] + uf_pred[ax]) for ax in range(self.grid.ndim)]
+        try:
+            super().step()
+        finally:
+            self._pc_velocity = None
+
+    def _snapshot(self) -> dict:
+        import copy  # noqa: PLC0415
+
+        nd = self.grid.ndim
+
+        def faces(f):
+            return None if f is None else [f[ax].copy() for ax in range(nd)]
+
+        return {
+            "cells": [c.data.copy() for c in (*self.u, *self.g, self.p, self.pf, self.dp, self.cls.psi)],
+            "uf": faces(self.uf), "alpha": faces(self.alpha), "mu": faces(self.mu), "a": faces(self.a),
+            "a_is_constant": self.a_is_constant,
+            "rho": self.rho.copy() if hasattr(self.rho, "copy") else self.rho,
+            "clock": copy.deepcopy(self.clock), "dtmax": self.dtmax,
+            "lists": {k: list(getattr(self, k)) for k in ("_u_hist", "_e_hist", "_v_hist", "_dts", "_uf_hist")},
+            "prev": (self._u_prev, self._c_prev, self._dt_prev),
+            "tp": (self.tp._steps, self.tp.j_ext),
+        }
+
+    def _restore(self, s: dict) -> None:
+        from ..fields import FaceField  # noqa: PLC0415
+
+        nd = self.grid.ndim
+        for c, d in zip((*self.u, *self.g, self.p, self.pf, self.dp, self.cls.psi), s["cells"]):
+            c.data[...] = d
+        self.uf = FaceField(self.grid, [a.copy() for a in s["uf"]], "uf")
+        for name in ("alpha", "mu", "a"):
+            if s[name] is not None:
+                f = getattr(self, name)
+                for ax in range(nd):
+                    f[ax] = s[name][ax].copy()
+        self.a_is_constant = s["a_is_constant"]
+        self.rho = s["rho"]
+        self.clock = s["clock"]
+        self.dtmax = s["dtmax"]
+        for k, v in s["lists"].items():
+            setattr(self, k, list(v))
+        self._u_prev, self._c_prev, self._dt_prev = s["prev"]
+        self.tp._steps, self.tp.j_ext = s["tp"]
