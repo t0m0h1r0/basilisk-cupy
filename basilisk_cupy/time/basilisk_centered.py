@@ -50,7 +50,8 @@ class CenteredNS:
                  uf_normal: dict | None = None,
                  mu: float | FaceField | None = None,
                  cfl: float = 0.8, DT: float = 1e30, stokes: bool = False,
-                 ops: FaceComplex | None = None, tolerance: float = TOLERANCE, viscous=None) -> None:
+                 ops: FaceComplex | None = None, tolerance: float = TOLERANCE, viscous=None,
+                 coupled_iterations: int = 0, coupled_tolerance: float | None = None) -> None:
         self.grid = grid
         self.ops = ops or FD2FaceComplex()
         self.periodic = tuple(periodic)
@@ -58,6 +59,15 @@ class CenteredNS:
         #: Implicit viscous solver with a ``solve(u, mu, rho, dt, tolerance=)`` method (e.g.
         #: :class:`~basilisk_cupy.terms.viscous.CCDViscosity`); ``None``: Basilisk's ``viscosity()``.
         self.viscous = viscous
+        #: 0: Basilisk's splitting (the predictor damps the previous step's g with the viscosity and removes
+        #: it; the new acceleration enters with the projection). K >= 1: the new acceleration is computed
+        #: first and K outer iterations solve the viscosity on ``u + dt g`` with ``g`` from the new
+        #: acceleration and the latest pressure, then project (docs/notes/34).
+        self.coupled_iterations = int(coupled_iterations)
+        #: With K >= 1: stop the outer iterations once the velocity change they make, ``dt max |g_{k+1} -
+        #: g_k|`` (from the second iteration on), falls below this (``coupled_iterations`` is then the
+        #: maximum); ``None``: always K.
+        self.coupled_tolerance = coupled_tolerance
         self.clock = Clock()
 
         ubcs = vector_bcs(grid.ndim, self.periodic, normal, tangential)
@@ -179,6 +189,12 @@ class CenteredNS:
             advection(list(self.u), self.uf, dt, list(self.g), ops=self.ops)
 
         self._run_hooks("viscous_term")
+        if self.coupled_iterations > 0:
+            self._coupled_step(dt)
+            self._run_hooks("end_timestep")
+            c.t = c.tnext
+            c.i += 1
+            return
         if self.mu is not None:
             self.correction(dt)
             if self.viscous is None:
@@ -208,6 +224,54 @@ class CenteredNS:
         self._run_hooks("end_timestep")
         c.t = c.tnext
         c.i += 1
+
+    def _coupled_step(self, dt: float) -> None:
+        """Viscosity, acceleration and projection solved together by outer iterations.
+
+        The acceleration ``a`` of the new step (e.g. the GFM jump of the interface just moved) is
+        computed before the viscosity; each iteration solves ``(I - dt/rho L) w = u_adv + dt g``,
+        ``g = face_to_cell(a - alpha grad p)`` with the latest pressure, sets ``u = w - dt g``,
+        projects ``interp(u) + dt a`` and updates ``g``. At convergence
+        ``(I - dt/rho L) u^{n+1} = u_adv + dt (a - alpha grad p^{n+1})`` with ``div u^{n+1} = 0``: the
+        viscosity acts on the velocity the new force and pressure produce. With ``u_adv = 0`` and ``a``
+        balanced by ``grad p`` the iterate stays zero (well-balanced)."""
+        if not self.a_is_constant:
+            for ax in range(self.grid.ndim):
+                self.a[ax] = 0.0
+        self._run_hooks("acceleration")
+        self.centered_gradient()
+        u_adv = [c.interior.copy() for c in self.u]
+        #: max |g_{k+1} - g_k| of every outer iteration of the last step (convergence diagnostics)
+        self.coupled_history = []
+        for _ in range(self.coupled_iterations):
+            g_prev = [c.interior.copy() for c in self.g]
+            for comp, v in zip(self.u, u_adv):
+                comp.interior = v.copy()
+            self.u.fill_ghosts()
+            if self.mu is not None:
+                self.correction(dt)
+                if self.viscous is None:
+                    self.mgu = viscosity(self.u, self.mu, self.rho, dt, nrelax=self.mgu.nrelax or 4,
+                                         tolerance=self.tolerance)
+                else:
+                    self.mgu = self.viscous.solve(self.u, self.mu, self.rho, dt, tolerance=self.tolerance)
+                self.correction(-dt)
+            self.u.fill_ghosts()
+            self.uf = FaceField(self.grid, [self.ops.interp_f(self.u[ax], ax) + dt * self.a[ax]
+                                            for ax in range(self.grid.ndim)], "uf")
+            self._apply_uf_bc(self.uf)
+            self._run_hooks("projection")
+            self.mgp = project(self.uf, self.p, self.alpha, dt, ops=self.ops,
+                               nrelax=self.mgp.nrelax or 4, tolerance=self.tolerance,
+                               basilisk_tolerance=True)
+            self._apply_uf_bc(self.uf)
+            self.centered_gradient()
+            xp = self.grid.xp
+            self.coupled_history.append(max(float(xp.max(xp.abs(c.interior - gp))) for c, gp in zip(self.g, g_prev)))
+            if (self.coupled_tolerance is not None and len(self.coupled_history) >= 2  # the first change is
+                    and dt * self.coupled_history[-1] < self.coupled_tolerance):  # the step's, not the iteration's
+                break
+        self.correction(dt)
 
     def run(self, t_end: float, *, every: Callable[["CenteredNS"], bool | None] | None = None,
             max_steps: int | None = None) -> None:
