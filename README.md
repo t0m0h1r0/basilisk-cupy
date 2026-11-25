@@ -894,3 +894,12 @@ energy-dissipative even with the non-symmetric wall closures, but it lowers the 
 and it does not stabilise the density-ratio-100 mode (|lambda| 1.189 -> 1.157; 7.3 % of that mode's energy lies
 in Q's band, white noise 10.4 %). This damping term is not adopted; the defect correction and the structure-preserving parts of the proposal were not evaluated here. Figure: `docs/figures/split_hyperviscosity.png`.
 Notes: `docs/notes/42_split_residual_eval.md`.
+
+Surface tension as the adjoint of the CLS transport (`cases/adjoint_tension.py`): with the discrete area
+`A = sum |G psi| V` and `mu = sigma dA/dpsi / V`, the face force `F = -psi_f G_f mu` does exactly the work that
+the same face velocity removes from the surface energy (to 1e-14). It is far less accurate than the sharp GFM
+jump (capillary wave, N = 32: -63.9 % damping, -32.8 % frequency against -20.7 % / -5.0 %; the error scales with
+eps k, as the CSF force), and spreading the GFM jump with the CLS transport's own kinematic weights (an adjoint
+pair of width h) also makes it worse (-25.9 % against -16.8 %). What matters is how narrow the kinematics and
+the force are compared with the layer, not the adjoint pairing itself: sharp kinematics with the sharp jump
+gives +3.8 %. Figure: `docs/figures/adjoint_tension.png`. Notes: `docs/notes/43_adjoint_tension.md`.

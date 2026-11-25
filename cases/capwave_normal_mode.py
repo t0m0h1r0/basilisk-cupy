@@ -87,7 +87,7 @@ def run(n, f: float = 1.0, periods: float = 2.0, a: float = 0.01, viscous=None, 
         jump_mode: str = "sharp", DT: float = cw.STEP, profile: bool = False, budget: bool = False,
         eps_factor: float | None = None, cls_kw: dict | None = None, pressure_jump: bool = True,
         vorticity: bool = False, mapping_y=None, stokes: bool = False, plain: bool | None = None,
-        jump_correction: dict | None = None):
+        jump_correction: dict | None = None, tension: str = "gfm"):
     warnings.filterwarnings("ignore")
     nu = cw.MU * f
     s, F = mode(K, 1.0, 1.0, nu, a)
@@ -116,6 +116,10 @@ def run(n, f: float = 1.0, periods: float = 2.0, a: float = 0.01, viscous=None, 
     tp = TwoPhaseCLS(ns, cls, rho1=1.0, rho2=1.0, mu1=nu, mu2=nu, vof_first=True, pressure_jump=pressure_jump,
                      jump_mode=jump_mode, **(cls_kw or {}))
     tp.add_surface_tension(1.0)
+    if tension == "adjoint":
+        from cases.adjoint_tension import attach as adjoint
+
+        adjoint(ns, tp, 1.0)
     if jump_correction is not None:
         from cases.jump_viscous import attach
 

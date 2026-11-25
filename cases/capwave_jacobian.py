@@ -147,12 +147,18 @@ class CapwaveMap:
         x, y = grid.meshgrid()
         ns = CenteredNS(grid, uf_normal={w: 0.0 for w in ("left", "right", "bottom", "top")}, tolerance=tolerance,
                         viscous=kw.pop("viscous", None), ops=kw.pop("ops_ns", None))
-        cls = CLSInterface.from_level_set(grid, y + 0.0 * x, BoundaryConditions(), divergence="fccd",
+        tension = kw.pop("tension", "gfm")
+        cls = CLSInterface.from_level_set(grid, y + 0.0 * x, BoundaryConditions(),
+                                          divergence=kw.pop("divergence", "plain" if tension == "adjoint" else "fccd"),
                                           ops=FCCDFaceComplex(order=6))
         ckw = {"method": "heights"} if curvature == "heights" else {}
         tp = TwoPhaseCLS(ns, cls, rho1=1.0, rho2=1.0, mu1=self.nu, mu2=self.nu, vof_first=True, pressure_jump=True,
                          curvature_kw=ckw, capillary_dt_factor=1e9, jump_mode=kw.pop("jump_mode", "sharp"))
         tp.add_surface_tension(1.0)
+        if tension == "adjoint":
+            from cases.adjoint_tension import attach as adjoint
+
+            adjoint(ns, tp, 1.0)
         if curvature == "exact":
             tp.potentials[0] = lambda t_: t_.sigma * self._sign * exact_linear_curvature(t_)
         hyper = kw.pop("hyper", None)
@@ -161,8 +167,23 @@ class CapwaveMap:
 
             attach(ns, **hyper)
         kin = kw.pop("kinematics", None)
-        if kin == "weights":
+        force_w = kw.pop("force_weights", False)
+        if kin == "weights" or force_w:
             tp._kin_w = kinematic_weights(tp)[1]
+        if force_w:  # the GFM jump spread over the y faces with the kinematic weights (the adjoint pair)
+            jump = tp.potentials[0]
+            tp.potentials.clear()
+            tp.pressure_jump = False
+            hy = float(grid.h[1])
+
+            def spread(_ns):
+                j = jump(tp)  # sigma kappa, constant in each column (exact curvature)
+                jc = j[:, 0]
+                _ns.a_is_constant = False
+                # sign of the GFM face acceleration: alpha j (H_R - H_L)/h on the cut face, liquid above
+                _ns.a[1] = _ns.a[1] + _ns.alpha[1] * jc[:, None] * tp._kin_w[None, :] / hy
+
+            ns.on("acceleration", spread)
         if kin is not None:
             sharp_kinematics(tp, kin)
         self._sign = 1.0
