@@ -47,11 +47,21 @@ TRANSPORTS = ("frozen", "ab2", "ab3", "pc")
 
 
 def _check_faces(faces: str, rho1: float, rho2: float) -> None:
-    if faces not in ("fd2", "fccd"):
-        raise ValueError("faces is 'fd2' or 'fccd'")
+    if faces not in ("fd2", "fccd", "phase-ccd"):
+        raise ValueError("faces is 'fd2', 'fccd' or 'phase-ccd'")
     if faces == "fccd" and rho1 != rho2:
         raise NotImplementedError("faces='fccd' solves for p - H j_ext, which assumes equal densities "
-                                  "(docs/notes/32); use faces='fd2' with a density ratio")
+                                  "(docs/notes/32); use faces='fd2' or 'phase-ccd' with a density ratio")
+
+
+def _face_ops(faces: str):
+    if faces == "fd2":
+        return None
+    if faces == "fccd":
+        return FCCDFaceComplex()
+    from ..discretization.phase_ccd import PhaseCCDFaces  # noqa: PLC0415
+
+    return PhaseCCDFaces(FCCDFaceComplex())
 
 
 def _convection(name: str):
@@ -77,12 +87,16 @@ def _attach_two_phase(ns, phi0, *, periodic, faces, rho1, rho2, mu1, mu2, sigma,
         for side in (0, 1):
             bc.set((ax, side), Periodic() if ax in periodic else Neumann(0.0))
     ns.cls = CLSInterface.from_level_set(grid, phi0, bc, eps=eps, ops=FCCDFaceComplex(order=6),
-                                         divergence="full" if faces == "fccd" else "fccd")
+                                         divergence="fccd" if faces == "fd2" else "full")
     if jump_mode is None:
         jump_mode = "smooth" if faces == "fccd" else "sharp"
     ns.tp = TwoPhaseCLS(ns, ns.cls, rho1=rho1, rho2=rho2, mu1=mu1, mu2=mu2, pressure_jump=True,
                         jump_mode=jump_mode, reinit_every=reinit_every, reinit_method=reinit_method,
-                        curvature_kw=curvature_kw, capillary_dt_factor=capillary_dt_factor)
+                        curvature_kw=curvature_kw, capillary_dt_factor=capillary_dt_factor,
+                        jump_interp="hermite" if faces == "phase-ccd" else "linear")
+    if faces == "phase-ccd":
+        # the cut faces move with the interface: refresh the operator once the properties are set
+        ns.on("properties", lambda _ns: _ns.ops.update(_ns.tp, _ns.alpha), after=True)
     if sigma:
         ns.tp.add_surface_tension(sigma)
     if gravity is not None:
@@ -153,7 +167,7 @@ class TwoPhaseIMEX(_TwoPhaseMixin, IMEXMultistepNS):
         _check_faces(faces, rho1, rho2)
         kw.setdefault("uf_normal", {w: 0.0 for w in WALLS if _SIDE_AXIS[w] not in periodic})
         kw.setdefault("viscous", CCDViscosity())
-        super().__init__(grid, scheme=scheme, periodic=periodic, ops=FCCDFaceComplex() if faces == "fccd" else None,
+        super().__init__(grid, scheme=scheme, periodic=periodic, ops=_face_ops(faces),
                          convection=_convection(convection), **kw)
         _attach_two_phase(self, phi0, periodic=periodic, faces=faces, rho1=rho1, rho2=rho2, mu1=mu1, mu2=mu2,
                           sigma=sigma, gravity=gravity, eps=eps, reinit_every=reinit_every,

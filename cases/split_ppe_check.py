@@ -212,7 +212,7 @@ def solve(n: int, ratio: float, variant: str, j0: float = 4.0, tolerance: float 
     rho1, rho2 = ratio, 1.0
     grid = CartesianGrid((n, n))
     x, y = grid.meshgrid()
-    faces = "fccd" if variant.startswith(("fccd", "hyb")) else "fd2"
+    faces = "fccd" if variant.startswith(("fccd", "hyb", "phase-ccd", "lib")) else "fd2"
     # the stepper is only used for its geometry and operators (equal densities pass its check)
     ns = TwoPhaseIMEX(grid, 0.25 - np.hypot(x - 0.5, y - 0.5), rho1=1.0, rho2=1.0, periodic=(0, 1), faces=faces)
     tp = ns.tp
@@ -247,6 +247,10 @@ def solve(n: int, ratio: float, variant: str, j0: float = 4.0, tolerance: float 
         jg = (1.0 - theta) * jl + theta * jr
         if jump_interp == "hermite":
             jg = _hermite_jump(jcell, theta, ax, h)
+        if variant == "lib":  # the library's operator and crossing interpolation
+            from basilisk_cupy.discretization.phase_ccd import hermite_at_crossings
+
+            jg = hermite_at_crossings(jcell, theta, ax, h, True)
         if exact_jump:  # the jump at the crossing itself instead of its linear interpolation
             if ax == 0:
                 xc = np.concatenate([x[:1] - h, x], axis=0) + theta * h
@@ -272,7 +276,12 @@ def solve(n: int, ratio: float, variant: str, j0: float = 4.0, tolerance: float 
     uf = FaceField(grid, ustar, "uf")
     p = CellField(grid, bc=BoundaryConditions.periodic(2))
     ops = ns.ops
-    if variant.startswith("phase-ccd"):
+    if variant == "lib":
+        from basilisk_cupy.discretization.phase_ccd import PhaseCCDFaces as LibPhaseCCD
+
+        ops = LibPhaseCCD(ns.ops)
+        ops.update(tp, alpha)
+    elif variant.startswith("phase-ccd"):
         cuts, thetas = [], []
         for ax in range(2):
             hl, hr, cut, theta = tp._cut(ax)
