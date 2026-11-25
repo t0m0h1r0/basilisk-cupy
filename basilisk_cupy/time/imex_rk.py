@@ -194,7 +194,8 @@ class IMEXRKNS(IMEXBDF2NS):
         self._apply_uf_bc(self.uf)
         self.dp.data[...] = 0.0
         self.mgp = project(self.uf, self.dp, self.alpha, cdt, ops=self.ops,
-                           nrelax=self.mgp.nrelax or 4, tolerance=self.tolerance)
+                           nrelax=self.mgp.nrelax or 4, tolerance=self.tolerance,
+                           basilisk_tolerance=self.volume_tolerance)
         self._apply_uf_bc(self.uf)
         self.p.interior = p_n + self.dp.interior
         self.p.fill_ghosts()

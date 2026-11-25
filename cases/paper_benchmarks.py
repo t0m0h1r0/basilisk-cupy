@@ -38,6 +38,9 @@ WATER_AIR = dict(rho1=998.2, rho2=1.204, mu1=1.002e-3, mu2=1.825e-5, sigma=0.072
 
 def _stepper(grid, phi, kw):
     kw = dict(kw)
+    # dimensional problems: bound the relative volume change per projection step (Basilisk's project())
+    kw.setdefault("volume_tolerance", True)
+    kw.setdefault("tolerance", 1e-8)  # converged to 1e-5 in the capillary wave's amplitude ratio
     tableau = kw.pop("tableau", None)
     if tableau:
         from basilisk_cupy.time.two_phase_imex_rk import TwoPhaseIMEXRK
