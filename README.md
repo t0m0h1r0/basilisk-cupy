@@ -938,3 +938,13 @@ integrators do not change the time-step dependence (N = 32: CN +8.5 / +6.8 / +5.
 CenteredNS +7.7 / +6.4 / +5.2 / +4.4 %): the per-step approximate projection dominates. Keeping the face velocity
 gives clean second order but a different limit (+8.4 %), because the cell and face velocities then evolve
 separately. Figure: `docs/figures/case_c.png`. Notes: `docs/notes/47_case_c_time.md`.
+
+One velocity field with a consistent projection (`cases/single_velocity.py`, the linear capillary-wave system
+as matrices): the cell-centred velocity with the exact projection `Pi_c = 1 - G_c (D_c G_c)^+ D_c`
+(`D_c = D_f I`, `G_c = -D_c^T`) is an orthogonal projector (1e-15), its semi-discrete eigenvalue equals the
+dt -> 0 limit of CenteredNS (+3.23 % fd2, +1.14 % CCD at N = 32), and Crank-Nicolson / SDIRK2 on it converge at
+second order and reach that limit at the default step (+3.20 % / +1.11 %, against CenteredNS's +7.72 % / +4.43 %).
+The static-drop balance is kept (div-free share of the GFM force 8.6e-4 against 8.1e-4). Caveat: in the cell
+form checkerboard-modulated pressure modes have the same small eigenvalue as the smoothest mode. A MAC
+velocity with these operators over-damps (+12.9 %). Figure: `docs/figures/single_velocity.png`. Notes:
+`docs/notes/48_single_velocity.md`.
