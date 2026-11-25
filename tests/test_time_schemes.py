@@ -90,7 +90,7 @@ def test_two_phase_transport_options():
     for tr, integ in (("frozen", "ssprk3"), ("ab2", "ssprk3"), ("ab3", "ssprk3"), ("pc", "ssprk3"), ("frozen", "rk4"),
                       ("frozen", "euler")):
         ns = TwoPhaseIMEX(grid, phi, mu1=0.1, mu2=0.1, sigma=1.0, transport=tr, psi_integrator=integ,
-                          scheme="cnab2", fixed_dt=2e-3)
+                          scheme="sbdf1" if tr == "ab3" else "cnab2", fixed_dt=2e-3)  # ab3 with a 1-level scheme
         m0 = ns.mass()
         ns.start()
         for _ in range(6):

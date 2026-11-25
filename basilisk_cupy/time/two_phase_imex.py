@@ -163,6 +163,8 @@ class TwoPhaseIMEX(_TwoPhaseMixin, IMEXMultistepNS):
         self.faces, self.convection_name = faces, convection
         self.transport, self.psi_integrator = transport, psi_integrator
         self._uf_hist: list = []  # u_f^n, u_f^{n-1}, ... (after the steps taken)
+        self._uf_dts: list = []   # dt_n, dt_{n-1}, ...: the steps between them (own history: the momentum
+        #                           scheme keeps only as many steps as it needs, e.g. one for sbdf1)
         self._uf_saved = None
         self._pc_velocity = None
         # registered after TwoPhaseCLS's transport hook, so it runs first; the second one restores uf
@@ -184,7 +186,7 @@ class TwoPhaseIMEX(_TwoPhaseMixin, IMEXMultistepNS):
             k = min(int(self.transport[-1]), len(self._uf_hist))
             if k == 1:
                 return
-            steps = [self.clock.dt] + self._dts[:k - 1]
+            steps = [self.clock.dt] + self._uf_dts[:k - 1]
             offsets = [sum(steps[:i + 1]) / steps[0] for i in range(k)]
             w = ab_beta(k, offsets)
             faces = [sum(float(w[j]) * self._uf_hist[j][ax] for j in range(k)) for ax in range(nd)]
@@ -200,6 +202,7 @@ class TwoPhaseIMEX(_TwoPhaseMixin, IMEXMultistepNS):
 
     def _remember_uf(self, ns) -> None:
         self._uf_hist = ([[self.uf[ax].copy() for ax in range(self.grid.ndim)]] + self._uf_hist)[:3]
+        self._uf_dts = ([float(self.clock.dt)] + self._uf_dts)[:3]
 
     # -- predictor--corrector ------------------------------------------------------------------------
     def step(self) -> None:
@@ -230,7 +233,7 @@ class TwoPhaseIMEX(_TwoPhaseMixin, IMEXMultistepNS):
             "a_is_constant": self.a_is_constant,
             "rho": self.rho.copy() if hasattr(self.rho, "copy") else self.rho,
             "clock": copy.deepcopy(self.clock), "dtmax": self.dtmax,
-            "lists": {k: list(getattr(self, k)) for k in ("_u_hist", "_e_hist", "_v_hist", "_dts", "_uf_hist")},
+            "lists": {k: list(getattr(self, k)) for k in ("_u_hist", "_e_hist", "_v_hist", "_dts", "_uf_hist", "_uf_dts")},
             "prev": (self._u_prev, self._c_prev, self._dt_prev),
             "tp": (self.tp._steps, self.tp.j_ext),
         }
