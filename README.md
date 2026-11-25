@@ -968,9 +968,10 @@ Paper review before the benchmarks (`docs/notes/10_paper_errata.md`, last sectio
 seven-stage step of §11b1 — the capillary wave transports a geometric cell fraction (swept volume) on an
 interface-fitted grid rebuilt every step, and the oscillating drop integrates the linear Rayleigh–Lamb mode on a
 closed-curve chart without coupling to Navier–Stokes (the paper's own `force_admissible=0`). The capillary wave's
-amplitude ratio after one period, 0.7936, is a damping rate about 6.2 times the weak viscous estimate
-exp(-2 nu k^2 T) = 0.964, and its grid resolves the liquid vorticity layer with delta/h = 0.20; the CLS kinematics
-of B under-damps, so it does not explain this. The Rayleigh–Taylor growth rate is asserted, not fitted.
+amplitude ratio after one period, 0.7936, mixes damping with the phase lag of a 16-point wave (corrected in
+`docs/notes/58_phase3_capwave.md`: frequency errors of 4-9.5 % alone bring the ratio to about 0.84; it is not a
+damping rate 6.2 times the viscous one, as first stated), and its grid resolves the liquid vorticity layer with
+delta/h = 0.20. The Rayleigh–Taylor growth rate is asserted, not fitted.
 
 The paper's standard two-phase step as one combination (`docs/notes/50_two_phase_imex.md`,
 `docs/figures/two_phase_imex.png`): `TwoPhaseIMEX(grid, phi0, rho1=, rho2=, mu1=, mu2=, sigma=, gravity=,
@@ -1014,3 +1015,11 @@ Phase 2, static drop compared three ways (`docs/notes/56_phase2_static.md`, `cas
 stable; the GFM jump error is 3.5-3.9 times smaller than VOF's (0.075 % against 0.29 % at N = 64; the paper's CSF
 path reports 1.23 %), the peak parasitic velocity 25-90 times smaller, while VOF's decays further by t = 1; the
 two time integrations differ by 1.5e-4 or less in the jump.
+
+Phase 3, the paper's capillary wave (`docs/notes/57_water_air_stability.md`, `docs/notes/58_phase3_capwave.md`):
+with water-air densities every CLS stepper grows unstable after 3-5 periods without re-initialisation (also at
+density ratio 1 and at a quarter of the step; Basilisk's VOF decays physically), while the paper's xi-SDF every 10
+or even 50 steps keeps it stable. Fitted against the two-fluid normal mode (beta = -0.803 1/s, omega = 134.34 1/s)
+at 16 points per wavelength: TwoPhaseIMEX with ab2 transport damps 0.56 times the physical rate with -9.3 %
+frequency, VOF 3.1 times with -4.0 %; the paper's own frozen transport amplifies (beta = +1.5). The paper's ratio at
+t = T falls in the range of all methods (0.73-0.83) because of the phase lag.
