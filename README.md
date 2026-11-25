@@ -922,3 +922,11 @@ deficit (-19.7 % / -5.8 % predicted, -16.6 % / -4.7 % measured at N = 32 / 64); 
 only -2 % and does not cause the remaining over-damping (+7.7 %, of which about half is the time step). The band
 area `sigma A_h(psi)` is not the GFM's energy and explains neither damping nor frequency. No force correction is
 needed. Figure: `docs/figures/adjoint_kinematics.png`. Notes: `docs/notes/45_adjoint_kinematics.md`.
+
+Attribution of the over-damping left after the band correction (`cases/residual_attribution_figures.py`;
+eigenvalues, N = 32, exact curvature): of +7.7 %, about 4.5 points are the time discretisation (+3.2 % as
+dt -> 0, measured down to dt/64, first order from dt/16 on; the same mode is tracked, eigenvector overlap
+>= 0.995), 2.1 points the fd2 viscosity (+1.1 % with the CCD viscosity as dt -> 0), and +1.1 % remains. Solving
+viscosity, surface tension and projection together (converged coupled iterations) changes it by 0.1 point or
+less, and there is no interaction between the viscosity and the splitting. Figure:
+`docs/figures/residual_attribution.png`. Notes: `docs/notes/46_residual_attribution.md`.
