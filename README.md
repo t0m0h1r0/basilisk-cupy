@@ -864,3 +864,13 @@ but the line relaxation of the mapped multigrid makes it slower on the CPU than 
 accuracy (43-51 s against 16 s for uniform 64^2 at -6.1 % and 58 s for 128^2 at -0.4 %). The static drop needs
 eps from the coarsest cells the interface crosses. Figure: `docs/figures/mapped_cls.png`. Notes:
 `docs/notes/39_mapped_cls.md`.
+
+A jump-corrected viscous operator was tried for the vortex layer (`cases/jump_viscous.py`, IIM form): the kink
+`[d_nn u_t] = d_t j / mu` is written as a divergence-free `J = H perp grad(-A chi d^3 / 6)` and
+`mu (H L(J+) - L(H J+))` is added to the implicit viscous step. As an operator it removes most of the kink error
+(fd2, tangential component near the interface: 0.31 -> 0.07), but on a frozen interface it helps only at
+delta / h = 1.83 (6.5e-4 -> 3.5e-4) and hurts at 0.92, and with the moving interface (capillary wave) it is
+unstable at N = 32 and 64 even at dt / 16: the tangential derivative of the curvature feeds grid-scale noise
+back into the capillary loop. Not adopted. By-product: the height-function curvature lowers the damping error
+much more (N = 64: -3.8 % -> -0.6 %; N = 32: -16.4 % -> -11.4 %), so the delta / h scaling of note 38 holds for
+the psi curvature only. Figure: `docs/figures/jump_correction.png`. Notes: `docs/notes/40_jump_correction.md`.
