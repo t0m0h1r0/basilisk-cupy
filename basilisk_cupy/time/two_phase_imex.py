@@ -233,7 +233,7 @@ class TwoPhaseIMEX(_TwoPhaseMixin, IMEXMultistepNS):
             "a_is_constant": self.a_is_constant,
             "rho": self.rho.copy() if hasattr(self.rho, "copy") else self.rho,
             "clock": copy.deepcopy(self.clock), "dtmax": self.dtmax,
-            "lists": {k: list(getattr(self, k)) for k in ("_u_hist", "_e_hist", "_v_hist", "_dts", "_uf_hist", "_uf_dts")},
+            "lists": {k: list(getattr(self, k)) for k in ("_u_hist", "_e_hist", "_v_hist", "_dts", "_uf_hist", "_uf_dts", "_a_hist")},
             "prev": (self._u_prev, self._c_prev, self._dt_prev),
             "tp": (self.tp._steps, self.tp.j_ext),
         }
