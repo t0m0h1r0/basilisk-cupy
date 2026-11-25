@@ -930,3 +930,11 @@ dt -> 0, measured down to dt/64, first order from dt/16 on; the same mode is tra
 viscosity, surface tension and projection together (converged coupled iterations) changes it by 0.1 point or
 less, and there is no interaction between the viscosity and the splitting. Figure:
 `docs/figures/residual_attribution.png`. Notes: `docs/notes/46_residual_attribution.md`.
+
+Case C prototype (`cases/case_c.py`): viscosity, GFM force, projection and the band-corrected kinematics solved
+together in each implicit stage (fixed point, about 3 iterations per stage), with BE, Crank-Nicolson and
+L-stable SDIRK2. With the faces rebuilt from the cells every step (as CenteredNS does), the second-order
+integrators do not change the time-step dependence (N = 32: CN +8.5 / +6.8 / +5.4 / +4.5 % at dt / 2 / 4 / 8,
+CenteredNS +7.7 / +6.4 / +5.2 / +4.4 %): the per-step approximate projection dominates. Keeping the face velocity
+gives clean second order but a different limit (+8.4 %), because the cell and face velocities then evolve
+separately. Figure: `docs/figures/case_c.png`. Notes: `docs/notes/47_case_c_time.md`.
