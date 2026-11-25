@@ -29,7 +29,7 @@ from .schemes import MultistepScheme
 
 
 class IMEXMultistepNS(IMEXBDF2NS):
-    def __init__(self, grid, *, scheme="sbdf2", **kwargs) -> None:
+    def __init__(self, grid, *, scheme="sbdf2", force_weights: str = "implicit", **kwargs) -> None:
         if kwargs.get("face_native"):
             raise NotImplementedError("IMEXMultistepNS has the cell-state form only (face_native=False)")
         super().__init__(grid, **kwargs)
@@ -39,6 +39,14 @@ class IMEXMultistepNS(IMEXBDF2NS):
         self._v_hist: list = []   # V^n, V^{n-1}, ...
         self._dts: list = []      # dt_{n}, dt_{n-1}, ... of the steps already taken (newest first)
         self.last_coefficients = None
+        #: time level of the face acceleration (the interfacial jump, gravity): ``"implicit"`` puts it at
+        #: t^{n+1} for every scheme (consistent for BDF); ``"scheme"`` weights it like the implicit term,
+        #: ``a <- sum_j gamma_j a^{n+1-j}`` (CN: (a^{n+1} + a^n)/2), which the Adams--Moulton / theta family
+        #: needs for second order with a moving interface (docs/notes/51, section 3).
+        if force_weights not in ("implicit", "scheme"):
+            raise ValueError("force_weights is 'implicit' or 'scheme'")
+        self.force_weights = force_weights
+        self._a_hist: list = []  # raw face accelerations a^n, a^{n-1}, ... of the steps taken
 
     def step(self) -> None:
         c = self.clock
@@ -92,6 +100,13 @@ class IMEXMultistepNS(IMEXBDF2NS):
                 self.a[ax] = 0.0
 
         self._run_hooks("acceleration")
+        raw_a = None
+        if self.force_weights == "scheme" and not self.a_is_constant:
+            raw_a = [self.a[ax].copy() for ax in range(ndim)]
+            g = coef.gamma
+            if len(g) > 1 and len(self._a_hist) >= len(g) - 1:
+                for ax in range(ndim):
+                    self.a[ax] = g[0] * raw_a[ax] + sum(g[j] * self._a_hist[j - 1][ax] for j in range(1, len(g)))
         for ax in range(ndim):
             self.u[ax].interior = self.u[ax].interior - sigma * g_n[ax]
         self.u.fill_ghosts()
@@ -115,6 +130,8 @@ class IMEXMultistepNS(IMEXBDF2NS):
         self._e_hist = ([conv_n] + self._e_hist)[:keep]
         self._v_hist = ([v_new] + self._v_hist)[:depth] if v_new is not None else []
         self._dts = ([dt] + self._dts)[:max(depth, 1)]
+        if raw_a is not None:
+            self._a_hist = ([raw_a] + self._a_hist)[:max(depth, 1)]
         # IMEXBDF2NS's bookkeeping (CFL limit, warnings) reads these
         self._u_prev, self._c_prev, self._dt_prev = u_n, conv_n, dt
         self._run_hooks("end_timestep")

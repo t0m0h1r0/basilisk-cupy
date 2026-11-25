@@ -78,6 +78,7 @@ class PhaseCCDFaces:
         crossing: ``F(x_f) = F_Gamma + (1/2 - theta) h (alpha p'')_side`` (the side that holds the face centre)."""
         self.fccd, self.cuts, self.thetas, self.h = fccd, cuts, thetas, h
         self.alphas, self.rho_l = alphas, rho_l
+        self.third = True  # include the one-sided third-derivative Taylor terms on the cut faces
 
     def grad_f(self, a, axis: int):
         from basilisk_cupy.discretization.ccd import ccd_matrices
@@ -117,18 +118,26 @@ class PhaseCCDFaces:
                             d2[1:-1] = (seg[2:] - 2 * seg[1:-1] + seg[:-2]) / h ** 2
                             d2[0], d2[-1] = d2[1], d2[-2]
                             q[idx] = d2
-                for s0 in starts:  # cut faces: GFM two-point difference + one-sided curvature terms
+                for s0 in starts:  # cut faces: GFM two-point difference + one-sided Taylor terms
                     L, R = (s0 - 1) % n, s0
                     tt = t[s0]
                     g[s0] = (line[R] - line[L]) / h
-                    bL = q[L] if np.isfinite(q[L]) else 0.0
-                    bR = q[R] if np.isfinite(q[R]) else 0.0
-                    g[s0] += (-((1 - tt) * h) ** 2 * bR + (tt * h) ** 2 * bL) / (2 * h)
+                    qL = q[L] if np.isfinite(q[L]) else 0.0
+                    qR = q[R] if np.isfinite(q[R]) else 0.0
+                    c3L = c3R = 0.0
+                    if self.third and np.isfinite(q[(L - 1) % n]) and np.isfinite(q[(R + 1) % n]):
+                        c3L = (qL - q[(L - 1) % n]) / h  # one-sided third derivatives within each phase
+                        c3R = (q[(R + 1) % n] - qR) / h
+                    bL = qL + tt * h * c3L          # second derivatives at the crossing
+                    bR = qR - (1 - tt) * h * c3R
+                    a, b = tt * h, (1 - tt) * h
+                    g[s0] += (-b * b * bR / 2 - b ** 3 * c3R / 6 + a * a * bL / 2 - a ** 3 * c3L / 6) / h
                     if af is not None:
                         # from the crossing to the face centre, in the phase that holds the centre
                         rho_side = rl[s0, j] if tt > 0.5 else self._rho_other(rl[s0, j])
-                        b_side = bL if tt > 0.5 else bR
-                        g[s0] += (0.5 - tt) * h * b_side / (rho_side * af[s0, j])
+                        b_side, c_side = (bL, c3L) if tt > 0.5 else (bR, c3R)
+                        d = (0.5 - tt) * h
+                        g[s0] += (d * b_side + d * d * c_side / 2) / (rho_side * af[s0, j])
             out[:n, j] = g
             out[n, j] = g[0]
         return np.moveaxis(out, 0, axis)
@@ -272,6 +281,7 @@ def solve(n: int, ratio: float, variant: str, j0: float = 4.0, tolerance: float 
         rho_l = [np.where(tp._cut(ax)[0], rho1, rho2) for ax in range(2)]
         ops = PhaseCCDFaces(ns.ops, cuts, thetas, h, alphas=[alpha[ax] for ax in range(2)], rho_l=rho_l)
         ops.rho_pair = (rho1, rho2)
+        ops.third = not variant.endswith("-2nd")
         if variant.endswith("plaindiv"):
             ops = PlainDivergence(ops)
     elif variant.endswith("plaindiv"):

@@ -103,3 +103,25 @@ def test_two_phase_transport_options():
             assert 0.0 < np.abs(psi - base).max() < 1e-2
     with pytest.raises(ValueError):
         TwoPhaseIMEX(grid, phi, psi_integrator="rk7")
+
+
+def test_force_weights():
+    """``force_weights="scheme"``: the face acceleration takes the implicit weights (CN: the midpoint). Unchanged for
+    BDF (gamma = (1)); changes CN. On the capillary wave (16 points) cnab2 + ab2 goes from -5.04 / -8.97 % (d = 1 / 2)
+    to -11.77 / -12.33 % (docs/notes/51, section 3)."""
+    grid = CartesianGrid((16, 16), origin=(-0.5, -0.5))
+    x, y = grid.meshgrid()
+    phi = 0.25 - np.hypot(x, y) + 0.02 * np.cos(2 * np.arctan2(y, x))
+    out = {}
+    for scheme in ("sbdf2", "cnab2"):
+        for fw in ("implicit", "scheme"):
+            ns = TwoPhaseIMEX(grid, phi, mu1=0.1, mu2=0.1, sigma=1.0, scheme=scheme, transport="ab2",
+                              fixed_dt=2e-3, force_weights=fw)
+            ns.start()
+            for _ in range(5):
+                ns.step()
+            out[(scheme, fw)] = np.stack([c.interior.copy() for c in ns.u])
+    assert np.array_equal(out[("sbdf2", "implicit")], out[("sbdf2", "scheme")])
+    assert np.abs(out[("cnab2", "implicit")] - out[("cnab2", "scheme")]).max() > 1e-8
+    with pytest.raises(ValueError):
+        TwoPhaseIMEX(grid, phi, force_weights="midpoint")
