@@ -874,3 +874,15 @@ unstable at N = 32 and 64 even at dt / 16: the tangential derivative of the curv
 back into the capillary loop. Not adopted. By-product: the height-function curvature lowers the damping error
 much more (N = 64: -3.8 % -> -0.6 %; N = 32: -16.4 % -> -11.4 %), so the delta / h scaling of note 38 holds for
 the psi curvature only. Figure: `docs/figures/jump_correction.png`. Notes: `docs/notes/40_jump_correction.md`.
+
+Discrete dispersion relation of the capillary wave (`cases/capwave_jacobian.py`): one step's Jacobian about the
+flat interface at rest, restricted to the fields cos kx / sin kx times a y profile (closed to 2e-5), gives the
+scheme's eigenvalue directly (N = 32: -16.4 % damping, -3.6 % frequency, as the time integration). Swapping
+one part at a time for an exact one: the exact linear curvature gives the same deficit (-16.6 %), and so do
+dt / 4, the CCD viscosity and FCCD faces; moving the interface with the face velocity at the interface instead
+of the CLS transport removes it (+3.8 %). The CLS transport moves the psi = 1/2 crossing with
+`sum w_f v(y_f)`, weights 0.57 at the interface face and 0.23 at +-h (second moment 0.33 h^2), and v has a peak
+of width delta at the interface, so the kinematic error is ~ (h / delta)^2. The normal-mode dispersion relation
+with this discrete kinematic condition reproduces the deficit (-17.0 % against -16.6 % at N = 32). This corrects
+notes 38 and 40: the deficit is kinematic, not the viscous resolution of the layer, and the height-function
+curvature only cancels it. Figure: `docs/figures/capwave_theory.png`. Notes: `docs/notes/41_capwave_theory.md`.
