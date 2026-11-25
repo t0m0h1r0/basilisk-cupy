@@ -14,6 +14,8 @@ this problem). Variants:
 * ``fccd-smooth``: FCCD faces solving for ``p~ = p - H j_ext`` (docs/notes/32; with a density ratio ``p~``
   keeps a kink, ``[d_n p~] = (rho1/rho2 - 1) d_n p_2``);
 * ``fccd-sharp``: FCCD faces across the jump;
+* ``fccd-c1``: option C of note 55 with the exact normal-derivative jump ``g`` (an oracle): FCCD on
+  ``p - H (j_ext - phi g_ext)``, continuous with its normal derivative;
 * ``hyb<m>-sharp`` / ``hyb<m>-smooth``: option A, the fd2 (GFM) face gradient within ``m`` faces of a cut face
   and FCCD elsewhere (:class:`HybridFaces`), on the pressure with its jump or on ``p~``.
 
@@ -42,6 +44,23 @@ def ds(x, y, ax):
     if ax == 0:
         return -2 * math.pi * np.sin(2 * math.pi * x) * np.cos(4 * math.pi * y)
     return -4 * math.pi * np.cos(2 * math.pi * x) * np.sin(4 * math.pi * y)
+
+
+class PlainDivergence:
+    """FCCD's face gradient with the plain face difference as the divergence (diagnostic for note 55)."""
+
+    name = "fccd-plain-div"
+
+    def __init__(self, fccd) -> None:
+        from basilisk_cupy.discretization.fd2 import FD2FaceComplex
+
+        self.fccd, self.fd2 = fccd, FD2FaceComplex()
+
+    def div_f(self, flux, periodic=None):
+        return self.fd2.div_f(flux, periodic=periodic)
+
+    def __getattr__(self, key):
+        return getattr(self.fccd, key)
 
 
 class HybridFaces:
@@ -91,8 +110,24 @@ def solve(n: int, ratio: float, variant: str, j0: float = 4.0, tolerance: float 
     jcell = (rho1 - rho2) * s_func(x, y) + j0
     h = float(grid.h[0])
     ustar = []
-    smooth = variant in ("fccd-smooth",) or variant.endswith("-smooth") and variant.startswith("hyb")
+    smooth = variant in ("fccd-smooth", "fccd-c1", "fccd-c1-plaindiv", "fccd-smooth-plaindiv", "fccd-exact-ext",
+                         "fccd-exact-c1") or variant.endswith("-smooth") and variant.startswith("hyb")
     jext = tp.extend_jump(jcell) if smooth else None
+    if variant in ("fccd-exact-ext", "fccd-exact-c1"):
+        # exact closest-point extension of the jump (constant along the normal of the circle)
+        r = np.hypot(x - 0.5, y - 0.5)
+        xg, yg = 0.5 + 0.25 * (x - 0.5) / r, 0.5 + 0.25 * (y - 0.5) / r
+        jext = (rho1 - rho2) * s_func(xg, yg) + j0
+        if variant == "fccd-exact-c1":
+            dn = (ds(xg, yg, 0) * (xg - 0.5) + ds(xg, yg, 1) * (yg - 0.5)) / 0.25
+            jext = jext - (0.25 - r) * (rho1 - rho2) * dn
+    if variant in ("fccd-c1", "fccd-c1-plaindiv"):
+        # option C with the exact normal-derivative jump g = [d_n p] = (rho1 - rho2) d_n s (n outward):
+        # p - H (j_ext - phi g_ext) is C^1 across the interface (phi = distance, positive inside)
+        r = np.hypot(x - 0.5, y - 0.5)
+        dn = (ds(x, y, 0) * (x - 0.5) + ds(x, y, 1) * (y - 0.5)) / np.maximum(r, 1e-12)
+        gext = tp.extend_jump((rho1 - rho2) * dn)
+        jext = jext - (0.25 - r) * gext
     for ax in range(2):
         hl, hr, cut, theta = tp._cut(ax)
         jl, jr = tp._faces(jcell, ax)
@@ -114,6 +149,8 @@ def solve(n: int, ratio: float, variant: str, j0: float = 4.0, tolerance: float 
     uf = FaceField(grid, ustar, "uf")
     p = CellField(grid, bc=BoundaryConditions.periodic(2))
     ops = ns.ops
+    if variant.endswith("plaindiv"):
+        ops = PlainDivergence(ns.ops)
     if variant.startswith("hyb"):
         m = int(variant[3:].split("-")[0])
         ops = HybridFaces(ns.ops, [_near_cut(tp._cut(ax)[2], m) for ax in range(2)])
