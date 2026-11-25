@@ -37,12 +37,12 @@ def test_density_ratio_projection(variant, ratio, u_res):
 
 
 def test_paper_capillary_wave_volume_tolerance():
-    """The paper's capillary wave (water-air, 32^2, one period): the amplitude ratio at T converges with the
-    projection bounded by the relative volume change (1e-6 / 1e-8 / 1e-10: 0.896129 / 0.896010 / 0.896008);
-    the absolute residual bound 1e-3 is too loose in these units (0.938)."""
+    """The paper's capillary wave (water-air, 32^2, one period): the amplitude ratio at T (column-integral
+    amplitude) converges with the projection bounded by the relative volume change (1e-6 / 1e-8 / 1e-10: 0.898968 /
+    0.898932 / 0.898929); the absolute residual bound 1e-3 is too loose in these units (0.956)."""
     from cases.paper_benchmarks import run
 
     r = run("capwave", samples=40)  # the output times split the steps: 8 samples give 0.9046
     s = r["series"]
-    assert s[-1]["amplitude"] / s[0]["amplitude"] == pytest.approx(0.89601, abs=2e-5)
+    assert s[-1]["amplitude"] / s[0]["amplitude"] == pytest.approx(0.898932, abs=2e-5)
     assert abs(s[-1]["mass"] / s[0]["mass"] - 1.0) < 1e-13

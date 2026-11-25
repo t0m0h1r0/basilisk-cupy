@@ -1020,6 +1020,14 @@ Phase 3, the paper's capillary wave (`docs/notes/57_water_air_stability.md`, `do
 with water-air densities every CLS stepper grows unstable after 3-5 periods without re-initialisation (also at
 density ratio 1 and at a quarter of the step; Basilisk's VOF decays physically), while the paper's xi-SDF every 10
 or even 50 steps keeps it stable. Fitted against the two-fluid normal mode (beta = -0.803 1/s, omega = 134.34 1/s)
-at 16 points per wavelength: TwoPhaseIMEX with ab2 transport damps 0.56 times the physical rate with -9.3 %
-frequency, VOF 3.1 times with -4.0 %; the paper's own frozen transport amplifies (beta = +1.5). The paper's ratio at
-t = T falls in the range of all methods (0.73-0.83) because of the phase lag.
+at 16 points per wavelength (amplitude from the column integral of phase 1): TwoPhaseIMEX with ab2 transport damps
+0.5 times the physical rate with -9.3 % frequency, VOF 2.5 times with -4.0 % (1.4 and 1.3 times, -4.2 and -1.3 %,
+at 32 points); the paper's own frozen transport amplifies (beta = +1.5). The paper's ratio at t = T falls in the
+range of all methods (0.64-0.87) because of the phase lag, and depends on how the amplitude is measured.
+The other three benchmarks (`docs/notes/59_phase3_drop_bubble.md`, `docs/figures/phase3_benchmarks.png`): the
+oscillating drop's frequency is within 3 % of Rayleigh-Lamb for every method, but with psi's CCD curvature the CLS
+amplitude grows even with xi-SDF every 10 steps (re-initialisation roughens the curvature, note 54) and stops with
+height-function curvature; the rising bubble runs to 0.06 s with re-initialisation (without it, it blows up at
+0.039 s, where the paper reports its unresolved breakdown), CLS and VOF agree to 1 % on the centroid while the paper
+rises about 17 % more and its mean rise velocity is inconsistent with its own centroid; the Rayleigh-Taylor linear
+growth rate is 1.721-1.731 against 1.754 for the viscous, capillary normal mode (the paper's 1.78 omits both).

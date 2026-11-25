@@ -186,13 +186,22 @@ def crossing_heights(psi, grid):
     return yc[np.arange(q.shape[0]), first]
 
 
+def column_heights(psi, grid):
+    """Interface height of every column from the column integral of phase 1 (below the interface):
+    ``y_bottom + sum_j psi h``. Exact for a VOF fraction and for a symmetric CLS profile; unlike the psi = 1/2
+    crossing it does not depend on how sharp the profile is (a VOF fraction jumps within one cell)."""
+    q = to_numpy(psi)
+    return float(grid.origin[1]) + q.sum(axis=1) * float(grid.h[1])
+
+
 def mode_amplitude(ns, info) -> float:
-    """First Fourier coefficient of the interface height, ``(2/N) sum (y_c - y0) cos(k x)``."""
+    """First Fourier coefficient of the interface height, ``(2/N) sum (eta - y0) cos(k x)``, with ``eta`` from the
+    column integral (:func:`column_heights`)."""
     grid = ns.grid
     x, _ = grid.meshgrid()
     xs = to_numpy(x)[:, 0]
-    yc = crossing_heights(ns.psi, grid)
-    return float(2.0 / len(xs) * np.sum((yc - info["y0"]) * np.cos(info["k"] * xs)))
+    eta = column_heights(ns.psi, grid)
+    return float(2.0 / len(xs) * np.sum((eta - info["y0"]) * np.cos(info["k"] * xs)))
 
 
 def moments(ns, weight):
@@ -209,8 +218,9 @@ def moments(ns, weight):
 
 
 def axis_radii(ns, centre):
-    """Half-axes along x and y through ``centre``: the ``psi = 1/2`` crossings on the lines ``y = yc`` and
-    ``x = xc`` (``psi`` linearly interpolated between the cell rows / columns), outwards from the centre."""
+    """Half-axes along x and y through ``centre``: half the integral of phase 1 on the lines ``y = yc`` and
+    ``x = xc`` (``psi`` linearly interpolated between the cell rows / columns). Exact for a VOF fraction and for a
+    symmetric CLS profile, unlike the psi = 1/2 crossing (a VOF fraction jumps within one cell)."""
     grid = ns.grid
     q = to_numpy(ns.psi)
     h = [float(v) for v in grid.h]
@@ -222,17 +232,7 @@ def axis_radii(ns, centre):
         j = int(math.floor(f))
         w = f - j
         line = (1 - w) * np.take(q, j, axis=t) + w * np.take(q, j + 1, axis=t)
-        pos = o[ax] + (np.arange(line.size) + 0.5) * h[ax]
-        c = np.searchsorted(pos, centre[ax])
-        r = []
-        for rng in (range(c, line.size - 1), range(c - 1, 0, -1)):
-            for i in rng:
-                i2 = i + 1 if rng.step > 0 else i - 1
-                if (line[i] - 0.5) * (line[i2] - 0.5) <= 0 and line[i] != line[i2]:
-                    xcross = pos[i] + (line[i] - 0.5) / (line[i] - line[i2]) * (pos[i2] - pos[i])
-                    r.append(abs(xcross - centre[ax]))
-                    break
-        radii.append(float(np.mean(r)) if r else float("nan"))
+        radii.append(0.5 * float(line.sum()) * h[ax])
     return radii
 
 
@@ -251,13 +251,14 @@ def diagnostics(case, ns, info) -> dict:
 
 
 def run(case: str, n: int | None = None, t_end: float | None = None, samples: int = 200, backend: str = "numpy",
-        umax_limit: float = 5.0, **kw) -> dict:
+        umax_limit: float = 5.0, snapshots: tuple = (), **kw) -> dict:
     """Time series of the diagnostics at ``samples`` equally spaced output times (hit exactly)."""
     ns, info = setup(case, n, backend, **kw)
     t_end = t_end or info["T"]
     times = [t_end * (i + 1) / samples for i in range(samples)]
     ns.start(events=times)
     series = [diagnostics(case, ns, info)]
+    snaps = {}
     t0 = time.time()
     k = 0
     while k < len(times):
@@ -268,10 +269,13 @@ def run(case: str, n: int | None = None, t_end: float | None = None, samples: in
             break
         if abs(ns.clock.t - times[k]) <= 1e-9 * max(1.0, t_end):
             series.append(diagnostics(case, ns, info))
+            for ts in snapshots:  # psi at the output times closest to the requested ones
+                if abs(times[k] - ts) <= 0.5 * t_end / samples:
+                    snaps[float(ts)] = to_numpy(ns.psi).tolist()
             k += 1
     if ns.grid.xp.__name__ == "cupy":
         ns.grid.xp.cuda.Stream.null.synchronize()
-    return dict(case=case, info=info, series=series, steps=ns.clock.i, wall=time.time() - t0,
+    return dict(case=case, info=info, series=series, steps=ns.clock.i, wall=time.time() - t0, snapshots=snaps,
                 psi=to_numpy(ns.psi).tolist() if samples and ns.grid.n[0] <= 64 else None)
 
 
