@@ -58,3 +58,4 @@
 | [53_equations.md](53_equations.md) | 方程式の整理：実装どおりの離散式（CLS、物性、曲率、GFM の鋭い形と滑らかな形、近似射影、Basilisk の分割、多段法と IMEX-RK の一般形、刻みの制約）、誤差の構造、選択肢、論文 11b1 との対応（#67） |
 | [54_reinit_closures.md](54_reinit_closures.md) | 論文の再初期化の二つの閉鎖（λ_Γ、ε_eff）：平らに近い界面で幅の問題の条件が悪く、毛管波の振幅に段差が入る。再初期化が ψ に入れる凹凸を CCD 曲率が増幅し、静止液滴のジャンプが +13%（#67） |
 | [55_density_ratio_fccd.md](55_density_ratio_fccd.md) | 密度比のある FCCD の射影の下調べ（製造解）：滑らかな形は等密度で 4 次だが密度比 10 で収束しない。fd2 の GFM は密度比によらず 2 次。面勾配を界面の近くだけ切り替える形も使えない（#68） |
+| [56_phase2_static.md](56_phase2_static.md) | フェーズ2：静止液滴の三者比較（VOF、CenteredNS + CLS/GFM、TwoPhaseIMEX；密度比 1〜1000、t = 1）：すべて安定、GFM のジャンプの誤差は VOF の 1/3.5〜1/3.9、寄生流の最大は 1/25〜1/90（#69） |
