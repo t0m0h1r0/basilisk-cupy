@@ -1003,3 +1003,8 @@ the profile width that closes the diffuse mass is ill-conditioned for a nearly f
 and puts steps into the amplitude (RMS error 1.1-2.4 times); every re-initialisation also roughens psi
 enough for its CCD curvature to scatter (band curvature 3.5...4.6 -> -6.3...18.0), shifting a static drop's jump by
 +13 %.
+
+Density-ratio projection with FCCD (`docs/notes/55_density_ratio_fccd.md`, manufactured `p_k = rho_k s + j0 H`): the
+smooth form `p - H j_ext` is 4th order at equal densities (residual 1.3e-4 -> 5.3e-7, N = 32 -> 128) but does not
+converge from a density ratio of 10; fd2's GFM is 2nd order at any ratio; switching the face gradient to fd2 near
+the interface does not repair FCCD. A phase-wise closure of the CCD line systems (or the paper's HFE) is needed.

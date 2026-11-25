@@ -63,8 +63,13 @@ class IMEXBDF2NS(CenteredNS):
     basilisk_init_dt = False  # fixed or CFL steps from the first step on
 
     def __init__(self, grid, *, convection=None, viscous=None, fixed_dt: float | None = None,
-                 face_native: bool = False, reconstruction=None, **kwargs) -> None:
+                 face_native: bool = False, reconstruction=None, volume_tolerance: bool = False, **kwargs) -> None:
         super().__init__(grid, **kwargs)
+        #: ``tolerance`` bounds the relative volume change of a cell in one projection step, ``|div u| sigma``
+        #: (Basilisk's ``project()``: the Poisson problem is solved to ``tolerance / sigma^2``), instead of the
+        #: residual ``div u / sigma`` itself (default). Needed for dimensional problems, where the absolute
+        #: residual of ``div u / sigma`` can be orders of magnitude above 1.
+        self.volume_tolerance = volume_tolerance
         #: carry the projected face velocity as the state, cells reconstructed from it (see module doc)
         self.face_native = face_native
         #: R_h of the face-native state: None (the operators' face_to_cell), "ccd" (compact face-line CCD
@@ -173,7 +178,8 @@ class IMEXBDF2NS(CenteredNS):
         self._apply_uf_bc(self.uf)
         self.dp.data[...] = 0.0
         self.mgp = project(self.uf, self.dp, self.alpha, cdt, ops=self.ops,
-                           nrelax=self.mgp.nrelax or 4, tolerance=self.tolerance)
+                           nrelax=self.mgp.nrelax or 4, tolerance=self.tolerance,
+                           basilisk_tolerance=self.volume_tolerance)
         self._apply_uf_bc(self.uf)
         self.p.interior = p_base + self.dp.interior
         self.p.fill_ghosts()
@@ -263,7 +269,8 @@ class IMEXBDF2NS(CenteredNS):
         self._run_hooks("projection")
         self.dp.data[...] = 0.0
         self.mgp = project(self.uf, self.dp, self.alpha, gdt, ops=self.ops,
-                           nrelax=self.mgp.nrelax or 4, tolerance=self.tolerance)
+                           nrelax=self.mgp.nrelax or 4, tolerance=self.tolerance,
+                           basilisk_tolerance=self.volume_tolerance)
         self._apply_uf_bc(self.uf)
         self.p.interior = self.p.interior + self.dp.interior
         self.p.fill_ghosts()

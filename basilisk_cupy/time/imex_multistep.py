@@ -102,7 +102,8 @@ class IMEXMultistepNS(IMEXBDF2NS):
         self._run_hooks("projection")
         self.dp.data[...] = 0.0
         self.mgp = project(self.uf, self.dp, self.alpha, sigma, ops=self.ops,
-                           nrelax=self.mgp.nrelax or 4, tolerance=self.tolerance)
+                           nrelax=self.mgp.nrelax or 4, tolerance=self.tolerance,
+                           basilisk_tolerance=self.volume_tolerance)
         self._apply_uf_bc(self.uf)
         self.p.interior = self.p.interior + self.dp.interior
         self.p.fill_ghosts()
