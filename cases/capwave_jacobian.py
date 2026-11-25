@@ -146,7 +146,7 @@ class CapwaveMap:
         grid = CartesianGrid((n, n), length=(2.0, 2.0), origin=(0.0, -1.0))
         x, y = grid.meshgrid()
         ns = CenteredNS(grid, uf_normal={w: 0.0 for w in ("left", "right", "bottom", "top")}, tolerance=tolerance,
-                        viscous=kw.pop("viscous", None), ops=kw.pop("ops_ns", None))
+                        viscous=kw.pop("viscous", None), ops=kw.pop("ops_ns", None), **kw.pop("ns_kw", {}))
         tension = kw.pop("tension", "gfm")
         cls = CLSInterface.from_level_set(grid, y + 0.0 * x, BoundaryConditions(),
                                           divergence=kw.pop("divergence", "plain" if tension == "adjoint" else "fccd"),
@@ -336,12 +336,12 @@ def dispersion(n=32, f=1.0, DT=cw.STEP, **kw):
     cm = CapwaveMap(n, f, DT, **kw)
     s, _ = mode(K, 1.0, 1.0, cm.nu)
     M, res = reduced(cm)
-    lam = np.linalg.eigvals(M)
+    lam, vecs = np.linalg.eig(M)
     tg = cmath.exp(s * cm.dt)
     k = int(np.argmin(np.abs(lam - tg)))
     sh = complex(np.log(lam[k]) / cm.dt)
     return {"s": s, "s_h": sh, "damping_err": sh.real / s.real - 1, "frequency_err": sh.imag / s.imag - 1,
-            "residual": res, "dt": cm.dt, "lam": lam}
+            "residual": res, "dt": cm.dt, "lam": lam, "vector": vecs[:, k]}
 
 
 def semi_discrete(n=32, f=1.0, DT=cw.STEP, **kw):
