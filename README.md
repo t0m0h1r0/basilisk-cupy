@@ -903,3 +903,13 @@ eps k, as the CSF force), and spreading the GFM jump with the CLS transport's ow
 pair of width h) also makes it worse (-25.9 % against -16.8 %). What matters is how narrow the kinematics and
 the force are compared with the layer, not the adjoint pairing itself: sharp kinematics with the sharp jump
 gives +3.8 %. Figure: `docs/figures/adjoint_tension.png`. Notes: `docs/notes/43_adjoint_tension.md`.
+
+Sharp interface kinematics for CLS (`cases/velocity_extension.py`, a prototype; the library transport is
+unchanged): the conservative transport by `uf` is kept and, in a band about the interface, the face-normal
+velocity is replaced by its value at the foot point on the interface (`delta = chi (V - u . n) n`, built on the
+faces and advected without compression). A uniform velocity gives `delta = 0` (identical to the transport).
+Capillary wave (normal-mode start): -16.4 % -> +3.4 % damping and -3.4 % -> +0.5 % frequency at N = 32
+(+3.5 % / +2.0 % at N = 64 / 128); reversed vortex 0.0139 -> 0.0084 (N = 128); mass and the static-drop jump
+unchanged. Not yet met: the energy exchange is not exact (the corrected kinematics and the GFM force are not
+adjoint), and static-drop spurious currents decay about 10 times more slowly. Figure:
+`docs/figures/velocity_extension.png`. Notes: `docs/notes/44_velocity_extension.md`.

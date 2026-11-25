@@ -87,7 +87,7 @@ def run(n, f: float = 1.0, periods: float = 2.0, a: float = 0.01, viscous=None, 
         jump_mode: str = "sharp", DT: float = cw.STEP, profile: bool = False, budget: bool = False,
         eps_factor: float | None = None, cls_kw: dict | None = None, pressure_jump: bool = True,
         vorticity: bool = False, mapping_y=None, stokes: bool = False, plain: bool | None = None,
-        jump_correction: dict | None = None, tension: str = "gfm"):
+        jump_correction: dict | None = None, tension: str = "gfm", kinematics: str = "transport"):
     warnings.filterwarnings("ignore")
     nu = cw.MU * f
     s, F = mode(K, 1.0, 1.0, nu, a)
@@ -113,6 +113,10 @@ def run(n, f: float = 1.0, periods: float = 2.0, a: float = 0.01, viscous=None, 
                                       divergence="plain" if plain else "fccd",
                                       eps=None if eps_factor is None else eps_factor * hmin,
                                       ops=FCCDFaceComplex(order=4 if plain else 6))
+    if kinematics == "extension":
+        from cases.velocity_extension import attach as extension
+
+        extension(cls)
     tp = TwoPhaseCLS(ns, cls, rho1=1.0, rho2=1.0, mu1=nu, mu2=nu, vof_first=True, pressure_jump=pressure_jump,
                      jump_mode=jump_mode, **(cls_kw or {}))
     tp.add_surface_tension(1.0)

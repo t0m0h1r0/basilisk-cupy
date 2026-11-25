@@ -33,7 +33,7 @@ def norms(grid, e):
 
 def run(n: int, backend: str = "numpy", reinit_every: int = 0, reinit_steps: int = 4, t_end: float = T,
         method: str = "compression", code_variant: bool = False, distance: str = "points", divergence: str = "plain", face_order: int = 4,
-        eps_factor: float | None = None):
+        eps_factor: float | None = None, kinematics: str = "transport"):
     grid = CartesianGrid((n, n), origin=(-0.5, -0.5), backend=backend)
     xp = grid.xp
     x, y = grid.meshgrid()
@@ -41,6 +41,10 @@ def run(n: int, backend: str = "numpy", reinit_every: int = 0, reinit_steps: int
     cls = CLSInterface.from_level_set(grid, dist, BoundaryConditions(), divergence=divergence,
                                       eps=None if eps_factor is None else eps_factor * float(grid.h[0]),
                                       ops=FCCDFaceComplex(order=face_order))
+    if kinematics == "extension":
+        from cases.velocity_extension import attach as extension
+
+        extension(cls)
     f0 = fraction(grid, circle)
     e0 = norms(grid, f0 - cls.psi.interior)
     m0 = cls.mass()
