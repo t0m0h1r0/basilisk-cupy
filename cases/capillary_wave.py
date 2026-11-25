@@ -54,9 +54,10 @@ def _cls_amplitude(xp, psi, grid):
 
 def run(n: int, backend: str = "numpy", tolerance: float = 1e-6, interface: str = "vof",
         divergence: str = "plain", face_order: int = 4, eps_factor: float | None = None, viscous=None,
-        ops_ns=None, **cls_kw):
+        ops_ns=None, DT: float | None = None, **cls_kw):
     """``interface="cls"``: TwoPhaseFlow's CLS (:class:`TwoPhaseCLS`, keywords ``cls_kw``), the
-    amplitude from the ``psi = 1/2`` crossings."""
+    amplitude from the ``psi = 1/2`` crossings. ``DT``: largest time step (the output events every
+    ``STEP`` cap it anyway)."""
     grid = CartesianGrid((n, n), length=(2.0, 2.0), origin=(0.0, -1.0), backend=backend)
     xp = grid.xp
     walls = ("left", "right", "bottom", "top")
@@ -76,6 +77,8 @@ def run(n: int, backend: str = "numpy", tolerance: float = 1e-6, interface: str 
                                     BoundaryConditions())
         tp = TwoPhase(ns, f, rho1=1.0, rho2=1.0, mu1=MU, mu2=MU, vof_first=True)
     tp.add_surface_tension(1.0)
+    if DT is not None:
+        ns.DT = DT
     times = event_times()
     amps = []
 

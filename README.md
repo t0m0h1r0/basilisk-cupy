@@ -842,3 +842,13 @@ count although `rho(A) - 1 = 8e-4`. With periodic boundaries the same compositio
 grows; the defect correction converges and the projection only speeds the growth up (`rho(PA) = 1.048`). The
 default split form has a negative symmetric part with walls and decays monotonically. Figure:
 `docs/figures/layered_energy.png`. Notes: `docs/notes/37_layered_energy.md`.
+
+Why the CLS capillary wave is under-damped on coarse grids (`cases/capwave_normal_mode.py`, the wave started on
+the exact normal mode of two identical viscous fluids, so the amplitude is one damped cosine): the damping
+error depends on delta / h alone (-27.8 / -16.4 / -9.1 / -3.8 / -2.0 % at 0.65 / 0.92 / 1.30 / 1.83 / 2.59) and
+not on the time step, the CLS width, the order of the viscous and face operators (fd2, CCD, FCCD) or the jump
+form; smearing the force (CSF) makes it much worse. The damping ratio equals, within about 1 %, the enstrophy of
+the exact mode sampled at the cell centres over its true value: the vorticity has a cusp at the interface
+(`[d_nn u_t] = d_t [p] / mu`) that cell values cannot carry, so that part of the dissipation is missing.
+`1 / sqrt(1 + c (h / delta)^2)` with c = 0.376 fits all points. Figure: `docs/figures/capwave_layer_diag.png`.
+Notes: `docs/notes/38_capwave_layer_diag.md`.
