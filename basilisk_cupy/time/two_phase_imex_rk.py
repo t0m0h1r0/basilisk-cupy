@@ -30,8 +30,10 @@ class TwoPhaseIMEXRK(_TwoPhaseMixin, IMEXRKNS):
                  mu1: float = 0.0, mu2: float = 0.0, sigma: float = 0.0, gravity=None, periodic: tuple = (),
                  faces: str = "fd2", convection: str = "central", eps: float | None = None, reinit_every: int = 0,
                  reinit_method: str = "xi_sdf", curvature_kw: dict | None = None, jump_mode: str | None = None,
-                 capillary_dt_factor: float | None = None, **kw) -> None:
-        """Arguments as :class:`TwoPhaseIMEX`; ``tableau``: ``ars111``, ``ars121``, ``ars222`` (default),
+                 capillary_dt_factor: float | None = None, force_weights: str = "stage", **kw) -> None:
+        """``force_weights``: the face acceleration (interfacial jump) of stage ``i``: ``"stage"`` (that stage's own,
+        held over the stage's ``c_i dt``) or ``"scheme"`` (the implicit weights, ``sum_j aI_ij a_j / c_i``; the
+        final combination uses ``bI``), docs/notes/62. Arguments as :class:`TwoPhaseIMEX`; ``tableau``: ``ars111``, ``ars121``, ``ars222`` (default),
         ``ars233``, ``ars343``, ``ars443`` (:data:`~.imex_rk.TABLEAUX`)."""
         if kw.get("face_native"):
             raise NotImplementedError("TwoPhaseIMEXRK has the cell-state form only")
@@ -46,6 +48,9 @@ class TwoPhaseIMEXRK(_TwoPhaseMixin, IMEXRKNS):
                           reinit_method=reinit_method, curvature_kw=curvature_kw, jump_mode=jump_mode,
                           capillary_dt_factor=capillary_dt_factor)
         self.faces, self.convection_name = faces, convection
+        if force_weights not in ("stage", "scheme"):
+            raise ValueError("force_weights is 'stage' or 'scheme'")
+        self.force_weights = force_weights
 
     def _set_psi(self, q) -> None:
         xp = self.grid.xp
@@ -53,11 +58,24 @@ class TwoPhaseIMEXRK(_TwoPhaseMixin, IMEXRKNS):
         self.cls.psi.fill_ghosts()
         self._run_hooks("properties")
 
-    def _new_acceleration(self) -> None:
+    def _new_acceleration(self, weights=None, c: float = 1.0) -> None:
+        """Rebuild ``a`` at the current interface; with ``weights`` (``force_weights="scheme"``) replace it by
+        ``sum_j w_j a_j / c`` over the raw stage accelerations (this one appended first)."""
         if not self.a_is_constant:
             for ax in range(self.grid.ndim):
                 self.a[ax] = 0.0
         self._run_hooks("acceleration")
+        if self.force_weights != "scheme" or self.a_is_constant:
+            return
+        self._a_stages.append([self.a[ax].copy() for ax in range(self.grid.ndim)])
+        if weights is None:
+            return
+        for ax in range(self.grid.ndim):
+            acc = 0.0
+            for j, w in enumerate(weights):
+                if w and j < len(self._a_stages):
+                    acc = acc + w * self._a_stages[j][ax]
+            self.a[ax] = acc / c
 
     def step(self) -> None:
         c = self.clock
@@ -85,6 +103,7 @@ class TwoPhaseIMEXRK(_TwoPhaseMixin, IMEXRKNS):
         need_last = not (t.explicit_stiffly_accurate and t.implicit_stiffly_accurate)
 
         self._run_hooks("properties")
+        self._a_stages = [None]  # stage 0 (explicit only in ARS tableaux: aI_i0 = 0)
         self._run_hooks("advection_term")
         C = [zero if self.stokes else self.convection.tendency(self.u, self.uf)]
         R = [cls._rhs(psi_n, self.uf)]
@@ -111,7 +130,7 @@ class TwoPhaseIMEXRK(_TwoPhaseMixin, IMEXRKNS):
             self._implicit_solve(gdt, None)
             ustar = [comp.interior.copy() for comp in self.u]
             V.append([(us - r) / gdt for us, r in zip(ustar, rhs)] if implicit else zero)
-            self._new_acceleration()
+            self._new_acceleration(t.AI[i][:i + 1], t.c[i])
             self._run_hooks("projection")
             self._project_stage(ustar, g_n, p_n, t.c[i] * dt)
             if i < last or need_last:
@@ -130,7 +149,7 @@ class TwoPhaseIMEXRK(_TwoPhaseMixin, IMEXRKNS):
             q = mass_correction(q, cls.dv, m0)
         self._set_psi(q)
         if need_last:
-            self._new_acceleration()
+            self._new_acceleration(t.implicit_weights, 1.0)
             bI = t.implicit_weights
             final = []
             for ax in range(nd):

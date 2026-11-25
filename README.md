@@ -1044,3 +1044,9 @@ drop the jump error is 3.5-4.9 times smaller on coarse grids (5.4e-4 against 2.6
 1.7e-4 by N = 128, where the curvature error appears to dominate; on the paper's capillary wave the frequency
 improves slightly and the damping grows. It costs 2-4 times fd2's GFM on the CPU; fd2 stays the default.
 
+
+Stage forces in IMEX-RK and the paper's code (`docs/notes/62_rk_force_weights.md`): `TwoPhaseIMEXRK(force_weights="scheme")`
+mixes the stage jump accelerations with the implicit weights, which removes the first-order step dependence of the
+2nd- and 3rd-order tableaux on the capillary wave (ars222: -5.8 / -9.3 / -11.0 % becomes -12.55 / -12.63 / -12.68 %),
+as `force_weights` does for Crank-Nicolson. The paper's own implementation at its current commit stops in the first
+step of each chapter-14 benchmark configuration at one of its built-in admission checks.
