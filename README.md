@@ -913,3 +913,12 @@ Capillary wave (normal-mode start): -16.4 % -> +3.4 % damping and -3.4 % -> +0.5
 unchanged. Not yet met: the energy exchange is not exact (the corrected kinematics and the GFM force are not
 adjoint), and static-drop spurious currents decay about 10 times more slowly. Figure:
 `docs/figures/velocity_extension.png`. Notes: `docs/notes/44_velocity_extension.md`.
+
+Energy consistency of the corrected kinematics with the GFM force (`cases/adjoint_kinematics.py`): for a frozen
+psi the transport is linear in the face velocity, `psi_t = -T uf`, and `F_adj = T^T dE/dpsi / V_f` satisfies the
+semi-discrete identity to 1e-14. Measured against the sharp-interface energy `sigma L(eta)` (the one the GFM jump
+is consistent with), the work mismatch between `F_GFM` and `F_adj` predicts the default transport's damping
+deficit (-19.7 % / -5.8 % predicted, -16.6 % / -4.7 % measured at N = 32 / 64); after the band correction it is
+only -2 % and does not cause the remaining over-damping (+7.7 %, of which about half is the time step). The band
+area `sigma A_h(psi)` is not the GFM's energy and explains neither damping nor frequency. No force correction is
+needed. Figure: `docs/figures/adjoint_kinematics.png`. Notes: `docs/notes/45_adjoint_kinematics.md`.
