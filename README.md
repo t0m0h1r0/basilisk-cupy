@@ -756,6 +756,20 @@ iterations when `dt |g_{k+1} - g_k|` falls below it; converged, density ratio 10
 1.8-2.0 x (K = 1: below 1.0) with 4-5 iterations per step. Figures: `docs/figures/step_jacobian.png`,
 `docs/figures/step_jacobian_modes.png`. Notes: `docs/notes/35_step_jacobian.md`.
 
+The outer iterations now report and control their convergence: `coupled_criterion="change"` (`dt |g_{k+1} - g_k|`)
+or `"residual"` (the momentum residual, which is exactly `(dt^2/rho) L (g_{k+1} - g_k)` and is 4-28 times the
+change at density ratios 100-1000 because of the stiff gas viscosity, while the velocity error stays about half
+the change), `coupled_rtol=` (relative to the first iteration), `coupled_on_failure="warn"|"raise"|"ignore"` and
+`coupled_failures`. The lagging-pressure residue `P (B - I) w` splits into `[P, B] w + (B - I) P w`: on the
+unstable mode 96 % is the second term (the cell-centred projection does not remove a face gradient averaged to
+cells), not the commutator. Converged, the static-drop limit stays at 1.7-1.9 x tension.h's step (ratios 100 and
+1000) and 2.1-2.3 x (ratio 1) for N = 16-128, while one iteration (K = 1) falls with N (1.75 / 1.28 / 0.93 at
+ratio 100). Anderson acceleration of the pressure iterates (`coupled_anderson=m`) cuts the iterations by 35-50 %;
+extrapolating the pressure (`coupled_predictor="linear"`) helps only with `TwoPhaseCLS(jump_mode="smooth")`,
+where the jump is rebuilt from the moved interface. For a fixed physical time (oscillating drop, N = 32, ratio
+100) Basilisk's splitting at 0.95 x is still faster (9.3 s against 22-31 s) and more accurate. Figure:
+`docs/figures/coupled_solver.png`. Notes: `docs/notes/36_coupled_solver.md`.
+
 ## GPU (cupy)
 
 On the GPU the multigrid hot loops run as fused `cupy.RawKernel`s

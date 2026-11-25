@@ -51,7 +51,10 @@ class CenteredNS:
                  mu: float | FaceField | None = None,
                  cfl: float = 0.8, DT: float = 1e30, stokes: bool = False,
                  ops: FaceComplex | None = None, tolerance: float = TOLERANCE, viscous=None,
-                 coupled_iterations: int = 0, coupled_tolerance: float | None = None) -> None:
+                 coupled_iterations: int = 0, coupled_tolerance: float | None = None,
+                 coupled_criterion: str = "change", coupled_on_failure: str = "warn",
+                 coupled_predictor: str | None = None, coupled_anderson: int = 0,
+                 coupled_rtol: float | None = None) -> None:
         self.grid = grid
         self.ops = ops or FD2FaceComplex()
         self.periodic = tuple(periodic)
@@ -68,6 +71,32 @@ class CenteredNS:
         #: g_k|`` (from the second iteration on), falls below this (``coupled_iterations`` is then the
         #: maximum); ``None``: always K.
         self.coupled_tolerance = coupled_tolerance
+        #: What ``coupled_tolerance`` bounds: ``"change"``, ``dt max |g_{k+1} - g_k|`` (a fixed-point
+        #: increment), or ``"residual"``, the momentum residual ``max |u_adv + dt g - (I - dt/rho L) u|``
+        #: of the state the iteration would end with (Basilisk ``viscosity()`` only; docs/notes/36).
+        if coupled_criterion not in ("change", "residual"):
+            raise ValueError("coupled_criterion is 'change' or 'residual'")
+        self.coupled_criterion = coupled_criterion
+        #: Relative criterion: stop when the measure falls below ``coupled_rtol`` times its value after the
+        #: first iteration (dimensionless; with ``coupled_tolerance`` too, the larger bound applies).
+        self.coupled_rtol = coupled_rtol
+        #: ``coupled_iterations`` reached without meeting ``coupled_tolerance``: ``"warn"``, ``"raise"``
+        #: or ``"ignore"``; ``coupled_failures`` counts such steps, ``coupled_info`` describes the last step.
+        if coupled_on_failure not in ("warn", "raise", "ignore"):
+            raise ValueError("coupled_on_failure is 'warn', 'raise' or 'ignore'")
+        self.coupled_on_failure = coupled_on_failure
+        self.coupled_failures = 0
+        self.coupled_info: dict = {}
+        #: Initial pressure of the outer iterations: ``None``, the previous step's; ``"linear"``,
+        #: ``2 p^n - p^{n-1}`` (with ``TwoPhaseCLS(jump_mode="smooth")`` ``p`` is the pressure without
+        #: its jump, which the acceleration rebuilds from the moved interface).
+        if coupled_predictor not in (None, "linear"):
+            raise ValueError("coupled_predictor is None or 'linear'")
+        self.coupled_predictor = coupled_predictor
+        self._p_prev = None
+        #: Anderson acceleration of the pressure iterates with this many previous residuals (0: plain
+        #: fixed-point iteration). For an affine iteration it is equivalent to GMRES on ``(I - T) p = c``.
+        self.coupled_anderson = int(coupled_anderson)
         self.clock = Clock()
 
         ubcs = vector_bcs(grid.ndim, self.periodic, normal, tangential)
@@ -234,17 +263,33 @@ class CenteredNS:
         projects ``interp(u) + dt a`` and updates ``g``. At convergence
         ``(I - dt/rho L) u^{n+1} = u_adv + dt (a - alpha grad p^{n+1})`` with ``div u^{n+1} = 0``: the
         viscosity acts on the velocity the new force and pressure produce. With ``u_adv = 0`` and ``a``
-        balanced by ``grad p`` the iterate stays zero (well-balanced)."""
+        balanced by ``grad p`` the iterate stays zero (well-balanced).
+
+        The iteration is a fixed point ``p_{k+1} = T(p_k)`` of the pressure (the projection's solution
+        does not depend on its initial guess). Stopped after iteration k, the momentum residual is
+        ``-(dt^2/rho) L (g_{k+1} - g_k)``: the change ``dt |g_{k+1} - g_k|`` amplified by the viscous
+        operator (by up to ``4 nu dt d/h^2``)."""
+        xp = self.grid.xp
         if not self.a_is_constant:
             for ax in range(self.grid.ndim):
                 self.a[ax] = 0.0
         self._run_hooks("acceleration")
+        p_now = self.p.interior.copy()
+        if self.coupled_predictor == "linear" and self._p_prev is not None:
+            self.p.interior = 2.0 * p_now - self._p_prev
+            self.p.fill_ghosts()
+        self._p_prev = p_now
         self.centered_gradient()
         u_adv = [c.interior.copy() for c in self.u]
         #: max |g_{k+1} - g_k| of every outer iteration of the last step (convergence diagnostics)
         self.coupled_history = []
+        self.coupled_residuals = []  # momentum residual after each iteration (criterion "residual")
+        X, F = [], []  # Anderson: pressure iterates and their residuals T(p) - p
+        criterion = self.coupled_tolerance is not None or self.coupled_rtol is not None
+        converged = not criterion
         for _ in range(self.coupled_iterations):
             g_prev = [c.interior.copy() for c in self.g]
+            p_in = self.p.interior.copy()
             for comp, v in zip(self.u, u_adv):
                 comp.interior = v.copy()
             self.u.fill_ghosts()
@@ -266,12 +311,85 @@ class CenteredNS:
                                basilisk_tolerance=True)
             self._apply_uf_bc(self.uf)
             self.centered_gradient()
-            xp = self.grid.xp
             self.coupled_history.append(max(float(xp.max(xp.abs(c.interior - gp))) for c, gp in zip(self.g, g_prev)))
-            if (self.coupled_tolerance is not None and len(self.coupled_history) >= 2  # the first change is
-                    and dt * self.coupled_history[-1] < self.coupled_tolerance):  # the step's, not the iteration's
-                break
+            if self.coupled_criterion == "residual":
+                self.coupled_residuals.append(self.momentum_residual(u_adv, dt))
+            if criterion and len(self.coupled_history) >= 2:  # the first change is the step's, not the iteration's
+                seq = ([dt * c for c in self.coupled_history] if self.coupled_criterion == "change"
+                       else self.coupled_residuals)
+                bound = max(self.coupled_tolerance or 0.0, (self.coupled_rtol or 0.0) * seq[0])
+                if seq[-1] < bound:
+                    converged = True
+                    break
+            if self.coupled_anderson > 0 and len(self.coupled_history) < self.coupled_iterations:
+                self._anderson(X, F, p_in)
+        self.coupled_info = {"iterations": len(self.coupled_history), "converged": converged,
+                             "change": dt * self.coupled_history[-1] if self.coupled_history else 0.0}
+        if not converged:
+            self.coupled_failures += 1
+            msg = (f"coupled iterations: {self.coupled_iterations} iterations without reaching "
+                   f"tol {self.coupled_tolerance} / rtol {self.coupled_rtol} ({self.coupled_criterion}) "
+                   f"at step {self.clock.i}")
+            if self.coupled_on_failure == "raise":
+                raise RuntimeError(msg)
+            if self.coupled_on_failure == "warn":
+                import warnings  # noqa: PLC0415
+
+                warnings.warn(msg, RuntimeWarning, stacklevel=3)
         self.correction(dt)
+
+    def _anderson(self, X, F, p_in) -> None:
+        """Replace the projection's pressure ``T(p_in)`` by the Anderson mixture of the last
+        ``coupled_anderson + 1`` iterates (type II, no damping), and recompute ``g`` from it. The face
+        velocity stays the one projected with ``T(p_in)`` (divergence-free)."""
+        xp = self.grid.xp
+        Tp = self.p.interior.copy()
+        f = Tp - p_in
+        f = f - xp.mean(f)  # the gauge
+        X.append(Tp)
+        F.append(f)
+        if len(F) > self.coupled_anderson + 1:
+            X.pop(0)
+            F.pop(0)
+        if len(F) < 2:
+            return
+        dF = xp.stack([(F[i + 1] - F[i]).ravel() for i in range(len(F) - 1)], axis=1)
+        dX = [X[i + 1] - X[i] for i in range(len(X) - 1)]
+        gamma = xp.linalg.lstsq(dF, F[-1].ravel(), rcond=None)[0]
+        mix = X[-1] - sum(float(gamma[i]) * dX[i] for i in range(len(dX)))
+        self.p.interior = mix
+        self.p.fill_ghosts()
+        self.centered_gradient()
+
+    def momentum_residual(self, u_adv, dt: float) -> float:
+        """``max |u_adv + dt g - (I - dt/rho L) u|`` for the velocity ``u = self.u + dt g`` the step would end
+        with now (Basilisk ``viscosity()`` operator; ``u - u_adv - dt g`` without viscosity)."""
+        xp = self.grid.xp
+        v = self.u.copy()
+        for ax in range(self.grid.ndim):
+            v[ax].interior = self.u[ax].interior + dt * self.g[ax].interior
+        v.fill_ghosts()
+        b = [xp.ascontiguousarray(u_adv[ax] + dt * self.g[ax].interior) for ax in range(self.grid.ndim)]
+        if self.mu is None:
+            return max(float(xp.max(xp.abs(b[ax] - v[ax].interior))) for ax in range(self.grid.ndim))
+        if self.viscous is not None:
+            raise NotImplementedError("the momentum residual uses Basilisk's viscosity() operator")
+        from ..linear.viscosity import ViscosityProblem  # noqa: PLC0415
+
+        problem = ViscosityProblem(v, self.mu, self.rho, dt)
+        res = [xp.zeros_like(c) for c in b]
+        problem.residual(list(v), b, res)
+        return max(float(xp.max(xp.abs(r))) for r in res)
+
+    def divergence_residuals(self) -> tuple[float, float]:
+        """``dt max |div uf|`` (faces, what the projection enforces) and ``dt max |div interp(u)|`` (the
+        centred velocity, which the approximate projection leaves divergent)."""
+        xp = self.grid.xp
+        per = tuple(ax for ax in range(self.grid.ndim) if ax in self.periodic)
+        dt = float(self.clock.dt)
+        face = dt * float(xp.max(xp.abs(self.ops.div_f(self.uf, periodic=per))))
+        cell = dt * float(xp.max(xp.abs(self.ops.div_f(self.face_velocity(), periodic=per))))
+        return face, cell
 
     def run(self, t_end: float, *, every: Callable[["CenteredNS"], bool | None] | None = None,
             max_steps: int | None = None) -> None:
