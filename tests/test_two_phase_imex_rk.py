@@ -66,3 +66,21 @@ def test_options():
         TwoPhaseIMEXRK(grid, phi, rho2=0.1, faces="fccd")
     with pytest.raises(NotImplementedError):
         TwoPhaseIMEXRK(grid, phi, face_native=True)
+
+
+def test_force_weights():
+    """``force_weights="scheme"`` mixes the stage accelerations with the implicit weights (docs/notes/62): it changes
+    the result of a 2-stage tableau, and is rejected with an unknown name."""
+    grid = CartesianGrid((16, 16), origin=(-0.5, -0.5))
+    x, y = grid.meshgrid()
+    phi = 0.25 - np.hypot(x, y) + 0.02 * np.cos(2 * np.arctan2(y, x))
+    out = {}
+    for fw in ("stage", "scheme"):
+        ns = TwoPhaseIMEXRK(grid, phi, tableau="ars222", mu1=0.1, mu2=0.1, sigma=1.0, fixed_dt=2e-3, force_weights=fw)
+        ns.start()
+        for _ in range(4):
+            ns.step()
+        out[fw] = np.stack([c.interior.copy() for c in ns.u])
+    assert np.abs(out["stage"] - out["scheme"]).max() > 1e-8
+    with pytest.raises(ValueError):
+        TwoPhaseIMEXRK(grid, phi, force_weights="midpoint")

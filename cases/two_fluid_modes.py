@@ -89,3 +89,72 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
+
+
+# -- 2-D drop (circular cylinder) ------------------------------------------------------------------------
+
+def _drop_matrix(s, n, R, sigma, rho1, mu1, rho2, mu2):
+    """Rows: u_r, u_theta continuous; shear stress continuous; normal stress jump. Columns: A (inner potential
+    r^n), B (inner stream I_n(m1 r)), C (outer potential r^-n), D (outer stream K_n(m2 r)); factor e^{i n theta}."""
+    import mpmath
+
+    def iv(n_, z):
+        return complex(mpmath.besseli(n_, z))
+
+    def kv(n_, z):
+        return complex(mpmath.besselk(n_, z))
+
+    i = 1j
+    m1 = np.sqrt(s * rho1 / mu1 + 0j)
+    m2 = np.sqrt(s * rho2 / mu2 + 0j)
+    if m1.real < 0:
+        m1 = -m1
+    if m2.real < 0:
+        m2 = -m2
+    d = 1e-6 * R
+
+    basis = [lambda r: r ** n, lambda r: iv(n, m1 * r), lambda r: r ** (-n), lambda r: kv(n, m2 * r)]
+    is_phi = [True, False, True, False]
+    mus = [mu1, mu1, mu2, mu2]
+    rhos = [rho1, rho1, rho2, rho2]
+
+    def ur(f, phi, r):  # u_r = phi_r (potential) or (1/r) psi_theta = i n psi / r (stream)
+        return (f(r + d) - f(r - d)) / (2 * d) if phi else i * n * f(r) / r
+
+    def ut(f, phi, r):  # u_theta = (1/r) phi_theta = i n phi / r, or -psi_r
+        return i * n * f(r) / r if phi else -(f(r + d) - f(r - d)) / (2 * d)
+
+    M = np.zeros((4, 4), dtype=complex)
+    sign = [1, 1, -1, -1]  # inner minus outer
+    for k in range(4):
+        f, phi, mu, rho, sg = basis[k], is_phi[k], mus[k], rhos[k], sign[k]
+        M[0, k] = sg * ur(f, phi, R)
+        M[1, k] = sg * ut(f, phi, R)
+        # tau_r_theta = mu (r d/dr(u_theta / r) + (1/r) d u_r / d theta)
+        dvt = ((ut(f, phi, R + d) / (R + d)) - (ut(f, phi, R - d) / (R - d))) / (2 * d)
+        M[2, k] = sg * mu * (R * dvt + i * n * ur(f, phi, R) / R)
+        # sigma_rr = -p + 2 mu d u_r / dr, p = -rho s phi (potential part only)
+        durr = (ur(f, phi, R + d) - ur(f, phi, R - d)) / (2 * d)
+        p = -rho * s * f(R) if phi else 0.0
+        M[3, k] = sg * (-p + 2 * mu * durr)
+    # surface tension: (sigma_rr,1 - sigma_rr,2) = -sigma (n^2 - 1) eta / R^2, with s eta = u_r(R) (inner)
+    for k in range(2):
+        M[3, k] += sigma * (n * n - 1) / R ** 2 * ur(basis[k], is_phi[k], R) / s
+    return M
+
+
+def drop_mode(n: int, R: float, sigma: float, rho1: float, mu1: float, rho2: float, mu2: float) -> complex:
+    """Complex growth rate ``s`` of mode ``n`` of a 2-D viscous drop (fluid 1 inside, radius R), Newton from the
+    inviscid ``i sqrt(n (n^2 - 1) sigma / ((rho1 + rho2) R^3))``."""
+    args = (n, R, sigma, rho1, mu1, rho2, mu2)
+    s = 1j * math.sqrt(n * (n * n - 1) * sigma / ((rho1 + rho2) * R ** 3))
+    for _ in range(200):
+        M0 = _drop_matrix(s, *args)
+        scale = np.abs(M0).max(axis=0)  # column scaling (the Bessel functions span many orders of magnitude)
+        f = np.linalg.det(M0 / scale)
+        ds = 1e-7 * abs(s)
+        step = f / ((np.linalg.det(_drop_matrix(s + ds, *args) / scale) - f) / ds)
+        s = s - step
+        if abs(step) < 1e-12 * abs(s):
+            break
+    return s

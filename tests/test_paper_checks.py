@@ -46,3 +46,13 @@ def test_paper_capillary_wave_volume_tolerance():
     s = r["series"]
     assert s[-1]["amplitude"] / s[0]["amplitude"] == pytest.approx(0.898932, abs=2e-5)
     assert abs(s[-1]["mass"] / s[0]["mass"] - 1.0) < 1e-13
+
+
+def test_drop_mode():
+    """2-D viscous drop, mode 2: weak damping 2 n (n - 1) nu / R^2 and sqrt(6) in near vacuum; the paper's drop."""
+    from cases.two_fluid_modes import drop_mode
+
+    s = drop_mode(2, 1.0, 1.0, 1.0, 1e-3, 1e-4, 1e-7)
+    assert s.real == pytest.approx(-0.004, rel=0.02) and s.imag == pytest.approx(math.sqrt(6.0), rel=1e-3)
+    s = drop_mode(2, math.sqrt(5.5e-3 * 4.5e-3), 0.0728, 998.2, 1.002e-3, 1.204, 1.825e-5)
+    assert s.real == pytest.approx(-0.179428, rel=1e-4) and s.imag == pytest.approx(59.554813, rel=1e-6)

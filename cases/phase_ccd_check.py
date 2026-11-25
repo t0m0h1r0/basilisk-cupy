@@ -16,15 +16,33 @@ import warnings
 import numpy as np
 
 
-def drop(faces: str, n: int, ratio: float, t_end: float = 0.5):
+CURVATURES = {
+    "psi": None,
+    "heights-fd2": {"method": "heights", "heights_method": "fd2"},
+    "heights-ccd": {"method": "heights", "heights_method": "ccd"},
+    "phi": {"source": "phi"},
+    "exact": "exact",
+}
+
+
+def drop(faces: str, n: int, ratio: float, t_end: float = 0.5, curvature: str = "psi"):
     warnings.filterwarnings("ignore")
     from basilisk_cupy import CartesianGrid
     from basilisk_cupy.time.two_phase_imex import TwoPhaseIMEX
 
     g = CartesianGrid((n, n), origin=(-0.5, -0.5))
     x, y = g.meshgrid()
+    ck = CURVATURES[curvature]
     ns = TwoPhaseIMEX(g, 0.25 - np.hypot(x, y), rho1=1.0, rho2=1.0 / ratio, mu1=0.1, mu2=0.1, sigma=1.0,
-                      faces=faces, tolerance=1e-8)
+                      faces=faces, tolerance=1e-8, curvature_kw=None if ck in (None, "exact") else dict(ck))
+    if ck == "exact":  # oracle: the exact curvature 1/R in the band (the drop stays at rest)
+        from basilisk_cupy.interface.cls_curvature import PSI_MIN
+
+        def exact_curvature(**kw):
+            q = ns.cls.psi.interior
+            return np.where((q > PSI_MIN) & (q < 1 - PSI_MIN), 4.0, 0.0)
+
+        ns.cls.curvature = exact_curvature
     ns.start(events=[t_end])
     umax, t0 = 0.0, time.time()
     while ns.clock.t < t_end - 1e-12:
@@ -60,7 +78,18 @@ def _dispatch(kind, kw):
 def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--jobs", type=int, default=None)
+    ap.add_argument("--curvature-scan", action="store_true", help="static drop, ratio 1000, curvature variants")
     args = ap.parse_args()
+    if args.curvature_scan:
+        from cases.parallel import pmap
+
+        items = [dict(faces=f, n=n, ratio=1000.0, curvature=c) for c in CURVATURES for f in ("fd2", "phase-ccd")
+                 for n in (32, 64, 128)]
+        for it, r in zip(items, pmap(drop, items, args.jobs)):
+            print(f"{it['curvature']:12s} {it['faces']:9s} N {it['n']:3d}: jump {r['jump']:.6f} "
+                  f"({r['jump'] / 4 - 1:+.2e}) u_end {r['u_end']:.2e} u_max {r['u_max']:.2e} t {r['t']:.3f} "
+                  f"({r['steps']} steps, {r['wall']:.0f}s)", flush=True)
+        return
     from cases.parallel import pmap
     from cases.two_fluid_modes import mode
 
