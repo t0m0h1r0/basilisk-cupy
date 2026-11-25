@@ -22,7 +22,8 @@ Design document: see the project's design doc ("Basilisk → CuPy 移植設計�
 | ⑤ Interface (two-phase) | VOF baseline (`vof.h` PLIC advection, `two-phase.h`, `heights.h` / `curvature.h`, `tension.h`, `iforce.h`, `reduced.h`; field-by-field equal to Basilisk's C build on the first steps of `gravity.c` / `capwave.c` and on the curvature tests). TwoPhaseFlow's CLS `psi` (`CLSInterface`: TVD-RK3 transport with FCCD face values and the corrected divergence, mass closure; ξ-SDF / Ridge–Eikonal, compression–diffusion and ACLS re-initialisation; curvature from `psi`, from the logit `phi` or from `psi`'s height functions) |
 | Two-phase coupling | `TwoPhaseCLS` on `CenteredNS`: CSF, or the paper's pressure-jump closure as a ghost-fluid method (phase-wise constant densities, GFM coefficient on cut faces; `pressure_jump=True`), with the jump either sharp or in the smooth form `p̃ = p − H j_ext` that FCCD's projection can differentiate (`jump_mode="smooth"`); capillary step bound × √(5/12) for the CCD curvature (stable to density ratio 1000 for a static drop); sharp GFM also on mapped grids |
 | Coupled iterations | `CenteredNS(coupled_iterations=K, coupled_rtol=..., coupled_anderson=m)`: outer iterations of viscosity, interfacial acceleration and projection within a step, with change / momentum-residual criteria and Anderson acceleration |
-| Not yet | the paper's seven-stage two-phase step as one integrator (IMEX-BDF2 with variable density + CLS + split PPE); HFE; defect correction of the split PPE; FCCD projection with a density ratio (the smooth form assumes equal densities) |
+| Paper's two-phase step | `TwoPhaseIMEX` (`time/two_phase_imex.py`): IMEX-BDF2 + CLS + pressure-jump GFM as one combination of the existing parts (§11b1's seven stages), options for the face operators, convection and the interface-transport velocity |
+| Not yet | split FCCD PPE with a density ratio; HFE; defect correction of the split PPE; FCCD projection with a density ratio (the smooth form assumes equal densities) |
 
 ## Usage
 
@@ -970,3 +971,14 @@ closed-curve chart without coupling to Navier–Stokes (the paper's own `force_a
 amplitude ratio after one period, 0.7936, is a damping rate about 6.2 times the weak viscous estimate
 exp(-2 nu k^2 T) = 0.964, and its grid resolves the liquid vorticity layer with delta/h = 0.20; the CLS kinematics
 of B under-damps, so it does not explain this. The Rayleigh–Taylor growth rate is asserted, not fitted.
+
+The paper's standard two-phase step as one combination (`docs/notes/50_two_phase_imex.md`,
+`docs/figures/two_phase_imex.png`): `TwoPhaseIMEX(grid, phi0, rho1=, rho2=, mu1=, mu2=, sigma=, gravity=,
+faces="fd2"|"fccd", convection="central"|"fuccd"|"uccd6", transport="projected"|"ab2")` is `IMEXBDF2NS` with
+`TwoPhaseCLS` (sharp GFM) attached. A static drop stays at rest to t = 0.5 for density ratios 1 to 1000
+(jump 4.0105 / 4.0030 at N = 32 / 64, mass to 1e-14), as with `CenteredNS`. On the capillary wave the paper's
+stage 1 — psi moved by the frozen projected face velocity `u_f^n` — is first order in time: the damping error at
+16 points per wavelength goes -18.8 / -15.9 / -14.4 / -13.6 / -13.2 / -13.0 % as the step is halved five times,
+and moving psi with the AB2 midpoint velocity `(1 + w/2) u_f^n - (w/2) u_f^{n-1}` removes it (-12.0 ... -12.8 %,
+the same limit as `CenteredNS`). The remaining -12.7 % is the CLS kinematics of B. Independent runs of the case
+scripts are spread over CPU cores (`cases/parallel.py`).
