@@ -68,6 +68,36 @@ def mass_correction(psi, dv, target):
     return xp.clip(psi + (gate * ratio) * w, 0.0, 1.0)
 
 
+def cell_widths(grid, ax: int):
+    """Physical cell widths along ``ax``, broadcastable to the interior shape (a float on a uniform axis)."""
+    if grid.axis_uniform(ax):
+        return float(grid.h[ax])
+    f = grid.faces(ax)
+    w = f[1:] - f[:-1]
+    shape = [1] * grid.ndim
+    shape[ax] = -1
+    return w.reshape(shape)
+
+
+def centre_spacing(grid, ax: int):
+    """Distance between the centres on either side of every face along ``ax`` (ghost centres mirrored
+    about walls), broadcastable to the face shape (a float on a uniform axis)."""
+    if grid.axis_uniform(ax):
+        return float(grid.h[ax])
+    c = grid.centers(ax, with_ghosts=True)
+    g, n = grid.ghosts, grid.n[ax]
+    d = c[g:g + n + 1] - c[g - 1:g + n]
+    shape = [1] * grid.ndim
+    shape[ax] = -1
+    return d.reshape(shape)
+
+
+def min_width(grid) -> float:
+    """Smallest physical cell width over all axes."""
+    xp = grid.xp
+    return min(float(xp.min(xp.asarray(cell_widths(grid, ax)))) for ax in range(grid.ndim))
+
+
 def _take_first(a, ax):
     idx = [slice(None)] * a.ndim
     idx[ax] = slice(0, 1)
@@ -80,27 +110,31 @@ class CLSInterface:
     def __init__(self, psi: CellField, eps: float | None = None, *, ops: FCCDFaceComplex | None = None,
                  mass_closure: bool = True, divergence: str = "plain") -> None:
         grid = psi.grid
-        if grid.ndim != 2 or not grid.is_uniform:
-            raise NotImplementedError("CLS is implemented on uniform 2-D grids")
+        if grid.ndim != 2:
+            raise NotImplementedError("CLS is implemented in 2-D")
         self.psi = psi
-        self.eps = EPSILON_FACTOR * float(min(grid.h)) if eps is None else float(eps)
+        self.eps = EPSILON_FACTOR * min_width(grid) if eps is None else float(eps)
         self.ops = ops or FCCDFaceComplex()
         self.ccd = self.ops.ccd if hasattr(self.ops, "ccd") else CCDCellDerivative()
         self.mass_closure = mass_closure
         if divergence not in ("plain", "fccd", "full"):
             raise ValueError("divergence is 'plain' (the paper's D_f) or 'fccd' (D_f of the corrected flux)")
         self.divergence = divergence
+        if not grid.is_uniform and divergence != "plain":
+            raise NotImplementedError("on a mapped grid the CLS transport has the plain divergence only")
         self._d1_cache: dict = {}
-        self.dv = float(grid.h[0] * grid.h[1])
+        # cell volumes (an array on a mapped grid) and the widths the face difference divides by
+        self.dv = float(grid.h[0] * grid.h[1]) if grid.is_uniform else grid.cell_volumes()
+        self._widths = [cell_widths(grid, ax) for ax in range(2)]
 
     @classmethod
     def from_level_set(cls, grid, phi_cells, bc, eps: float | None = None, **kw) -> "CLSInterface":
         """``psi = H_eps(phi)`` from cell-centred values of a signed distance positive in the liquid."""
-        e = EPSILON_FACTOR * float(min(grid.h)) if eps is None else float(eps)
+        e = EPSILON_FACTOR * min_width(grid) if eps is None else float(eps)
         return cls(CellField.from_interior(grid, psi_from_phi(phi_cells, e), bc), e, **kw)
 
     def mass(self) -> float:
-        return float(self.psi.interior.sum()) * self.dv
+        return float(self.psi.grid.xp.sum(self.psi.interior * self.dv))
 
     def curvature(self, method: str = "psi", **kw):
         """Curvature in the interface band: ``method="psi"`` differentiates ``psi`` (the paper,
@@ -138,7 +172,7 @@ class CLSInterface:
             lo = [slice(None)] * 2
             hi = [slice(None)] * 2
             lo[ax], hi[ax] = slice(0, n), slice(1, n + 1)
-            d = (flux[tuple(hi)] - flux[tuple(lo)]) / float(grid.h[ax])
+            d = (flux[tuple(hi)] - flux[tuple(lo)]) / self._widths[ax]
             out = -d if out is None else out - d
         return out
 
@@ -184,7 +218,7 @@ class CLSInterface:
         """One TVD-RK3 step with the face velocity ``uf`` (frozen), clipping each stage, then stage B."""
         xp = self.psi.grid.xp
         q0 = self.psi.interior
-        m0 = xp.sum(q0) * self.dv
+        m0 = xp.sum(q0 * self.dv)
         q1 = xp.clip(q0 + dt * self._rhs(q0, uf), 0.0, 1.0)
         q2 = xp.clip(0.75 * q0 + 0.25 * (q1 + dt * self._rhs(q1, uf)), 0.0, 1.0)
         q3 = xp.clip(q0 / 3.0 + 2.0 / 3.0 * (q2 + dt * self._rhs(q2, uf)), 0.0, 1.0)
@@ -208,6 +242,8 @@ class CLSInterface:
         ``distance`` (xi-SDF): ``"points"`` is the paper's distance to the nearest crossing point;
         ``"segments"`` the distance to the polyline through the crossings (marching squares on the
         dual cells), which an oblique interface needs (see :func:`_distance_to_crossings`)."""
+        if not self.psi.grid.is_uniform:
+            raise NotImplementedError("re-initialisation is implemented on uniform grids")
         if method == "xi_sdf":
             self._reinit_xi_sdf(code_variant, distance)
         elif method == "compression":

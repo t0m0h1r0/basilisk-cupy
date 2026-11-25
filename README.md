@@ -852,3 +852,15 @@ the exact mode sampled at the cell centres over its true value: the vorticity ha
 (`[d_nn u_t] = d_t [p] / mu`) that cell values cannot carry, so that part of the dissipation is missing.
 `1 / sqrt(1 + c (h / delta)^2)` with c = 0.376 fits all points. Figure: `docs/figures/capwave_layer_diag.png`.
 Notes: `docs/notes/38_capwave_layer_diag.md`.
+
+CLS and the sharp GFM jump on mapped grids (`CartesianGrid(..., mapping=(None, MonitorMapping(...)))`): the CLS
+face difference divides by the physical cell widths, the mass uses the cell volumes, the GFM jump divides by
+the centre distance (as the fd2 face gradient) and tension's step bound uses the smallest physical width
+(re-initialisation, the smooth jump form, the `fccd`/`full` transport corrections, implicit tension and surface
+viscosity still refuse mapped grids; momentum advection too, so the comparison runs Stokes). An identity map
+reproduces the uniform grid to 1e-8. With 32 x 32 cells and the y axis refined alpha = 2 / 4 / 8 times about the
+interface, the capillary-wave damping error drops from -20.6 % to -9.5 / -4.5 / -2.2 % (`cases/mapped_capwave_figures.py`),
+but the line relaxation of the mapped multigrid makes it slower on the CPU than a uniform grid of the same
+accuracy (43-51 s against 16 s for uniform 64^2 at -6.1 % and 58 s for 128^2 at -0.4 %). The static drop needs
+eps from the coarsest cells the interface crosses. Figure: `docs/figures/mapped_cls.png`. Notes:
+`docs/notes/39_mapped_cls.md`.

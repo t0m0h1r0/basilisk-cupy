@@ -158,6 +158,9 @@ class TwoPhaseCLS(TwoPhase):
         self.pressure_jump = pressure_jump
         self.surface_viscosity = float(surface_viscosity)
         self.implicit_tension = float(implicit_tension)
+        if not f.grid.is_uniform and (jump_mode != "sharp" or surface_viscosity or implicit_tension):
+            raise NotImplementedError("on a mapped grid TwoPhaseCLS has the sharp jump only (no surface "
+                                      "viscosity, no implicit tension)")
         if jump_mode not in ("sharp", "smooth"):
             raise ValueError("jump_mode is 'sharp' (the pressure jumps) or 'smooth' (p - H j_ext is solved for)")
         self.jump_mode = jump_mode
@@ -340,12 +343,14 @@ class TwoPhaseCLS(TwoPhase):
         for pot in self.potentials:
             v = pot(self)
             phi = v if phi is None else phi + v
-        h = float(self.f.grid.h[0])
         ns.a_is_constant = False
         if self.jump_mode == "smooth":
             self._smooth_jump_force(ns, phi)
             return
+        from .cls import centre_spacing  # noqa: PLC0415
+
         for ax in range(2):
+            h = centre_spacing(self.f.grid, ax)  # the fd2 face gradient divides by the centre distance
             hl, hr, cut, theta = self._cut(ax)
             jl, jr = self._faces(phi, ax)
             j = (1.0 - theta) * jl + theta * jr

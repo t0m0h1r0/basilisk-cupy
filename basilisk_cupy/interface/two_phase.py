@@ -119,7 +119,9 @@ class TwoPhase:
         amin = min(float(xp.min(a)) for a in ns.alpha.components)
         amax = max(float(xp.max(a)) for a in ns.alpha.components)
         rhom = (1.0 / amin + 1.0 / amax) / 2.0
-        dmin = float(min(self.f.grid.h))
+        from .cls import min_width  # noqa: PLC0415
+
+        dmin = min_width(self.f.grid)  # the smallest physical cell width (grid.h is the xi width on a mapped axis)
         dt = math.sqrt(rhom * (dmin * dmin * dmin) / (PI * self.sigma))
         if dt < ns.dtmax:
             ns.dtmax = dt

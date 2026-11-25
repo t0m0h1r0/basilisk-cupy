@@ -204,6 +204,9 @@ class HelmholtzProblem:
             den = den - self.lam[level]
         bc = self.correction_bcs[0]
         line_axes = [ax for ax in range(ndim) if not bc.is_periodic(ax)] or [None]
+        if LINES_MAPPED_ONLY:  # anisotropy comes from the stretched axes only: lines along those suffice
+            mapped = [ax for ax in line_axes if ax is not None and not grid.axis_uniform(ax)]
+            line_axes = mapped or line_axes
         interior = grid.interior()
         for ax in line_axes:
             others = [b for b in range(ndim) if b != ax]
@@ -231,6 +234,10 @@ class HelmholtzProblem:
                 else:
                     da.data[interior] = new
                     break
+
+
+#: relax lines along the stretched axes only (a uniform axis keeps its point coupling); see _relax_lines
+LINES_MAPPED_ONLY = False
 
 
 def _solve_lines(xp, axis: int, lower, diag, upper, rhs, s_lo: float, s_hi: float):
