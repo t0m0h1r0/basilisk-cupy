@@ -131,14 +131,40 @@ def solve(n: int, ratio: float, variant: str, j0: float = 4.0, tolerance: float 
 def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--jobs", type=int, default=None)
+    ap.add_argument("--out", default="docs/figures")
     args = ap.parse_args()
     from cases.parallel import pmap
 
     items = [dict(n=n, ratio=r, variant=v) for v in ("fd2", "fccd-smooth", "fccd-sharp")
              for r in (1.0, 10.0, 1000.0) for n in (32, 64, 128)]
-    for it, r in zip(items, pmap(solve, items, args.jobs)):
+    res = pmap(solve, items, args.jobs)
+    for it, r in zip(items, res):
         print(f"{it['variant']:12s} ratio {it['ratio']:6g} N {it['n']:4d}: p err {r['p_err']:.3e} "
               f"(outside the band {r['p_err_far']:.3e}, scale {r['p_scale']:.0f}), |u_f| {r['u_res']:.3e}")
+    import matplotlib
+
+    matplotlib.use("Agg")
+    import matplotlib.pyplot as plt
+
+    fig, ax = plt.subplots(figsize=(6.4, 4.4))
+    styles = {"fd2": "o-", "fccd-smooth": "s--", "fccd-sharp": "^:"}
+    colors = {1.0: "C0", 10.0: "C1", 1000.0: "C3"}
+    for v in styles:
+        for ratio in colors:
+            pts = [(it["n"], r["u_res"]) for it, r in zip(items, res) if it["variant"] == v and it["ratio"] == ratio]
+            ax.loglog(*zip(*pts), styles[v], color=colors[ratio], label=f"{v}, density ratio {ratio:g}")
+    ns_ = np.array([32, 128])
+    ax.loglog(ns_, 2.4e-2 * (ns_ / 32.0) ** -2, "k-", lw=0.6)
+    ax.loglog(ns_, 1.3e-4 * (ns_ / 32.0) ** -4, "k-", lw=0.6)
+    ax.text(90, 4e-3, "h²", fontsize=8)
+    ax.text(90, 2e-6, "h⁴", fontsize=8)
+    ax.set_xlabel("N")
+    ax.set_ylabel("residual face velocity max |u_f|")
+    ax.set_title("manufactured p_k = ρ_k s + j₀H: projected face velocity")
+    ax.legend(fontsize=6.5, ncol=1, loc="center left", bbox_to_anchor=(1.0, 0.5))
+    fig.tight_layout()
+    fig.savefig(f"{args.out}/density_ratio_fccd.png", dpi=150, bbox_inches="tight")
+    print("wrote", f"{args.out}/density_ratio_fccd.png")
 
 
 if __name__ == "__main__":
