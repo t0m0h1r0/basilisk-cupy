@@ -1031,3 +1031,8 @@ height-function curvature; the rising bubble runs to 0.06 s with re-initialisati
 0.039 s, where the paper reports its unresolved breakdown), CLS and VOF agree to 1 % on the centroid while the paper
 rises about 17 % more and its mean rise velocity is inconsistent with its own centroid; the Rayleigh-Taylor linear
 growth rate is 1.721-1.731 against 1.754 for the viscous, capillary normal mode (the paper's 1.78 omits both).
+
+Verdict on the paper (`docs/notes/60_paper_verdict.md`): fifteen claims checked against measurements, with the
+recommended configuration of this port: SBDF2, ab2 interface transport, xi-SDF re-initialisation every 10 steps,
+height-function curvature for closed interfaces, fd2 GFM faces, tension.h's step times sqrt(5/12), and a
+volume-change projection tolerance for dimensional problems.
