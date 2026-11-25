@@ -151,6 +151,10 @@ class CapwaveMap:
         cls = CLSInterface.from_level_set(grid, y + 0.0 * x, BoundaryConditions(),
                                           divergence=kw.pop("divergence", "plain" if tension == "adjoint" else "fccd"),
                                           ops=FCCDFaceComplex(order=6))
+        if kw.pop("cls_kinematics", "transport") == "extension":
+            from cases.velocity_extension import attach as extension
+
+            extension(cls)
         ckw = {"method": "heights"} if curvature == "heights" else {}
         tp = TwoPhaseCLS(ns, cls, rho1=1.0, rho2=1.0, mu1=self.nu, mu2=self.nu, vof_first=True, pressure_jump=True,
                          curvature_kw=ckw, capillary_dt_factor=1e9, jump_mode=kw.pop("jump_mode", "sharp"))
