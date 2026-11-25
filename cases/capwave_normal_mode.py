@@ -86,7 +86,8 @@ def fit(t, a, s0: complex) -> complex:
 def run(n, f: float = 1.0, periods: float = 2.0, a: float = 0.01, viscous=None, ops_ns=None,
         jump_mode: str = "sharp", DT: float = cw.STEP, profile: bool = False, budget: bool = False,
         eps_factor: float | None = None, cls_kw: dict | None = None, pressure_jump: bool = True,
-        vorticity: bool = False, mapping_y=None, stokes: bool = False, plain: bool | None = None):
+        vorticity: bool = False, mapping_y=None, stokes: bool = False, plain: bool | None = None,
+        jump_correction: dict | None = None):
     warnings.filterwarnings("ignore")
     nu = cw.MU * f
     s, F = mode(K, 1.0, 1.0, nu, a)
@@ -115,6 +116,10 @@ def run(n, f: float = 1.0, periods: float = 2.0, a: float = 0.01, viscous=None, 
     tp = TwoPhaseCLS(ns, cls, rho1=1.0, rho2=1.0, mu1=nu, mu2=nu, vof_first=True, pressure_jump=pressure_jump,
                      jump_mode=jump_mode, **(cls_kw or {}))
     tp.add_surface_tension(1.0)
+    if jump_correction is not None:
+        from cases.jump_viscous import attach
+
+        attach(ns, tp, **jump_correction)
     ns.u[0].interior = u.real
     ns.u[1].interior = v.real
     ns.u.fill_ghosts()
@@ -202,9 +207,14 @@ def run(n, f: float = 1.0, periods: float = 2.0, a: float = 0.01, viscous=None, 
         ns.step()
         if abs(ns.clock.t - times[len(amps)]) <= 1e-9:
             amps.append(amplitude())
+            if not np.isfinite(amps[-1]) or abs(amps[-1]) > 100 * a:  # blown up: keep what was recorded
+                break
             if vorticity:
                 vort.append((ns.clock.t, omega_k()))
-    sh = fit(times, amps, s)
+    try:
+        sh = fit(times[:len(amps)], amps, s) if np.all(np.isfinite(amps)) else complex("nan")
+    except np.linalg.LinAlgError:
+        sh = complex("nan")
     out = {"s": s, "s_h": sh, "damping_err": sh.real / s.real - 1, "frequency_err": sh.imag / s.imag - 1,
            "delta_h": math.sqrt(2 * nu / W0) / (2.0 / ny), "amplitudes": amps, "t": times}
     if vorticity:
