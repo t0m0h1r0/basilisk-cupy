@@ -36,8 +36,66 @@ from basilisk_cupy.backend import to_numpy
 WATER_AIR = dict(rho1=998.2, rho2=1.204, mu1=1.002e-3, mu2=1.825e-5, sigma=0.0728)
 
 
-def _stepper(grid, phi, kw):
+class VOFRun:
+    """Basilisk's VOF two-phase flow on ``CenteredNS`` with the diagnostics interface of the CLS steppers
+    (``psi`` is the volume fraction)."""
+
+    def __init__(self, grid, level, kw) -> None:
+        from basilisk_cupy import BoundaryConditions, CellField
+        from basilisk_cupy.boundary import Neumann, Periodic
+        from basilisk_cupy.interface.fractions import fraction
+        from basilisk_cupy.interface.two_phase import TwoPhase
+        from basilisk_cupy.time.basilisk_centered import CenteredNS
+
+        periodic = tuple(kw.get("periodic", ()))
+        walls = {w: 0.0 for w, ax in (("left", 0), ("right", 0), ("bottom", 1), ("top", 1)) if ax not in periodic}
+        self.ns = CenteredNS(grid, periodic=periodic, uf_normal=walls, tolerance=kw.get("vof_tolerance", 1e-8))
+        bc = BoundaryConditions()
+        for ax in range(2):
+            for side in (0, 1):
+                bc.set((ax, side), Periodic() if ax in periodic else Neumann(0.0))
+        self.f = CellField.from_interior(grid, fraction(grid, level), bc)
+        self.tp = TwoPhase(self.ns, self.f, rho1=kw["rho1"], rho2=kw["rho2"], mu1=kw["mu1"], mu2=kw["mu2"])
+        self.tp.add_surface_tension(kw["sigma"])
+        if kw.get("gravity") is not None:
+            G, Z = kw["gravity"]
+            self.tp.add_reduced_gravity(G, Z)
+        self.grid, self.cls = grid, self
+        self.dv = float(grid.h[0] * grid.h[1])
+
+    def __getattr__(self, key):
+        return getattr(self.ns, key)
+
+    @property
+    def psi(self):
+        return self.f.interior
+
+    def mass(self) -> float:
+        return float(self.grid.xp.sum(self.f.interior)) * self.dv
+
+    def sharp_volume(self) -> float:
+        return self.mass()
+
+    def kinetic_energy(self) -> float:
+        xp = self.grid.xp
+        rho = self.ns.rho if not isinstance(self.ns.rho, float) else self.ns.rho
+        return 0.5 * float(sum(xp.sum(rho * c.interior ** 2) for c in self.ns.u)) * self.dv
+
+    def max_velocity(self) -> float:
+        xp = self.grid.xp
+        return max(float(xp.max(xp.abs(c.interior))) for c in self.ns.u)
+
+    def start(self, events=None):
+        self.ns.start(events=events)
+
+    def step(self):
+        self.ns.step()
+
+
+def _stepper(grid, phi, kw, level=None):
     kw = dict(kw)
+    if kw.pop("method", None) == "vof":
+        return VOFRun(grid, level, kw)
     # dimensional problems: bound the relative volume change per projection step (Basilisk's project())
     kw.setdefault("volume_tolerance", True)
     kw.setdefault("tolerance", 1e-8)  # converged to 1e-5 in the capillary wave's amplitude ratio
@@ -76,14 +134,16 @@ def setup(case: str, n: int | None = None, backend: str = "numpy", **kw):
         k = 2 * math.pi / 0.01
         eta = 0.01 + 2e-4 * xp.cos(k * x)
         phi = (eta - y) / xp.sqrt(1.0 + (2e-4 * k * xp.sin(k * x)) ** 2)
-        ns = _stepper(grid, phi, dict(WATER_AIR, periodic=(0,), **kw))
+        ns = _stepper(grid, phi, dict(WATER_AIR, periodic=(0,), **kw),
+                      level=lambda x, y: 0.01 + 2e-4 * np.cos(k * x) - y)
         return ns, dict(k=k, y0=0.01, A0=2e-4, T=0.046742983863)
     if case == "drop":
         n = n or 32
         grid = CartesianGrid((n, n), length=(0.02, 0.02), backend=backend)
         x, y = grid.meshgrid()
         phi = grid.xp.asarray(ellipse_distance(x - 0.01, y - 0.01, 5.5e-3, 4.5e-3))
-        ns = _stepper(grid, phi, dict(WATER_AIR, periodic=(0, 1), **kw))
+        ns = _stepper(grid, phi, dict(WATER_AIR, periodic=(0, 1), **kw),
+                      level=lambda x, y: 1.0 - ((x - 0.01) / 5.5e-3) ** 2 - ((y - 0.01) / 4.5e-3) ** 2)
         R = math.sqrt(5.5e-3 * 4.5e-3)
         w0 = math.sqrt(6 * 0.0728 / ((998.2 + 1.204) * R ** 3))
         return ns, dict(R=R, D0=0.1, omega0=w0, T=2 * math.pi / w0, centre=(0.01, 0.01))
@@ -93,7 +153,8 @@ def setup(case: str, n: int | None = None, backend: str = "numpy", **kw):
         x, y = grid.meshgrid()
         phi = grid.xp.sqrt((x - 0.005) ** 2 + (y - 0.005) ** 2) - 0.0025
         ns = _stepper(grid, phi, dict(rho1=1000.0, rho2=1.2, mu1=1e-3, mu2=1.8e-5, sigma=0.072, periodic=(0,),
-                                      gravity=((0.0, -9.81), (0.0, 0.0)), **kw))
+                                      gravity=((0.0, -9.81), (0.0, 0.0)), **kw),
+                      level=lambda x, y: (x - 0.005) ** 2 + (y - 0.005) ** 2 - 0.0025 ** 2)
         return ns, dict(T=0.03)
     if case == "rt":
         n = n or 128
@@ -104,7 +165,8 @@ def setup(case: str, n: int | None = None, backend: str = "numpy", **kw):
         eta = 1.0 + 0.01 * xp.cos(k * x)
         phi = (eta - y) / xp.sqrt(1.0 + (0.01 * k * xp.sin(k * x)) ** 2)
         ns = _stepper(grid, phi, dict(rho1=950.0, rho2=1000.0, mu1=5e-3, mu2=1e-3, sigma=0.040,
-                                      gravity=((0.0, -9.81), (0.0, 0.0)), **kw))
+                                      gravity=((0.0, -9.81), (0.0, 0.0)), **kw),
+                      level=lambda x, y: 1.0 + 0.01 * np.cos(k * x) - y)
         return ns, dict(k=k, y0=1.0, A0=0.01, T=7.0)
     raise ValueError(f"unknown case {case!r}")
 
@@ -124,13 +186,22 @@ def crossing_heights(psi, grid):
     return yc[np.arange(q.shape[0]), first]
 
 
+def column_heights(psi, grid):
+    """Interface height of every column from the column integral of phase 1 (below the interface):
+    ``y_bottom + sum_j psi h``. Exact for a VOF fraction and for a symmetric CLS profile; unlike the psi = 1/2
+    crossing it does not depend on how sharp the profile is (a VOF fraction jumps within one cell)."""
+    q = to_numpy(psi)
+    return float(grid.origin[1]) + q.sum(axis=1) * float(grid.h[1])
+
+
 def mode_amplitude(ns, info) -> float:
-    """First Fourier coefficient of the interface height, ``(2/N) sum (y_c - y0) cos(k x)``."""
+    """First Fourier coefficient of the interface height, ``(2/N) sum (eta - y0) cos(k x)``, with ``eta`` from the
+    column integral (:func:`column_heights`)."""
     grid = ns.grid
     x, _ = grid.meshgrid()
     xs = to_numpy(x)[:, 0]
-    yc = crossing_heights(ns.psi, grid)
-    return float(2.0 / len(xs) * np.sum((yc - info["y0"]) * np.cos(info["k"] * xs)))
+    eta = column_heights(ns.psi, grid)
+    return float(2.0 / len(xs) * np.sum((eta - info["y0"]) * np.cos(info["k"] * xs)))
 
 
 def moments(ns, weight):
@@ -147,8 +218,9 @@ def moments(ns, weight):
 
 
 def axis_radii(ns, centre):
-    """Half-axes along x and y through ``centre``: the ``psi = 1/2`` crossings on the lines ``y = yc`` and
-    ``x = xc`` (``psi`` linearly interpolated between the cell rows / columns), outwards from the centre."""
+    """Half-axes along x and y through ``centre``: half the integral of phase 1 on the lines ``y = yc`` and
+    ``x = xc`` (``psi`` linearly interpolated between the cell rows / columns). Exact for a VOF fraction and for a
+    symmetric CLS profile, unlike the psi = 1/2 crossing (a VOF fraction jumps within one cell)."""
     grid = ns.grid
     q = to_numpy(ns.psi)
     h = [float(v) for v in grid.h]
@@ -160,17 +232,7 @@ def axis_radii(ns, centre):
         j = int(math.floor(f))
         w = f - j
         line = (1 - w) * np.take(q, j, axis=t) + w * np.take(q, j + 1, axis=t)
-        pos = o[ax] + (np.arange(line.size) + 0.5) * h[ax]
-        c = np.searchsorted(pos, centre[ax])
-        r = []
-        for rng in (range(c, line.size - 1), range(c - 1, 0, -1)):
-            for i in rng:
-                i2 = i + 1 if rng.step > 0 else i - 1
-                if (line[i] - 0.5) * (line[i2] - 0.5) <= 0 and line[i] != line[i2]:
-                    xcross = pos[i] + (line[i] - 0.5) / (line[i] - line[i2]) * (pos[i2] - pos[i])
-                    r.append(abs(xcross - centre[ax]))
-                    break
-        radii.append(float(np.mean(r)) if r else float("nan"))
+        radii.append(0.5 * float(line.sum()) * h[ax])
     return radii
 
 
@@ -189,27 +251,31 @@ def diagnostics(case, ns, info) -> dict:
 
 
 def run(case: str, n: int | None = None, t_end: float | None = None, samples: int = 200, backend: str = "numpy",
-        **kw) -> dict:
+        umax_limit: float = 5.0, snapshots: tuple = (), **kw) -> dict:
     """Time series of the diagnostics at ``samples`` equally spaced output times (hit exactly)."""
     ns, info = setup(case, n, backend, **kw)
     t_end = t_end or info["T"]
     times = [t_end * (i + 1) / samples for i in range(samples)]
     ns.start(events=times)
     series = [diagnostics(case, ns, info)]
+    snaps = {}
     t0 = time.time()
     k = 0
     while k < len(times):
         ns.step()
         u = ns.max_velocity()
-        if not math.isfinite(u):
-            series.append(dict(t=float(ns.clock.t), failed=True))
+        if not math.isfinite(u) or u > umax_limit:  # blow-up: stop before the step collapses
+            series.append(dict(t=float(ns.clock.t), failed=True, umax=u))
             break
         if abs(ns.clock.t - times[k]) <= 1e-9 * max(1.0, t_end):
             series.append(diagnostics(case, ns, info))
+            for ts in snapshots:  # psi at the output times closest to the requested ones
+                if abs(times[k] - ts) <= 0.5 * t_end / samples:
+                    snaps[float(ts)] = to_numpy(ns.psi).tolist()
             k += 1
     if ns.grid.xp.__name__ == "cupy":
         ns.grid.xp.cuda.Stream.null.synchronize()
-    return dict(case=case, info=info, series=series, steps=ns.clock.i, wall=time.time() - t0,
+    return dict(case=case, info=info, series=series, steps=ns.clock.i, wall=time.time() - t0, snapshots=snaps,
                 psi=to_numpy(ns.psi).tolist() if samples and ns.grid.n[0] <= 64 else None)
 
 
