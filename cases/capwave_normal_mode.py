@@ -86,21 +86,32 @@ def fit(t, a, s0: complex) -> complex:
 def run(n, f: float = 1.0, periods: float = 2.0, a: float = 0.01, viscous=None, ops_ns=None,
         jump_mode: str = "sharp", DT: float = cw.STEP, profile: bool = False, budget: bool = False,
         eps_factor: float | None = None, cls_kw: dict | None = None, pressure_jump: bool = True,
-        vorticity: bool = False):
+        vorticity: bool = False, mapping_y=None, stokes: bool = False, plain: bool | None = None):
     warnings.filterwarnings("ignore")
     nu = cw.MU * f
     s, F = mode(K, 1.0, 1.0, nu, a)
     nx, ny = (n, n) if np.isscalar(n) else n  # (nx, ny): anisotropic cells
-    grid = CartesianGrid((nx, ny), length=(2.0, 2.0), origin=(0.0, -1.0))
+    grid = CartesianGrid((nx, ny), length=(2.0, 2.0), origin=(0.0, -1.0),
+                         mapping=None if mapping_y is None else (None, mapping_y))
     walls = ("left", "right", "bottom", "top")
-    ns = CenteredNS(grid, uf_normal={w: 0.0 for w in walls}, tolerance=1e-10, viscous=viscous, ops=ops_ns)
+    if viscous is None and not grid.is_uniform:
+        from basilisk_cupy.terms.viscous import FD2Viscosity
+
+        viscous = FD2Viscosity()  # Basilisk's viscosity() needs square uniform cells
+    ns = CenteredNS(grid, uf_normal={w: 0.0 for w in walls}, tolerance=1e-10, viscous=viscous, ops=ops_ns,
+                    stokes=stokes)
     x, y = grid.meshgrid()
     u, v, _, _, _ = F(x, y)
     eta = a * np.cos(K * x)
     dist = (y - eta) / np.sqrt(1.0 + (a * K * np.sin(K * x)) ** 2)
-    cls = CLSInterface.from_level_set(grid, dist, BoundaryConditions(), divergence="fccd",
-                                      eps=None if eps_factor is None else eps_factor * float(grid.h[0]),
-                                      ops=FCCDFaceComplex(order=6))
+    from basilisk_cupy.interface.cls import min_width
+
+    hmin = min_width(grid)
+    plain = (not grid.is_uniform) if plain is None else plain  # the mapped CLS has the plain divergence only
+    cls = CLSInterface.from_level_set(grid, dist, BoundaryConditions(),
+                                      divergence="plain" if plain else "fccd",
+                                      eps=None if eps_factor is None else eps_factor * hmin,
+                                      ops=FCCDFaceComplex(order=4 if plain else 6))
     tp = TwoPhaseCLS(ns, cls, rho1=1.0, rho2=1.0, mu1=nu, mu2=nu, vof_first=True, pressure_jump=pressure_jump,
                      jump_mode=jump_mode, **(cls_kw or {}))
     tp.add_surface_tension(1.0)
@@ -108,7 +119,7 @@ def run(n, f: float = 1.0, periods: float = 2.0, a: float = 0.01, viscous=None, 
     ns.u[1].interior = v.real
     ns.u.fill_ghosts()
     ns.DT = DT
-    xc = (np.arange(nx) + 0.5) * grid.h[0]
+    xc = np.asarray(grid.centers(0))
     w = np.cos(K * xc) * 2.0 / nx
 
     def amplitude():
@@ -116,18 +127,24 @@ def run(n, f: float = 1.0, periods: float = 2.0, a: float = 0.01, viscous=None, 
         lo, hi = psi[:, :-1] - 0.5, psi[:, 1:] - 0.5
         cross = (lo * hi <= 0) & (lo != hi)
         t = np.where(cross, lo / np.where(cross, lo - hi, 1.0), 0.0)
-        yc = np.where(cross, y[:, :-1] + t * grid.h[1], np.nan)
+        yy = np.broadcast_to(y, psi.shape)
+        yc = np.where(cross, yy[:, :-1] + t * (yy[:, 1:] - yy[:, :-1]), np.nan)
         return float(np.sum(w * np.nanmean(yc, axis=1)))
 
     T = 2 * math.pi / s.imag
     times = [i * DT for i in range(int(periods * T / DT) + 1)]
-    dA = float(grid.h[0] * grid.h[1])
+    dA = grid.cell_volumes()
 
     def kinetic():
-        return 0.5 * sum(float(np.sum(c.interior ** 2)) for c in ns.u) * dA
+        return 0.5 * sum(float(np.sum(c.interior ** 2 * dA)) for c in ns.u)
 
     def surface():  # excess surface energy of eta = a cos kx: sigma/2 int eta_x^2 dx = sigma k^2 a^2 L_x / 4
         return K * K * amplitude() ** 2 * 2.0 / 4.0
+
+    def face_area(ax):  # volume attached to a face: width across x centre distance along ax
+        from basilisk_cupy.interface.cls import cell_widths, centre_spacing
+
+        return centre_spacing(grid, ax) * cell_widths(grid, 1 - ax) * np.ones(grid.face_shape(ax))
 
     stages = {"advection": 0.0, "viscous": 0.0, "projection": 0.0, "surface": 0.0, "force_work": 0.0,
               "pressure_work": 0.0, "quadratic": 0.0}
@@ -154,9 +171,10 @@ def run(n, f: float = 1.0, periods: float = 2.0, a: float = 0.01, viscous=None, 
                         sl = [slice(None)] * 2
                         sl[ax] = slice(1, -1)
                         sl = tuple(sl)
-                        stages["force_work"] += dt_ * float(np.sum(state["Iu"][ax][sl] * state["a"][ax][sl])) * dA
-                        stages["pressure_work"] -= dt_ * float(np.sum(state["Iu"][ax][sl] * Gp[sl])) * dA
-                    stages["quadratic"] += 0.5 * dt_ ** 2 * sum(float(np.sum(c.interior ** 2)) for c in _ns.g) * dA
+                        fa = face_area(ax)[sl]
+                        stages["force_work"] += dt_ * float(np.sum(state["Iu"][ax][sl] * state["a"][ax][sl] * fa))
+                        stages["pressure_work"] -= dt_ * float(np.sum(state["Iu"][ax][sl] * Gp[sl] * fa))
+                    stages["quadratic"] += 0.5 * dt_ ** 2 * sum(float(np.sum(c.interior ** 2 * dA)) for c in _ns.g)
                     sf = surface()
                     stages["surface"] += sf - state["s"]
                     state["s"] = sf
@@ -177,7 +195,7 @@ def run(n, f: float = 1.0, periods: float = 2.0, a: float = 0.01, viscous=None, 
 
     def omega_k():  # sin kx coefficient of omega = v_x - u_y (cell values, centred differences)
         uu, vv = ns.u[0].interior, ns.u[1].interior
-        om = np.gradient(vv, grid.h[0], axis=0) - np.gradient(uu, grid.h[1], axis=1)
+        om = np.gradient(vv, grid.centers(0), axis=0) - np.gradient(uu, grid.centers(1), axis=1)
         return np.sum(om * wsx, axis=0)
 
     while len(amps) < len(times):

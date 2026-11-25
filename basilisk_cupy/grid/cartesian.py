@@ -328,7 +328,15 @@ class AxisMetric:
         return arr.reshape(shape)
 
     def wall_distance(self, side: int, layer: int) -> float:
-        """Physical distance between ghost layer ``layer`` (1, 2, ...) and its mirror cell."""
+        """Physical distance between ghost layer ``layer`` (1, 2, ...) and its mirror cell (cached: every
+        ghost fill asks for it, and evaluating a monitor map is costly)."""
+        cache = self.__dict__.setdefault("_wall_distance_cache", {})
+        key = (side, layer)
+        if key not in cache:
+            cache[key] = self._wall_distance(side, layer)
+        return cache[key]
+
+    def _wall_distance(self, side: int, layer: int) -> float:
         g = self.grid
         n = g.n[self.axis]
         k = layer - 1
