@@ -831,3 +831,14 @@ pytest -m slow      # full lid-cavity run to steady state (~1 min)
 Tests run on numpy; when cupy is importable every backend-parametrised test
 (all solver, Poisson, CCD/FCCD, defect-correction and IMEX-BDF2 tests, and the
 slow lid-cavity run) also runs on cupy, together with the kernel tests.
+
+Why the layered CCD viscosity (`CCDViscosity(form="layered")`, the paper's literal D1 o D1) increased the energy
+of projected white noise 7.8 times in 40 steps (`cases/layered_energy.py`, operators assembled as matrices):
+with walls, layer A closes the velocity derivative with the Dirichlet condition and layer C closes the stress
+derivative by extrapolation, so `L` is not symmetric. Its symmetric part has a positive eigenvalue (+12.7/h^2 at
+N = 16), `||(I - kappa L)^{-1}||_2 = 8.7`, and the zero eigenvalue of the grid-scale modes (where the CCD first
+derivative vanishes) is defective (nullity 4 for `L`, 5 for `L^2`), so the energy grows like a power of the step
+count although `rho(A) - 1 = 8e-4`. With periodic boundaries the same composition is symmetric and nothing
+grows; the defect correction converges and the projection only speeds the growth up (`rho(PA) = 1.048`). The
+default split form has a negative symmetric part with walls and decays monotonically. Figure:
+`docs/figures/layered_energy.png`. Notes: `docs/notes/37_layered_energy.md`.
