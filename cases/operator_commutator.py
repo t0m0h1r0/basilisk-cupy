@@ -97,17 +97,32 @@ def smooth_field(n, seed=0, kmax=4):
     return u
 
 
-def lagged_gradient(o):
+def lagged_gradient(o, q_values=None):
     """``G = dt face_to_cell(alpha grad q)`` for the pressure ``q = x^2 - y^2`` (the l = 2 mode's): what one
     outer iteration leaves when the pressure lags by ``q``."""
     ns, grid = o.ns, o.grid
     x, y = grid.meshgrid()
     q = CellField(grid, bc=ns.p.bc, name="q")
-    q.interior = x * x - y * y
+    q.interior = x * x - y * y if q_values is None else q_values
     q.fill_ghosts()
     G = [o.dt * ns.ops.face_to_cell(ns.alpha[ax] * ns.ops.grad_f(q, ax), ax, periodic=False) for ax in range(2)]
     G1 = [o.dt * ns.ops.face_to_cell(ns.ops.grad_f(q, ax), ax, periodic=False) for ax in range(2)]
     return G, G1
+
+
+def split(n=32, rho2=1.0, mu2=0.1, mu1=0.1, factor=1.0, q_values=None):
+    """``P (B - I) w = [P, B] w + (B - I) P w`` for the lagged-pressure velocity ``w = dt face_to_cell(alpha
+    grad q)``: the commutator part, the part left because the cell projection does not remove a cell
+    gradient (``P w != 0``), their sum, and ``|P w| / |w|``; all over ``|dt grad q|``."""
+    o = Ops(n, rho2, mu2, mu1, factor)
+    w, w1 = lagged_gradient(o, q_values)
+    Pw, Bw = o.P(w), o.B(w)
+    comm = sub(o.P(Bw), o.B(Pw))
+    rest = sub(o.B(Pw), Pw)
+    total = sub(o.P(Bw), Pw)
+    s = norm(w1)
+    return {"commutator": norm(comm) / s, "approx_projection": norm(rest) / s, "total": norm(total) / s,
+            "Pw_over_w": norm(Pw) / norm(w), "w_over_w1": norm(w) / s}
 
 
 def measure(n=32, rho2=1.0, mu2=0.1, mu1=0.1, factor=1.0, seed=0):
