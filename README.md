@@ -744,6 +744,18 @@ mu = 0 / 0.01 / 0.1 / 1, against 1.60-1.65 / 1.40-1.45 / 1.15-1.20 / 1.00-1.05),
 it; the accuracy is unchanged and the capillary wave runs at four times the step. Not at density ratio 100.
 Figure: `docs/figures/coupled_viscous.png`. Notes: `docs/notes/34_coupled_viscous.md`.
 
+`cases/step_jacobian.py` linearises one whole step (psi, u, uf, p, g; matrix-free central differences,
+Arnoldi, the pressure gauge and the total psi deflated). With the solvers at 1e-14, the factor where the
+leading |lambda| crosses 1 falls inside the measured stability bracket in all eight cases checked (static drop,
+N = 32, density ratios 1 and 100, K = 0, 1, 2 and converged). At density ratio 100, K = 1 fails through a band of
+oscillatory modes (|lambda| 1.19, arg 0.22 pi at 1.6 x, on the oblique parts of the interface), not the
+capillary sawtooth (arg = pi): a lagging pressure leaves `(B - I) dt alpha grad dp` after the viscous solve, which
+the projection does not remove, and it grows with the gas-side alpha (0.039 / 0.70 / 8.1 / 46.5 relative at
+density ratios 1 / 10 / 100 / 1000; viscosity ratio alone: 0.0026). `coupled_tolerance=` stops the outer
+iterations when `dt |g_{k+1} - g_k|` falls below it; converged, density ratio 100 at N = 64 is stable up to
+1.8-2.0 x (K = 1: below 1.0) with 4-5 iterations per step. Figures: `docs/figures/step_jacobian.png`,
+`docs/figures/step_jacobian_modes.png`. Notes: `docs/notes/35_step_jacobian.md`.
+
 ## GPU (cupy)
 
 On the GPU the multigrid hot loops run as fused `cupy.RawKernel`s
