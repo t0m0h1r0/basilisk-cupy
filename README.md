@@ -982,3 +982,14 @@ stage 1 — psi moved by the frozen projected face velocity `u_f^n` — is first
 and moving psi with the AB2 midpoint velocity `(1 + w/2) u_f^n - (w/2) u_f^{n-1}` removes it (-12.0 ... -12.8 %,
 the same limit as `CenteredNS`). The remaining -12.7 % is the CLS kinematics of B. Independent runs of the case
 scripts are spread over CPU cores (`cases/parallel.py`).
+
+Swappable time integration (`docs/notes/51_multistep_schemes.md`, `52_two_phase_imex_rk.md`): `IMEXMultistepNS(scheme=...)`
+takes any multistep IMEX pair — `sbdf1`...`sbdf4`, `cnab2`, `mcnab2`, `cnlf`, or (`bdf<k>`/`am<k>`/`theta<x>`,
+`ext<k>`/`ab<k>`) — with coefficients from Lagrange polynomials on the actual time levels (variable steps exact,
+orders lowered at start-up); `sbdf2` reproduces `IMEXBDF2NS` to 1e-12. `TwoPhaseIMEX` adds the interface-transport
+velocity (`frozen`, `ab2`, `ab3`, `pc` predictor-corrector) and the psi integrator (`ssprk3`, `ssprk2`, `heun3`,
+`rk4`, `euler`); `TwoPhaseIMEXRK(tableau=...)` advances psi inside the stages of ARS(1,1,1), (1,2,1), (2,2,2),
+(2,3,3), (3,4,3), (4,4,3). Measured with kx != ky: the approximate projection's cross term drops every scheme to
+first order at N = 16 and vanishes by N = 64; the incremental pressure correction caps multistep schemes at second
+order (sbdf3's error is 6.5 times sbdf2's), while IMEX-RK with a projection per stage reaches third order for
+Stokes flow and stalls near 3e-6 with convection.

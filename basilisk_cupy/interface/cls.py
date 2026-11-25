@@ -214,14 +214,36 @@ class CLSInterface:
             corr[tuple(w)] = 0.0
         return corr
 
-    def advect(self, uf: FaceField, dt: float) -> None:
-        """One TVD-RK3 step with the face velocity ``uf`` (frozen), clipping each stage, then stage B."""
+    def advect(self, uf: FaceField, dt: float, integrator: str | None = None) -> None:
+        """One step with the face velocity ``uf`` (frozen), clipping each stage, then stage B.
+
+        ``integrator`` (default ``self.integrator``, ``"ssprk3"``): the paper's TVD-RK3 (Shu--Osher form),
+        or an explicit Runge--Kutta method of :data:`~basilisk_cupy.time.schemes.EXPLICIT_RK`
+        (``"euler"``, ``"ssprk2"``, ``"rk4"``, ...) in Butcher form, every stage value clipped to [0, 1]."""
         xp = self.psi.grid.xp
         q0 = self.psi.interior
         m0 = xp.sum(q0 * self.dv)
-        q1 = xp.clip(q0 + dt * self._rhs(q0, uf), 0.0, 1.0)
-        q2 = xp.clip(0.75 * q0 + 0.25 * (q1 + dt * self._rhs(q1, uf)), 0.0, 1.0)
-        q3 = xp.clip(q0 / 3.0 + 2.0 / 3.0 * (q2 + dt * self._rhs(q2, uf)), 0.0, 1.0)
+        integrator = integrator or getattr(self, "integrator", "ssprk3")
+        if integrator == "ssprk3":
+            q1 = xp.clip(q0 + dt * self._rhs(q0, uf), 0.0, 1.0)
+            q2 = xp.clip(0.75 * q0 + 0.25 * (q1 + dt * self._rhs(q1, uf)), 0.0, 1.0)
+            q3 = xp.clip(q0 / 3.0 + 2.0 / 3.0 * (q2 + dt * self._rhs(q2, uf)), 0.0, 1.0)
+        else:
+            from ..time.schemes import explicit_rk  # noqa: PLC0415
+
+            A, b, _ = explicit_rk(integrator)
+            ks = []
+            for i in range(len(b)):
+                y = q0
+                for j in range(i):
+                    if A[i][j]:
+                        y = y + dt * A[i][j] * ks[j]
+                ks.append(self._rhs(xp.clip(y, 0.0, 1.0) if i else q0, uf))
+            q3 = q0
+            for bi, k in zip(b, ks):
+                if bi:
+                    q3 = q3 + dt * bi * k
+            q3 = xp.clip(q3, 0.0, 1.0)
         if self.mass_closure:
             q3 = mass_correction(q3, self.dv, m0)
         self.psi.interior = q3
