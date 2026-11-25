@@ -21,9 +21,8 @@ from __future__ import annotations
 
 from ..interface.cls import mass_correction
 from ..terms.viscous import CCDViscosity
-from ..discretization.ccd import FCCDFaceComplex
 from .imex_rk import IMEXRKNS
-from .two_phase_imex import _SIDE_AXIS, WALLS, _attach_two_phase, _check_faces, _convection, _TwoPhaseMixin
+from .two_phase_imex import _SIDE_AXIS, WALLS, _attach_two_phase, _check_faces, _convection, _face_ops, _TwoPhaseMixin
 
 
 class TwoPhaseIMEXRK(_TwoPhaseMixin, IMEXRKNS):
@@ -41,7 +40,7 @@ class TwoPhaseIMEXRK(_TwoPhaseMixin, IMEXRKNS):
         kw.setdefault("uf_normal", {w: 0.0 for w in WALLS if _SIDE_AXIS[w] not in periodic})
         kw.setdefault("viscous", CCDViscosity())
         super().__init__(grid, tableau=tableau, periodic=periodic,
-                         ops=FCCDFaceComplex() if faces == "fccd" else None, convection=_convection(convection), **kw)
+                         ops=_face_ops(faces), convection=_convection(convection), **kw)
         _attach_two_phase(self, phi0, periodic=periodic, faces=faces, rho1=rho1, rho2=rho2, mu1=mu1, mu2=mu2,
                           sigma=sigma, gravity=gravity, eps=eps, reinit_every=reinit_every,
                           reinit_method=reinit_method, curvature_kw=curvature_kw, jump_mode=jump_mode,

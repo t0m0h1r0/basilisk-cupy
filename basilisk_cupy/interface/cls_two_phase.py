@@ -145,7 +145,8 @@ class TwoPhaseCLS(TwoPhase):
                  mu2: float = 0.0, vof_first: bool = False, reinit_every: int = 0,
                  reinit_method: str = "xi_sdf", curvature_kw: dict | None = None,
                  pressure_jump: bool = False, capillary_dt_factor: float | None = None,
-                 surface_viscosity: float = 0.0, implicit_tension: float = 0.0, jump_mode: str = "sharp") -> None:
+                 surface_viscosity: float = 0.0, implicit_tension: float = 0.0, jump_mode: str = "sharp",
+                 jump_interp: str = "linear") -> None:
         f: CellField = cls.psi
         if f.grid.ndim != 2:
             raise NotImplementedError("two-phase flows are implemented in 2-D")
@@ -164,6 +165,12 @@ class TwoPhaseCLS(TwoPhase):
         if jump_mode not in ("sharp", "smooth"):
             raise ValueError("jump_mode is 'sharp' (the pressure jumps) or 'smooth' (p - H j_ext is solved for)")
         self.jump_mode = jump_mode
+        #: the jump at a face's crossing: ``"linear"`` (the two cell values, weights by theta) or ``"hermite"``
+        #: (quintic Hermite with the CCD jet along the line, :func:`.phase_ccd.hermite_at_crossings`; the linear
+        #: interpolation error h^2 j'' grows with the density ratio and limits a high-order projection, note 55)
+        if jump_interp not in ("linear", "hermite"):
+            raise ValueError("jump_interp is 'linear' or 'hermite'")
+        self.jump_interp = jump_interp
         self.j_ext = None
         self.cg_stats = []
         self.capillary_dt_factor = CCD_CAPILLARY_DT_FACTOR if capillary_dt_factor is None else float(capillary_dt_factor)
@@ -219,6 +226,18 @@ class TwoPhaseCLS(TwoPhase):
         hi = list(lo)
         hi[ax] = slice(1, n[ax] + 2)
         return cp[tuple(lo)], cp[tuple(hi)]
+
+    def _jump_at_crossings(self, phi, ax, theta):
+        """The jump at the crossing of every face along ``ax`` (cell values ``phi``)."""
+        if self.jump_interp == "hermite":
+            from ..discretization.phase_ccd import hermite_at_crossings  # noqa: PLC0415
+            from .cls_curvature import PSI_MIN  # noqa: PLC0415
+
+            q = self.f.interior
+            band = (q > PSI_MIN) & (q < 1.0 - PSI_MIN)
+            return hermite_at_crossings(phi, theta, ax, float(self.f.grid.h[ax]), self.f.bc.is_periodic(ax), band)
+        jl, jr = self._faces(phi, ax)
+        return (1.0 - theta) * jl + theta * jr
 
     def _cut(self, ax):
         xp = self.f.grid.xp
@@ -352,8 +371,7 @@ class TwoPhaseCLS(TwoPhase):
         for ax in range(2):
             h = centre_spacing(self.f.grid, ax)  # the fd2 face gradient divides by the centre distance
             hl, hr, cut, theta = self._cut(ax)
-            jl, jr = self._faces(phi, ax)
-            j = (1.0 - theta) * jl + theta * jr
+            j = self._jump_at_crossings(phi, ax, theta)
             sign = hr.astype(phi.dtype) - hl.astype(phi.dtype)
             ns.a[ax] = ns.a[ax] + xp.where(cut, ns.alpha[ax] * j * sign / h, 0.0)
 
@@ -367,8 +385,7 @@ class TwoPhaseCLS(TwoPhase):
         pts, vals = [], []
         for ax in range(2):
             hl, hr, cut, theta = self._cut(ax)
-            jl, jr = self._faces(phi, ax)
-            j = (1.0 - theta) * jl + theta * jr
+            j = self._jump_at_crossings(phi, ax, theta)
             idx = xp.nonzero(cut)
             i, k = idx
             if ax == 0:
@@ -414,8 +431,7 @@ class TwoPhaseCLS(TwoPhase):
         self.j_ext = jext
         for ax in range(2):
             hl, hr, cut, theta = self._cut(ax)
-            jl, jr = self._faces(phi, ax)
-            jg = (1.0 - theta) * jl + theta * jr
+            jg = self._jump_at_crossings(phi, ax, theta)
             el, er = self._faces(jext, ax)
             Hl, Hr = hl.astype(jext.dtype), hr.astype(jext.dtype)
             b = xp.where(cut, jg * (Hr - Hl), 0.0)
