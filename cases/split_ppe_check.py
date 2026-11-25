@@ -63,6 +63,83 @@ class PlainDivergence:
         return getattr(self.fccd, key)
 
 
+class PhaseCCDFaces:
+    """Option A' of note 55: phase-wise CCD along every grid line (segments between cut faces, extrapolation
+    closures at the cut ends), FCCD face gradients inside the segments, and on the cut faces the GFM two-point
+    gradient with the one-sided curvature terms ``(-((1-theta)h)^2 f''_R + (theta h)^2 f''_L)/(2h)`` (from the
+    Taylor expansions of each phase to the crossing, with [p] = j and the continuous flux). Segments shorter
+    than 6 cells keep fd2. Periodic lines only (this prototype)."""
+
+    name = "phase-ccd"
+
+    def __init__(self, fccd, cuts, thetas, h, alphas=None, rho_l=None) -> None:
+        """``alphas``: the face coefficients (GFM on cut faces); ``rho_l``: per axis, the density of the cell on
+        the lower side of every face. With them the cut-face value is the flux at the face centre, not at the
+        crossing: ``F(x_f) = F_Gamma + (1/2 - theta) h (alpha p'')_side`` (the side that holds the face centre)."""
+        self.fccd, self.cuts, self.thetas, self.h = fccd, cuts, thetas, h
+        self.alphas, self.rho_l = alphas, rho_l
+
+    def grad_f(self, a, axis: int):
+        from basilisk_cupy.discretization.ccd import ccd_matrices
+
+        p = np.moveaxis(np.asarray(a.interior), axis, 0)  # (n, m): lines along axis 0
+        cut = np.moveaxis(self.cuts[axis], axis, 0)      # (n + 1, m) faces
+        th = np.moveaxis(self.thetas[axis], axis, 0)
+        af = np.moveaxis(np.asarray(self.alphas[axis]), axis, 0) if self.alphas is not None else None
+        rl = np.moveaxis(self.rho_l[axis], axis, 0) if self.rho_l is not None else None
+        n, m = p.shape
+        h = self.h
+        out = np.zeros((n + 1, m))
+        for j in range(m):
+            line, c, t = p[:, j], cut[:n, j], th[:n, j]  # face i between cells i-1 and i (periodic)
+            g = np.zeros(n)
+            q = np.full(n, np.nan)
+            starts = np.nonzero(c)[0]
+            if starts.size == 0:
+                D1, D2, *_ = ccd_matrices(n, h, "periodic", "periodic")
+                q = D2 @ line
+                g = (line - np.roll(line, 1)) / h - (h / 24.0) * (q - np.roll(q, 1))
+            else:
+                for k, s0 in enumerate(starts):
+                    s1 = starts[(k + 1) % len(starts)]
+                    length = (s1 - s0) % n or n
+                    idx = (s0 + np.arange(length)) % n  # cells of the segment
+                    seg = line[idx]
+                    if length >= 6:
+                        _, D2, *_ = ccd_matrices(length, h, "extrapolate", "extrapolate")
+                        qs = D2 @ seg
+                        q[idx] = qs
+                        g[idx[1:]] = (seg[1:] - seg[:-1]) / h - (h / 24.0) * (qs[1:] - qs[:-1])
+                    else:
+                        g[idx[1:]] = (seg[1:] - seg[:-1]) / h
+                        if length >= 3:  # second differences (one-sided copies at the ends) for the cut terms
+                            d2 = np.empty(length)
+                            d2[1:-1] = (seg[2:] - 2 * seg[1:-1] + seg[:-2]) / h ** 2
+                            d2[0], d2[-1] = d2[1], d2[-2]
+                            q[idx] = d2
+                for s0 in starts:  # cut faces: GFM two-point difference + one-sided curvature terms
+                    L, R = (s0 - 1) % n, s0
+                    tt = t[s0]
+                    g[s0] = (line[R] - line[L]) / h
+                    bL = q[L] if np.isfinite(q[L]) else 0.0
+                    bR = q[R] if np.isfinite(q[R]) else 0.0
+                    g[s0] += (-((1 - tt) * h) ** 2 * bR + (tt * h) ** 2 * bL) / (2 * h)
+                    if af is not None:
+                        # from the crossing to the face centre, in the phase that holds the centre
+                        rho_side = rl[s0, j] if tt > 0.5 else self._rho_other(rl[s0, j])
+                        b_side = bL if tt > 0.5 else bR
+                        g[s0] += (0.5 - tt) * h * b_side / (rho_side * af[s0, j])
+            out[:n, j] = g
+            out[n, j] = g[0]
+        return np.moveaxis(out, 0, axis)
+
+    def _rho_other(self, r):
+        return self.rho_pair[1] if r == self.rho_pair[0] else self.rho_pair[0]
+
+    def __getattr__(self, key):
+        return getattr(self.fccd, key)
+
+
 class HybridFaces:
     """Option A of note 55: FCCD's face gradient away from the interface, the fd2 (GFM) two-point gradient on
     the faces within ``m`` faces of a cut face (both axes); every other operation is FCCD's."""
@@ -92,7 +169,34 @@ def _near_cut(cut, m: int, periodic_axes=(True, True)):
     return near
 
 
-def solve(n: int, ratio: float, variant: str, j0: float = 4.0, tolerance: float = 1e-11):
+def _hermite_jump(jcell, theta, ax, h):
+    """``j`` at the crossings by quintic Hermite interpolation between the two cells of every face, with the
+    CCD jet ``(j, j', j'')`` along the face's axis (periodic lines): compact, no wider stencil."""
+    from basilisk_cupy.discretization.ccd import ccd_matrices
+
+    jm = np.moveaxis(jcell, ax, 0)
+    n = jm.shape[0]
+    D1, D2, *_ = ccd_matrices(n, h, "periodic", "periodic")
+    d1, d2 = D1 @ jm, D2 @ jm
+    L = np.concatenate([jm[-1:], jm], axis=0)  # face i: cells i-1 (L) and i (R), periodic
+    R = np.concatenate([jm, jm[:1]], axis=0)
+    L1, R1 = np.concatenate([d1[-1:], d1]), np.concatenate([d1, d1[:1]])
+    L2, R2 = np.concatenate([d2[-1:], d2]), np.concatenate([d2, d2[:1]])
+    t = np.moveaxis(theta, ax, 0)
+    # quintic Hermite on [0, 1] with values, h-scaled first and h^2-scaled second derivatives
+    t2, t3, t4, t5 = t * t, t ** 3, t ** 4, t ** 5
+    H0 = 1 - 10 * t3 + 15 * t4 - 6 * t5
+    H1 = t - 6 * t3 + 8 * t4 - 3 * t5
+    H2 = 0.5 * t2 - 1.5 * t3 + 1.5 * t4 - 0.5 * t5
+    H3 = 10 * t3 - 15 * t4 + 6 * t5
+    H4 = -4 * t3 + 7 * t4 - 3 * t5
+    H5 = 0.5 * t3 - t4 + 0.5 * t5
+    val = H0 * L + H1 * h * L1 + H2 * h * h * L2 + H3 * R + H4 * h * R1 + H5 * h * h * R2
+    return np.moveaxis(val, 0, ax)
+
+
+def solve(n: int, ratio: float, variant: str, j0: float = 4.0, tolerance: float = 1e-11, exact_jump: bool = False,
+          jump_interp: str = "linear"):
     from basilisk_cupy.time.two_phase_imex import TwoPhaseIMEX
 
     warnings.filterwarnings("ignore")
@@ -132,6 +236,16 @@ def solve(n: int, ratio: float, variant: str, j0: float = 4.0, tolerance: float 
         hl, hr, cut, theta = tp._cut(ax)
         jl, jr = tp._faces(jcell, ax)
         jg = (1.0 - theta) * jl + theta * jr
+        if jump_interp == "hermite":
+            jg = _hermite_jump(jcell, theta, ax, h)
+        if exact_jump:  # the jump at the crossing itself instead of its linear interpolation
+            if ax == 0:
+                xc = np.concatenate([x[:1] - h, x], axis=0) + theta * h
+                yc = np.concatenate([y[:1], y], axis=0)
+            else:
+                xc = np.concatenate([x[:, :1], x], axis=1)
+                yc = np.concatenate([y[:, :1] - h, y], axis=1) + theta * h
+            jg = np.where(cut, (rho1 - rho2) * s_func(xc, yc) + j0, 0.0)
         B = np.where(cut, jg * (hr.astype(float) - hl.astype(float)), 0.0) / h
         if smooth:
             el, er = tp._faces(jext, ax)
@@ -149,7 +263,18 @@ def solve(n: int, ratio: float, variant: str, j0: float = 4.0, tolerance: float 
     uf = FaceField(grid, ustar, "uf")
     p = CellField(grid, bc=BoundaryConditions.periodic(2))
     ops = ns.ops
-    if variant.endswith("plaindiv"):
+    if variant.startswith("phase-ccd"):
+        cuts, thetas = [], []
+        for ax in range(2):
+            hl, hr, cut, theta = tp._cut(ax)
+            cuts.append(cut)
+            thetas.append(theta)
+        rho_l = [np.where(tp._cut(ax)[0], rho1, rho2) for ax in range(2)]
+        ops = PhaseCCDFaces(ns.ops, cuts, thetas, h, alphas=[alpha[ax] for ax in range(2)], rho_l=rho_l)
+        ops.rho_pair = (rho1, rho2)
+        if variant.endswith("plaindiv"):
+            ops = PlainDivergence(ops)
+    elif variant.endswith("plaindiv"):
         ops = PlainDivergence(ns.ops)
     if variant.startswith("hyb"):
         m = int(variant[3:].split("-")[0])
