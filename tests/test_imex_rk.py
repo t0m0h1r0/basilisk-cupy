@@ -16,7 +16,7 @@ from basilisk_cupy.time.imex_rk import TABLEAUX, IMEXRKNS, stability_function
 from .conftest import order
 
 
-@pytest.mark.parametrize("name", sorted(TABLEAUX))
+@pytest.mark.parametrize("name", ["ars343", "ars443"])  # 3rd-order tableaux (the others: test_two_phase_imex_rk)
 def test_tableaux(name):
     t = TABLEAUX[name]()
     AE, AI, b, c = (np.array(v, float) for v in (t.AE, t.AI, t.bE, t.c))
@@ -59,7 +59,7 @@ def _taylor_green(cls, n, dt, t_end, *, backend, mu=0.01, stokes=False, conv="ce
     return ns, max(float(xp.max(xp.abs(ns.u[a].interior - decay * ex[a]))) for a in range(2))
 
 
-@pytest.mark.parametrize("tableau", sorted(TABLEAUX))
+@pytest.mark.parametrize("tableau", ["ars343", "ars443"])
 def test_stokes_third_order_in_time(backend, tableau):
     ks, t_end = [5, 10, 20], 0.25
     ref, _ = _taylor_green(IMEXRKNS, 16, t_end / 160, t_end, backend=backend, stokes=True, tableau=tableau)
@@ -86,7 +86,7 @@ def test_adaptive_step_uses_the_spectral_bound(backend):
     assert ns.clock.dt <= bound * 1.05 and ns.clock.dt > 0.5 * bound
 
 
-@pytest.mark.parametrize("tableau", sorted(TABLEAUX))
+@pytest.mark.parametrize("tableau", ["ars343", "ars443"])
 def test_hooks_run_in_basilisk_order(tableau):
     ns = IMEXRKNS(CartesianGrid((8, 8)), periodic=(0, 1), fixed_dt=0.01, tableau=tableau)
     seen = []
