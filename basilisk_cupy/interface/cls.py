@@ -268,6 +268,8 @@ class CLSInterface:
             raise NotImplementedError("re-initialisation is implemented on uniform grids")
         if method == "xi_sdf":
             self._reinit_xi_sdf(code_variant, distance)
+        elif method == "xi_sdf_vw":
+            self._reinit_xi_sdf_vw(distance)
         elif method == "compression":
             self._reinit_compression(n_steps)
         elif method in ("acls2008", "acls2017"):
@@ -275,7 +277,76 @@ class CLSInterface:
         elif method == "acls-fccd":
             self._reinit_acls_fccd(n_steps, **(acls_options or {}))
         else:
-            raise ValueError("method is 'xi_sdf', 'compression', 'acls2008', 'acls2017' or 'acls-fccd'")
+            raise ValueError("method is 'xi_sdf', 'xi_sdf_vw', 'compression', 'acls2008', 'acls2017' or 'acls-fccd'")
+
+    def sharp_volume(self, phi=None) -> float:
+        """Continuous sharp-interface volume ``sum clip(1/2 + phi/h, 0, 1) dV`` (``phi`` the logit of ``psi`` by
+        default): the cell fraction of a straight interface parallel to a cell side, a continuous stand-in
+        for the paper's thresholded volume ``V_Gamma,h`` (which is piecewise constant in a uniform shift)."""
+        xp = self.psi.grid.xp
+        if phi is None:
+            phi = phi_from_psi(self.psi.interior, self.eps)
+        h = float(self.psi.grid.h[0])
+        return float(xp.sum(xp.clip(0.5 + phi / h, 0.0, 1.0)) * self.dv)
+
+    def _reinit_xi_sdf_vw(self, distance: str = "points") -> None:
+        """Ridge--Eikonal with the paper's two scalar closures (05, eqs. ridge_eikonal_sharp_volume_shift and
+        ridge_eikonal_diffuse_mass_width), docs/notes/54:
+
+        1. ``phi_sdf``: the xi-SDF distance (as ``xi_sdf``);
+        2. ``lambda``: uniform shift with ``V(phi_sdf + lambda) = V(phi*)`` (:meth:`sharp_volume`, bisection);
+        3. ``eps_eff``: profile width with ``sum H_eps_eff(phi_sdf + lambda) dV = sum psi* dV`` (bisection in
+           ``[eps/4, 4 eps]``; without a sign change there, the width of the smallest residual on a scan).
+
+        ``self.reinit_info`` records ``lambda``, ``eps_eff / eps``, the residuals and whether the width was
+        bracketed. ``self.eps`` is not changed (the next re-initialisation starts from it again)."""
+        grid = self.psi.grid
+        xp = grid.xp
+        h = float(grid.h[0])
+        eps = self.eps
+        q = self.psi.interior
+        m0 = float(xp.sum(q) * self.dv)
+        phi_star = phi_from_psi(q, eps)
+        v0 = self.sharp_volume(phi_star)
+        sgn = xp.where(phi_star < 0.0, -1.0, 1.0)
+        d = (_distance_to_crossings if distance == "points" else _distance_to_segments)(phi_star, self.psi.bc)
+        if d is None:
+            return
+        phi = sgn * d * h
+
+        lo, hi = -2.0 * h, 2.0 * h
+        for _ in range(60):
+            mid = 0.5 * (lo + hi)
+            if self.sharp_volume(phi + mid) < v0:
+                lo = mid
+            else:
+                hi = mid
+        lam = 0.5 * (lo + hi)
+        phi = phi + lam
+
+        def miss(e):
+            return float(xp.sum(psi_from_phi(phi, e)) * self.dv) - m0
+
+        a, b = 0.25 * eps, 4.0 * eps
+        fa, fb = miss(a), miss(b)
+        bracketed = fa * fb <= 0.0
+        if bracketed:
+            for _ in range(60):
+                m = 0.5 * (a + b)
+                fm = miss(m)
+                if fa * fm <= 0.0:
+                    b = m
+                else:
+                    a, fa = m, fm
+            e_eff = 0.5 * (a + b)
+        else:
+            scan = [eps * 2.0 ** (k / 8.0) for k in range(-16, 17)]
+            e_eff = min(scan, key=lambda e: abs(miss(e)))
+        new = psi_from_phi(phi, e_eff)
+        self.reinit_info = {"lambda": lam, "eps_eff": e_eff / eps, "mass_residual": miss(e_eff) / m0,
+                            "volume_residual": self.sharp_volume(phi) / v0 - 1.0, "bracketed": bracketed}
+        self.psi.interior = new
+        self.psi.fill_ghosts()
 
     def _reinit_xi_sdf(self, code_variant: bool, distance: str = "points") -> None:
         """Ridge--Eikonal distance reconstruction, uniform-grid form (paper 05a, xi-SDF algorithm):
