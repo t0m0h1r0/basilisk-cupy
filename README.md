@@ -19,6 +19,10 @@ Design document: see the project's design doc ("Basilisk → CuPy 移植設計�
 | ⑥ Time stepping | `timestep()` / `dtnext()`; `CenteredNS` (`navier-stokes/centered.h`) with Basilisk's event order exposed as hook stages; `IMEXBDF2NS` (TwoPhaseFlow: EXT2 convection, implicit BDF2 viscosity, incremental pressure correction with projection step 2dt/3); `IMEXRKNS` (ARS(3,4,3) / ARS(4,4,3) IMEX Runge–Kutta, a projection per stage) |
 | ③ Terms | semi-discrete convection for multistep integrators (`tendency(u, uf)`): `CentralFluxConvection` (`D_f(P_f(u) u_f)`), `UCCD6Convection` (skew CCD + `σ|u|h⁷(−D₂)⁴`), `FUCCDConvection` (FUCCD₄ / FUCCD₁ conservative upwind face fluxes) |
 | Scheme | `scheme.py` registry and YAML loader (`operators: face/cell`, `terms: convection`) |
+| ⑤ Interface (two-phase) | VOF baseline (`vof.h` PLIC advection, `two-phase.h`, `heights.h` / `curvature.h`, `tension.h`, `iforce.h`, `reduced.h`; field-by-field equal to Basilisk's C build on the first steps of `gravity.c` / `capwave.c` and on the curvature tests). TwoPhaseFlow's CLS `psi` (`CLSInterface`: TVD-RK3 transport with FCCD face values and the corrected divergence, mass closure; ξ-SDF / Ridge–Eikonal, compression–diffusion and ACLS re-initialisation; curvature from `psi`, from the logit `phi` or from `psi`'s height functions) |
+| Two-phase coupling | `TwoPhaseCLS` on `CenteredNS`: CSF, or the paper's pressure-jump closure as a ghost-fluid method (phase-wise constant densities, GFM coefficient on cut faces; `pressure_jump=True`), with the jump either sharp or in the smooth form `p̃ = p − H j_ext` that FCCD's projection can differentiate (`jump_mode="smooth"`); capillary step bound × √(5/12) for the CCD curvature (stable to density ratio 1000 for a static drop); sharp GFM also on mapped grids |
+| Coupled iterations | `CenteredNS(coupled_iterations=K, coupled_rtol=..., coupled_anderson=m)`: outer iterations of viscosity, interfacial acceleration and projection within a step, with change / momentum-residual criteria and Anderson acceleration |
+| Not yet | the paper's seven-stage two-phase step as one integrator (IMEX-BDF2 with variable density + CLS + split PPE); HFE; defect correction of the split PPE; FCCD projection with a density ratio (the smooth form assumes equal densities) |
 
 ## Usage
 
@@ -958,3 +962,11 @@ first order. Development stops here: the band velocity correction and the exact 
 experimental prototypes in `cases/`, high-wavenumber damping and the adjoint surface tension are dropped, MAC and a
 full Case C are deferred. For damping within 1 %, raising the resolution (N = 128 for this wave: +0.5 %) is the
 cheaper and surer route.
+
+Paper review before the benchmarks (`docs/notes/10_paper_errata.md`, last section): chapter 14 does not run the
+seven-stage step of §11b1 — the capillary wave transports a geometric cell fraction (swept volume) on an
+interface-fitted grid rebuilt every step, and the oscillating drop integrates the linear Rayleigh–Lamb mode on a
+closed-curve chart without coupling to Navier–Stokes (the paper's own `force_admissible=0`). The capillary wave's
+amplitude ratio after one period, 0.7936, is a damping rate about 6.2 times the weak viscous estimate
+exp(-2 nu k^2 T) = 0.964, and its grid resolves the liquid vorticity layer with delta/h = 0.20; the CLS kinematics
+of B under-damps, so it does not explain this. The Rayleigh–Taylor growth rate is asserted, not fitted.
