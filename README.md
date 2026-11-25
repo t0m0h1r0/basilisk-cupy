@@ -948,3 +948,13 @@ The static-drop balance is kept (div-free share of the GFM force 8.6e-4 against 
 form checkerboard-modulated pressure modes have the same small eigenvalue as the smoothest mode. A MAC
 velocity with these operators over-damps (+12.9 %). Figure: `docs/figures/single_velocity.png`. Notes:
 `docs/notes/48_single_velocity.md`.
+
+Summary of B, the capillary-wave damping work of notes 38-48 (`docs/notes/49_b_summary.md`,
+`docs/figures/b_summary.png`): the damping deficit on coarse grids is set by the CLS interface kinematics (the
+crossing moves with a velocity averaged over +-h), not by the order of the viscous or face operators; energy
+consistency and physical accuracy are different properties; wavenumber alone cannot separate an unresolved
+physical layer from numerical noise; the collocated approximate projection keeps higher-order integrators at
+first order. Development stops here: the band velocity correction and the exact cell projection are kept as
+experimental prototypes in `cases/`, high-wavenumber damping and the adjoint surface tension are dropped, MAC and a
+full Case C are deferred. For damping within 1 %, raising the resolution (N = 128 for this wave: +0.5 %) is the
+cheaper and surer route.
