@@ -886,3 +886,11 @@ of width delta at the interface, so the kinematic error is ~ (h / delta)^2. The 
 with this discrete kinematic condition reproduces the deficit (-17.0 % against -16.6 % at N = 32). This corrects
 notes 38 and 40: the deficit is kinematic, not the viscous resolution of the layer, and the height-function
 curvature only cancels it. Figure: `docs/figures/capwave_theory.png`. Notes: `docs/notes/41_capwave_theory.md`.
+
+A spectrally split CCD damping `gamma Q^T M Q` (`Q = I - (I + alpha L_h^m)^{-1}` from the CCD Laplacian; proposed
+together with a high-wavenumber defect correction) was evaluated (`cases/split_hyperviscosity.py`): it is
+energy-dissipative even with the non-symmetric wall closures, but it lowers the capillary wave's damping
+(-16.4 % -> -18.9 % at gamma dt = 100, N = 32), because it trims the vortex layer that carries the dissipation,
+and it does not stabilise the density-ratio-100 mode (|lambda| 1.189 -> 1.157; 7.3 % of that mode's energy lies
+in Q's band, white noise 10.4 %). This damping term is not adopted; the defect correction and the structure-preserving parts of the proposal were not evaluated here. Figure: `docs/figures/split_hyperviscosity.png`.
+Notes: `docs/notes/42_split_residual_eval.md`.
