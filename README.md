@@ -999,6 +999,7 @@ structure, the options and the correspondence to the paper's seven stages.
 
 Re-initialisation with the paper's two closures (`reinit_method="xi_sdf_vw"`, `docs/notes/54_reinit_closures.md`):
 the profile width that closes the diffuse mass is ill-conditioned for a nearly flat interface (eps_eff/eps = 3.96 /
-0.25 from an exact profile at N = 32 / 64) and wrecks a capillary wave; every re-initialisation also roughens psi
+0.25 from an exact profile at N = 32 / 64) and, used every 10 steps on a capillary wave, sits at the search bounds
+and puts steps into the amplitude (RMS error 1.1-2.4 times); every re-initialisation also roughens psi
 enough for its CCD curvature to scatter (band curvature 3.5...4.6 -> -6.3...18.0), shifting a static drop's jump by
 +13 %.

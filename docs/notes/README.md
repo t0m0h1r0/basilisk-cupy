@@ -56,4 +56,4 @@
 | [51_multistep_schemes.md](51_multistep_schemes.md) | 時間積分の差し替え（1）：多段法の IMEX（BDF1〜4、EXT1〜4、AB、AM、θ、MCNAB2、CNLF を Lagrange の係数で一般化）、界面の輸送の速度（凍結 / AB2・3 / 予測子・修正子）、ψ の RK。kx ≠ ky では近似射影の交差項で N = 16 の次数が 1 に落ち、IPC で 3 次以上も 2 次止まり（#66） |
 | [52_two_phase_imex_rk.md](52_two_phase_imex_rk.md) | 時間積分の差し替え（2）：ARS(1,1,1)〜(4,4,3) と二相の IMEX-RK（ψ も段ごとに進める）。Stokes では 3 次の表が 3 次、対流があると誤差が約 3e-6 で止まる（#66） |
 | [53_equations.md](53_equations.md) | 方程式の整理：実装どおりの離散式（CLS、物性、曲率、GFM の鋭い形と滑らかな形、近似射影、Basilisk の分割、多段法と IMEX-RK の一般形、刻みの制約）、誤差の構造、選択肢、論文 11b1 との対応（#67） |
-| [54_reinit_closures.md](54_reinit_closures.md) | 論文の再初期化の二つの閉鎖（λ_Γ、ε_eff）：平らに近い界面で幅の問題の条件が悪く、毛管波が壊れる。再初期化が ψ に入れる凹凸を CCD 曲率が増幅し、静止液滴のジャンプが +13%（#67） |
+| [54_reinit_closures.md](54_reinit_closures.md) | 論文の再初期化の二つの閉鎖（λ_Γ、ε_eff）：平らに近い界面で幅の問題の条件が悪く、毛管波の振幅に段差が入る。再初期化が ψ に入れる凹凸を CCD 曲率が増幅し、静止液滴のジャンプが +13%（#67） |
