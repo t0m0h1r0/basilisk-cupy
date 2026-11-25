@@ -155,6 +155,11 @@ class CapwaveMap:
         tp.add_surface_tension(1.0)
         if curvature == "exact":
             tp.potentials[0] = lambda t_: t_.sigma * self._sign * exact_linear_curvature(t_)
+        hyper = kw.pop("hyper", None)
+        if hyper is not None:
+            from cases.split_hyperviscosity import attach
+
+            attach(ns, **hyper)
         kin = kw.pop("kinematics", None)
         if kin == "weights":
             tp._kin_w = kinematic_weights(tp)[1]
