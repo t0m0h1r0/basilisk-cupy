@@ -23,7 +23,7 @@ Design document: see the project's design doc ("Basilisk → CuPy 移植設計�
 | Two-phase coupling | `TwoPhaseCLS` on `CenteredNS`: CSF, or the paper's pressure-jump closure as a ghost-fluid method (phase-wise constant densities, GFM coefficient on cut faces; `pressure_jump=True`), with the jump either sharp or in the smooth form `p̃ = p − H j_ext` that FCCD's projection can differentiate (`jump_mode="smooth"`); capillary step bound × √(5/12) for the CCD curvature (stable to density ratio 1000 for a static drop); sharp GFM also on mapped grids |
 | Coupled iterations | `CenteredNS(coupled_iterations=K, coupled_rtol=..., coupled_anderson=m)`: outer iterations of viscosity, interfacial acceleration and projection within a step, with change / momentum-residual criteria and Anderson acceleration |
 | Paper's two-phase step | `TwoPhaseIMEX` (`time/two_phase_imex.py`): IMEX-BDF2 + CLS + pressure-jump GFM as one combination of the existing parts (§11b1's seven stages), options for the face operators, convection and the interface-transport velocity |
-| Not yet | split FCCD PPE with a density ratio; HFE; defect correction of the split PPE; FCCD projection with a density ratio (the smooth form assumes equal densities) |
+| Not yet | GPU lines for the phase-wise CCD projection (`faces="phase-ccd"`, host only); HFE in the paper's iterative form; defect correction of the split PPE; FCCD projection with a density ratio (the smooth form assumes equal densities) |
 
 ## Usage
 
@@ -1036,3 +1036,11 @@ Verdict on the paper (`docs/notes/60_paper_verdict.md`): fifteen claims checked 
 recommended configuration of this port: SBDF2, ab2 interface transport, xi-SDF re-initialisation every 10 steps,
 height-function curvature for closed interfaces, fd2 GFM faces, tension.h's step times sqrt(5/12), and a
 volume-change projection tolerance for dimensional problems.
+
+Phase-wise CCD projection for a density ratio (`docs/notes/61_phase_ccd.md`): `TwoPhaseIMEX(faces="phase-ccd")` closes
+the CCD line systems at the cut faces (extrapolation closures), adds one-sided Taylor terms to the GFM difference on
+cut faces and interpolates the jump at the crossings with CCD Hermite data; stable at density ratio 1000. On a static
+drop the jump error is 3.5-4.9 times smaller on coarse grids (5.4e-4 against 2.6e-3 at N = 32) but levels off at
+1.7e-4 by N = 128, where the curvature error appears to dominate; on the paper's capillary wave the frequency
+improves slightly and the damping grows. It costs 2-4 times fd2's GFM on the CPU; fd2 stays the default.
+
