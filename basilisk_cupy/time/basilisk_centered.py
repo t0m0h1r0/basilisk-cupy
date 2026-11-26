@@ -166,10 +166,16 @@ class CenteredNS:
         self.u.fill_ghosts()
 
     def centered_gradient(self) -> None:
-        """g = average to cells of (a - alpha grad p) on faces."""
+        """g = average to cells of (a - alpha grad p) on faces. ``g_scale`` (set by a two-phase module, else None):
+        per-axis face factors applied before the average (``alpha_mean / alpha_gfm`` of
+        :class:`~..interface.vof_jump.TwoPhaseVOFJump`: the cells take the face's net force with their own
+        density, docs/notes/65)."""
         self.p.fill_ghosts()
+        scale = getattr(self, "g_scale", None)
         for ax in range(self.grid.ndim):
             gf = self.a[ax] - self.alpha[ax] * self.ops.grad_f(self.p, ax)
+            if scale is not None:
+                gf = gf * scale[ax]
             self.g[ax].interior = self.ops.face_to_cell(gf, ax, periodic=self.p.bc.is_periodic(ax))
         self.g.fill_ghosts()
 

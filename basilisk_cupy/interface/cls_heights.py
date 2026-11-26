@@ -70,7 +70,12 @@ def _crossing_positions(Q, eps, h):
 
 
 def height_curvature(psi: CellField, *, m: int = 4, delta: float = 0.5, method: str = "ccd",
-                     psi_min: float = PSI_MIN, heights: str = "crossing", eps: float | None = None, trim: int = 2):
+                     psi_min: float = PSI_MIN, heights: str = "crossing", eps: float | None = None, trim: int = 2,
+                     fallback=None, averages: bool = False):
+    """``fallback``: the curvature of the band cells no run covers (default: the curvature of ``psi`` itself);
+    a VOF fraction with ``heights="sum"`` uses Basilisk's curvature (:func:`vof_height_curvature`).
+    ``averages``: the heights are column averages over the cell width (a VOF column sum): with CCD they are turned
+    into point values ``eta - h^2 eta''/24`` (eta'' from the same CCD solve) before differentiation."""
     grid = psi.grid
     if grid.ndim != 2 or not grid.is_uniform:
         raise NotImplementedError("2-D uniform grids")
@@ -121,6 +126,8 @@ def height_curvature(psi: CellField, *, m: int = 4, delta: float = 0.5, method: 
                     e = eta[i0:i1, j]
                     if method == "ccd" and (L >= 6 + 2 * trim or (per and L >= 3)):
                         d1, d2 = _ccd(L, h[t], per)
+                        if averages:
+                            e = e - h[t] * h[t] / 24.0 * (d2 @ e)
                         e1, e2 = d1 @ e, d2 @ e
                         sl = slice(0, L) if per else slice(trim, L - trim)
                         e1, e2 = e1[sl], e2[sl]
@@ -141,7 +148,24 @@ def height_curvature(psi: CellField, *, m: int = 4, delta: float = 0.5, method: 
                     K[rows[take], j] = k[take]
         Km = np.moveaxis(K, 1, a)
         kappa = np.where(np.isnan(kappa) & ~np.isnan(Km), Km, kappa)
-    fallback = to_numpy(psi_curvature(psi, psi_min=psi_min))
-    kappa = np.where(np.isnan(kappa), fallback, kappa)
+    fb = to_numpy(psi_curvature(psi, psi_min=psi_min) if fallback is None else fallback(psi))
+    kappa = np.where(np.isnan(kappa), fb, kappa)
     kappa = np.where(band, kappa, 0.0)
     return xp.asarray(kappa)
+
+
+def vof_height_curvature(f: CellField, sigma: float = 1.0, *, method: str = "ccd", m: int = 3, trim: int = 2,
+                         averages: bool = True):
+    """``sigma kappa`` of a VOF fraction in interfacial cells (``NODATA`` elsewhere), as tension.h's
+    :func:`.curvature.curvature` but with ``eta'`` and ``eta''`` from one CCD solve along each run of columns whose
+    window of ``2m + 1`` cells holds the whole transition (the column sum of f is then the exact height); the cells
+    no such run covers keep Basilisk's value (docs/notes/66)."""
+    from .curvature import curvature  # noqa: PLC0415
+    from .heights import NODATA  # noqa: PLC0415
+
+    xp = f.grid.xp
+    base = curvature(f.interior, f.bc, f.grid, 1.0)
+    inter = base != NODATA
+    k = height_curvature(f, m=m, delta=1e-6, method=method, psi_min=0.0, heights="sum", trim=trim,
+                         fallback=lambda _: xp.where(inter, base, 0.0), averages=averages)
+    return xp.where(inter, sigma * k, NODATA)
