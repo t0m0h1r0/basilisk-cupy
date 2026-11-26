@@ -193,3 +193,29 @@ def explicit_rk(name: str):
 
 __all__ = ["MultistepScheme", "Coefficients", "EXPLICIT_RK", "explicit_rk", "bdf_alpha", "ext_beta", "ab_beta",
            "am_gamma"]
+
+
+def explicit_real_limit(scheme: "MultistepScheme", r_max: float = 4.0, samples: int = 4001) -> float:
+    """Largest ``r dt`` for which the scheme's explicit part is stable on ``u' = -r u`` at constant steps (``u^{n+1}``
+    and the history weighted by ``alpha``, the explicit term by ``beta``): EXT2/BDF2 4/3, EXT3/BDF3 0.95, AB2/AM2 1;
+    0 when no positive ``r dt`` is stable (CNLF's leapfrog). The explicit hyperviscosity of UCCD6 / FUCCD4 is
+    bounded with it (docs/notes/72)."""
+    c = scheme.coefficients([1.0] * 4)
+    a, b = np.asarray(c.alpha, float), np.asarray(c.beta, float)
+    k = max(len(a) - 1, len(b))
+    def stable(x):
+        poly = np.zeros(k + 1)
+        poly[:len(a)] += a
+        poly[1:1 + len(b)] += x * b
+        return np.abs(np.roots(poly)).max() <= 1.0 + 1e-12
+
+    last = 0.0
+    for x in np.linspace(r_max / samples, r_max, samples):
+        if not stable(x):
+            lo, hi = last, float(x)
+            for _ in range(60):  # bisection to round-off (EXT2/BDF2: 4/3 exactly)
+                mid = 0.5 * (lo + hi)
+                lo, hi = (mid, hi) if stable(mid) else (lo, mid)
+            return lo
+        last = float(x)
+    return last

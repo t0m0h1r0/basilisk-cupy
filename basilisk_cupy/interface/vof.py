@@ -33,7 +33,7 @@ class VOFTracer:
 
     field: CellField
     inverse: bool = False
-    gradient: object = None  # slope limiter g(l, c, r) of f, or None for centred differences
+    gradient: object = None  # slope limiter g(l, c, r) of f, None for centred differences, or "ccd" (docs/notes/72)
 
 
 @dataclass
@@ -84,6 +84,48 @@ def _concentration_gradient(xp, cp, tp, axis, inverse, limiter):
     return xp.where(cc >= CMIN, g, 0.0)
 
 
+MIN_CCD_RUN = 6  # the shortest run of a phase's cells differentiated by CCD (shorter runs keep vof.h's gradient)
+
+
+def _ccd_concentration_gradient(xp, cp, tp, axis, inverse, base, periodic_axis: bool):
+    """``f'`` (times Delta) of the concentration ``f = t / c`` by CCD along runs of the phase's cells (``c >= CMIN``,
+    or ``1 - c`` for ``inverse``), with extrapolation closures at the run ends (the phase ends there); runs shorter
+    than ``MIN_CCD_RUN`` keep ``base`` (vof.h's gradient). The concentration is smooth within its phase, so its CCD
+    derivative does not cross the interface."""
+    import numpy as np  # noqa: PLC0415
+
+    from ..backend import to_numpy  # noqa: PLC0415
+    from ..discretization.ccd import ccd_matrices  # noqa: PLC0415
+
+    c = to_numpy(_shift(cp, axis, 0))
+    t = to_numpy(_shift(tp, axis, 0))
+    if inverse:
+        c = 1.0 - c
+    f = np.where(c > 0.0, t / np.where(c > 0.0, c, 1.0), 0.0)
+    out = to_numpy(base).copy()
+    F, C, O = (np.moveaxis(a, axis, 0) for a in (f, c, out))
+    n, m = F.shape
+    for j in range(m):
+        ok = C[:, j] >= CMIN
+        if periodic_axis and ok.all():
+            d1 = ccd_matrices(n, 1.0, "periodic", "periodic")[0]
+            O[:, j] = d1 @ F[:, j]
+            continue
+        k = 0
+        while k < n:
+            if not ok[k]:
+                k += 1
+                continue
+            e = k
+            while e < n and ok[e]:
+                e += 1
+            if e - k >= MIN_CCD_RUN:
+                d1 = ccd_matrices(e - k, 1.0, "extrapolate", "extrapolate")[0]
+                O[k:e, j] = d1 @ F[k:e, j]
+            k = e
+    return xp.asarray(out)
+
+
 def _sweep(interface: VOFInterface, uf: FaceField, dt: float, axis: int, cc, tcs, periodic):
     c = interface.c
     grid = c.grid
@@ -113,7 +155,12 @@ def _sweep(interface: VOFInterface, uf: FaceField, dt: float, axis: int, cc, tcs
     tfluxes = []
     for tr, tcl in zip(interface.tracers, tcs):
         tp = _with_ghosts(tr.field)
-        gf = _pad(_concentration_gradient(xp, cp, tp, axis, tr.inverse, tr.gradient), periodic, xp)
+        if isinstance(tr.gradient, str) and tr.gradient == "ccd":
+            base = _concentration_gradient(xp, cp, tp, axis, tr.inverse, None)
+            g = _ccd_concentration_gradient(xp, cp, tp, axis, tr.inverse, base, bool(periodic[axis]))
+        else:
+            g = _concentration_gradient(xp, cp, tp, axis, tr.inverse, tr.gradient)
+        gf = _pad(g, periodic, xp)
         ci = 1.0 - cu if tr.inverse else cu
         cf1 = 1.0 - cf if tr.inverse else cf
         ti, gi = upwind(tp), upwind(gf)

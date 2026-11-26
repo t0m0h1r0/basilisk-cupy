@@ -74,3 +74,6 @@
 | [69_cls_sharp_default.md](69_cls_sharp_default.md) | CLS の `cell_density` の既定を `"sharp"` に：密度比 1000 の静止液滴の寄生流は 1.1〜2.9 倍、連成反復の収束は 2.7 倍の反復。研究用の測定は `"diffuse"` を明示（#79） |
 | [70_vof_imex_capillary_step.md](70_vof_imex_capillary_step.md) | IMEX 上の VOF の静止液滴が N = 128 で崩れる：SBDF2 の陽的な表面張力は 1 ステップに (ωΔt)⁴ 程度増幅し、tension.h の上限（ωΔt ≈ 1）では粘性が抑えきれない。毛管の刻みを √(5/12) 倍にして解消、動く界面の結果はほぼ不変（#80） |
 | [71_conserving.md](71_conserving.md) | 運動量保存形の VOF（`TwoPhase(conserving=True)`、Basilisk の `conserving.h`）：`rt.c` を一様な 64² で C 版と照合し t = 0.1 で 1e-5 の一致。照合で `centered.h` の壁の圧力（`neumann_pressure`）の移植漏れを見つけて修正（#81） |
+| [72_convection_stability.md](72_convection_stability.md) | 二相流の対流と安定性：外力のない二相のせん断層で、運動量保存形だけが運動エネルギーを増やさない。UCCD6・FUCCD₄ の風上の散逸は中心差分の不安定を遅らせるが密度比 100 で発散、時間積分（SBDF3・CNLF）でも直らない。UCCD6・FUCCD₄ の刻みの上限が SBDF2 に固定されていた不具合を修正。運動量保存形 + CCD の勾配（`conserving_gradient="ccd"`）、CCD-BCG の試作（#82） |
+| [73_verification_spurious.md](73_verification_spurious.md) | 検証の拡充（1）：寄生流の標準の試験 `spurious.c` を一様な格子で C 版と照合、形と曲率の誤差が 3〜4 桁一致（#82） |
+| [74_compact_flux.md](74_compact_flux.md) | BCG 型の流束をコンパクトに：厳密な演算子 R_C(D)、`ccd2` の式の誤り（点の値の展開）を線形安定性で確認、左辺を固定し右辺を CFL 数に依存させるコンパクトな流束（α = 1/3、5 点）は全 CFL 数で安定、一次元の定速移流で 5 次（#82） |
