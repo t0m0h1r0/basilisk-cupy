@@ -1172,3 +1172,12 @@ G^{n+1} u^{n+1} = C u^n carries a discontinuous density (ratio 1000, exact inter
 local reconstruction, keeps a free stream and the total momentum to round-off, never increases the reconstructed
 kinetic energy, and its update decays exponentially with the cell distance. A velocity whose gradient jumps at the
 interface drops it to first order.
+
+Piecewise reconstruction sharing the interface value (`docs/notes/81_piecewise_galerkin.md`, the user's design): near
+the interface one piecewise polynomial P_-(xi) = a0 + sum a_r^- xi^r, P_+(xi) = a0 + sum a_r^+ xi^r, fitted to p full
+cells on each side and the interfacial cell's mass-weighted average, restores fourth order (also at intermediate times)
+for a gradient jump and for different non-polynomial functions per phase, reproduces per-phase polynomials to
+round-off, and its Schur denominator, condition number and amplification match the user's estimates independent of
+the density ratio; the structure (free stream, momentum, energy, G >= M) is kept and the Galerkin correction is not
+concentrated at the interface. Open issue: the update operator jumps by O(1) when the interface crosses a cell
+boundary (the stencil switches); a blend of stencils is continuous but less accurate.
