@@ -79,7 +79,8 @@ def _convection(name: str):
 
 
 def _attach_two_phase(ns, phi0, *, periodic, faces, rho1, rho2, mu1, mu2, sigma, gravity, eps, reinit_every,
-                      reinit_method, curvature_kw, jump_mode, capillary_dt_factor) -> None:
+                      reinit_method, curvature_kw, jump_mode, capillary_dt_factor, cls_divergence=None,
+                      jump_interp=None) -> None:
     """CLS (FCCD face values of order 6, corrected divergence) and TwoPhaseCLS with the GFM pressure jump."""
     grid = ns.grid
     bc = BoundaryConditions()
@@ -87,13 +88,13 @@ def _attach_two_phase(ns, phi0, *, periodic, faces, rho1, rho2, mu1, mu2, sigma,
         for side in (0, 1):
             bc.set((ax, side), Periodic() if ax in periodic else Neumann(0.0))
     ns.cls = CLSInterface.from_level_set(grid, phi0, bc, eps=eps, ops=FCCDFaceComplex(order=6),
-                                         divergence="fccd" if faces == "fd2" else "full")
+                                         divergence=cls_divergence or ("fccd" if faces == "fd2" else "full"))
     if jump_mode is None:
         jump_mode = "smooth" if faces == "fccd" else "sharp"
     ns.tp = TwoPhaseCLS(ns, ns.cls, rho1=rho1, rho2=rho2, mu1=mu1, mu2=mu2, pressure_jump=True,
                         jump_mode=jump_mode, reinit_every=reinit_every, reinit_method=reinit_method,
                         curvature_kw=curvature_kw, capillary_dt_factor=capillary_dt_factor,
-                        jump_interp="hermite" if faces == "phase-ccd" else "linear")
+                        jump_interp=jump_interp or ("hermite" if faces == "phase-ccd" else "linear"))
     if faces == "phase-ccd":
         # the cut faces move with the interface: refresh the operator once the properties are set
         ns.on("properties", lambda _ns: _ns.ops.update(_ns.tp, _ns.alpha), after=True)
@@ -142,7 +143,8 @@ class TwoPhaseIMEX(_TwoPhaseMixin, IMEXMultistepNS):
                  convection: str = "central", eps: float | None = None, reinit_every: int = 0,
                  reinit_method: str = "xi_sdf", curvature_kw: dict | None = None, jump_mode: str | None = None,
                  capillary_dt_factor: float | None = None, transport: str = "frozen",
-                 psi_integrator: str = "ssprk3", scheme="sbdf2", **kw) -> None:
+                 psi_integrator: str = "ssprk3", scheme="sbdf2", cls_divergence: str | None = None,
+                 jump_interp: str | None = None, **kw) -> None:
         """``phi0``: cell-centred signed distance, positive in phase 1 (``psi = 1``). ``gravity``: ``(G, Z)`` of
         the reduced gravity (``G`` the acceleration vector). Walls on the non-periodic sides (``uf`` normal
         zero there). ``scheme``: the momentum's multistep IMEX scheme (:class:`~.schemes.MultistepScheme`,
@@ -172,7 +174,8 @@ class TwoPhaseIMEX(_TwoPhaseMixin, IMEXMultistepNS):
         _attach_two_phase(self, phi0, periodic=periodic, faces=faces, rho1=rho1, rho2=rho2, mu1=mu1, mu2=mu2,
                           sigma=sigma, gravity=gravity, eps=eps, reinit_every=reinit_every,
                           reinit_method=reinit_method, curvature_kw=curvature_kw, jump_mode=jump_mode,
-                          capillary_dt_factor=capillary_dt_factor)
+                          capillary_dt_factor=capillary_dt_factor, cls_divergence=cls_divergence,
+                          jump_interp=jump_interp)
         self.cls.integrator = psi_integrator
         self.faces, self.convection_name = faces, convection
         self.transport, self.psi_integrator = transport, psi_integrator
