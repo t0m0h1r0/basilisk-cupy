@@ -44,12 +44,16 @@ def _runs(ok, P, jump):
 
 def ccd_curvature(f, sigma: float = 1.0, *, min_run: int = 8, trim: int = 1, jump: float = 1.5,
                   averages: bool = True, choose: str = "normal", max_slope: float = np.inf,
-                  stats: dict | None = None):
+                  stats: dict | None = None, filter_alpha: float = 0.0, filter_order: int = 2):
     """``sigma kappa`` in the interfacial cells of the VOF field ``f`` (``CellField``), ``NODATA`` elsewhere.
     ``choose``: which axis's run gives a cell its value: ``"normal"`` (the axis of the larger normal component) or
     ``"interior"`` (the run in which the cell's column lies farther from the run's ends). ``max_slope``: the CCD
     value is used only where ``|P'|`` is at most this (the column parametrisation is singular where the interface
-    turns vertical, R (1 - 1/sqrt 2) away from 45 degrees on a circle); tension.h's value elsewhere."""
+    turns vertical, R (1 - 1/sqrt 2) away from 45 degrees on a circle); tension.h's value elsewhere.
+    ``filter_alpha > 0``: the column positions of a run are filtered before differentiation,
+    ``(I + alpha (-D2)^m) e_f = e`` (``m = filter_order``, D2 the run's CCD second derivative in cells): symbol about
+    ``1 / (1 + alpha (k h)^(2m))``, against the grid-scale ruggedness the VOF transport leaves in a moving interface
+    (docs/notes/76)."""
     grid = f.grid
     if grid.ndim != 2 or not grid.is_uniform or abs(float(grid.h[0]) - float(grid.h[1])) > 1e-12 * float(grid.h[0]):
         raise NotImplementedError("2-D uniform grids of square cells (the slopes are in cells per cell)")
@@ -92,6 +96,9 @@ def ccd_curvature(f, sigma: float = 1.0, *, min_run: int = 8, trim: int = 1, jum
                 d1, d2 = _ccd(L, 1.0, per)
                 if averages:
                     e = e - (d2 @ e) / 24.0
+                if filter_alpha > 0.0:
+                    A = np.linalg.matrix_power(-np.asarray(d2), filter_order)
+                    e = np.linalg.solve(np.eye(L) + filter_alpha * A, e)
                 e1, e2 = d1 @ e, d2 @ e
                 kk = e2 / delta / (1.0 + e1 * e1) ** 1.5
                 sl = slice(0, L) if per else slice(trim, L - trim)

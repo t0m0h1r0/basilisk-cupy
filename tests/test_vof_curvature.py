@@ -103,3 +103,21 @@ def test_phase_ccd_transfer_option():
     for ax in range(2):
         assert np.allclose(np.asarray(ops.interp_f(c, ax)), np.asarray(ref.interp_f(c, ax)))
     assert PhaseCCDFaces(FCCDFaceComplex()).interp_f.__self__ is not None  # FCCD's by default
+
+
+def test_ccd_curvature_filter():
+    """``filter_alpha`` (docs/notes/76): 0 leaves the CCD column curvature unchanged; a filtered run keeps a smooth
+    circle's curvature accurate (the filter acts at the grid scale) and damps a grid-scale ruggedness of the
+    interface (fractions of a circle with an O(h^2) zigzag radius)."""
+    n = 128
+    g = CartesianGrid((n, n), origin=(-0.5, -0.5))
+    c = (0.3 / n, 0.17 / n)
+    f = CellField.from_interior(g, circle_fractions(n, c[0], c[1], R), BoundaryConditions())
+    k0 = np.asarray(ccd_curvature(f, 1.0))
+    assert np.array_equal(k0, np.asarray(ccd_curvature(f, 1.0, filter_alpha=0.0)))
+    assert _rms(ccd_curvature(f, 1.0, filter_alpha=0.05, filter_order=2)) < 2e-3
+    h = 1.0 / n
+    rough = lambda x, y: (R + 2 * h * h * np.cos(np.round(np.arctan2(y - c[1], x - c[0]) * R / h) * np.pi)) ** 2 \
+        - (x - c[0]) ** 2 - (y - c[1]) ** 2  # noqa: E731
+    fr = CellField.from_interior(g, fraction(g, rough, refine=8), BoundaryConditions())
+    assert _rms(ccd_curvature(fr, 1.0, filter_alpha=0.05, filter_order=2)) < 0.5 * _rms(ccd_curvature(fr, 1.0))

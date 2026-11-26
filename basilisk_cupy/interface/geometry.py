@@ -57,3 +57,44 @@ def rectangle_fraction(nx, ny, alpha, ax, ay, bx, by):
     alpha = alpha - ny * (by + ay) / 2.0
     n1y = ny * (by - ay)
     return line_area(n1x, n1y, alpha)
+
+
+def strip_moments(nx, ny, alpha, x0, x1):
+    """Area and first moments (x, y) of the part of the strip ``[x0, x1] x [-1/2, 1/2]`` (cell coordinates) below the
+    line ``nx x + ny y = alpha`` (the "inside" of :func:`line_area`). At each x the inside is an interval
+    [y_lo(x), y_hi(x)], piecewise linear in x with kinks where the line meets y = -1/2 or 1/2 (a step where ny = 0):
+    two-point Gauss on each of the three pieces integrates the area and both moments exactly."""
+    xp = array_module(alpha)
+    nx, ny, alpha = (xp.asarray(v) + xp.zeros_like(alpha) for v in (nx, ny, alpha))
+    x0 = xp.zeros_like(alpha) + x0
+    x1 = xp.zeros_like(alpha) + x1
+    flat = xp.abs(nx) < 1e-14
+    snx = xp.where(flat, 1.0, nx)
+    k1 = xp.where(flat, x0, (alpha - 0.5 * ny) / snx)
+    k2 = xp.where(flat, x0, (alpha + 0.5 * ny) / snx)
+    b = xp.sort(xp.stack([x0, x1, _clamp(xp, k1, x0, x1), _clamp(xp, k2, x0, x1)]), axis=0)
+
+    def interval(x):
+        sny = xp.where(ny == 0.0, 1.0, ny)
+        y = _clamp(xp, (alpha - nx * x) / sny, -0.5, 0.5)
+        lo = xp.where(ny > 0.0, -0.5, y)
+        hi = xp.where(ny > 0.0, y, 0.5)
+        inside = nx * x <= alpha
+        lo = xp.where(ny == 0.0, xp.where(inside, -0.5, 0.0), lo)
+        hi = xp.where(ny == 0.0, xp.where(inside, 0.5, 0.0), hi)
+        return lo, hi
+
+    g = 0.5 / 3.0 ** 0.5
+    area = xp.zeros_like(alpha)
+    mx = xp.zeros_like(alpha)
+    my = xp.zeros_like(alpha)
+    for i in range(3):
+        a, c = b[i], b[i + 1]
+        w = 0.5 * (c - a)
+        for t in (0.5 - g, 0.5 + g):
+            x = a + t * (c - a)
+            lo, hi = interval(x)
+            area = area + (hi - lo) * w
+            mx = mx + (hi - lo) * x * w
+            my = my + 0.5 * (hi * hi - lo * lo) * w
+    return area, mx, my

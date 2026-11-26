@@ -21,7 +21,7 @@ from dataclasses import dataclass, field
 
 from ..fields import CellField, FaceField
 from .fractions import reconstruction
-from .geometry import rectangle_fraction
+from .geometry import rectangle_fraction, strip_moments
 
 SEPS = 0.0  # Basilisk common.h (without embedded boundaries)
 CMIN = 0.5  # vof_concentration_gradient: switch to one-sided away from the interface
@@ -37,6 +37,19 @@ class VOFTracer:
     #                          "ccd2" (with the parabola term, docs/notes/75)
     ccd_cmin: float = CMIN  # the phase fraction from which a cell joins a CCD run (0.99: the interfacial cells keep
     #                         vof.h's gradient, docs/notes/75)
+    source: object = None  # the concentration's rate of change (cell array, e.g. rho_k g for the momentum): the face
+    #                        value gets + dt/2 the mean source of the face's two cells, as BCG's prediction
+    #                        (docs/notes/77)
+    transverse: bool = False  # the face value gets BCG's transverse term - dt/2 v df/dy of its upwind cell (v the
+    #                           cell velocity across the sweep from the face velocities, df/dy vof.h's slope across)
+    complementary: bool = False  # an inverse tracer's dilation term in the cells with c <= 1/2 (the complement of
+    #                              cc = c > 1/2); vof.h takes c < 1/2, so at c = 1/2 exactly neither phase dilates
+    #                              and a constant concentration is not preserved (docs/notes/77)
+    fresh_dilation: bool = False  # the second sweep's dilation term with the concentration after the first sweep
+    #                               (vof.h: the step's start in both, docs/notes/77)
+    geometric: bool = False  # the slope terms (along and across the sweep) at the centroids of the phase's part of
+    #                          the swept strip and of the cell (from the PLIC line) instead of vof.h's full-cell
+    #                          (1 - C)/2 along the sweep only (docs/notes/77, P1)
 
 
 @dataclass
@@ -162,6 +175,14 @@ def _sweep(interface: VOFInterface, uf: FaceField, dt: float, axis: int, cc, tcs
     cf = xp.where((cu <= 0.0) | (cu >= 1.0), cu, frac)
     flux = cf * u
     cfl = float(xp.max(un * s)) if u.size else 0.0
+    geo = None
+    if any(tr.geometric for tr in interface.tracers):
+        # flipped coordinates x' = -s x: the swept strip is [-1/2, C - 1/2] (as rectangle_fraction above)
+        C = xp.minimum(1.0, s * un)
+        Ac, Mc, Tc = strip_moments(-s * a_n, a_t, a_al, -0.5, 0.5)
+        As, Ms, Ts = strip_moments(-s * a_n, a_t, a_al, -0.5, C - 0.5)
+        mid = (cu > 0.0) & (cu < 1.0)
+        geo = (C, Ac, Mc, Tc, As, Ms, Ts, mid)
     tfluxes = []
     for tr, tcl in zip(interface.tracers, tcs):
         tp = _with_ghosts(tr.field)
@@ -182,6 +203,32 @@ def _sweep(interface: VOFInterface, uf: FaceField, dt: float, axis: int, cc, tcs
         cf1 = 1.0 - cf if tr.inverse else cf
         ti, gi = upwind(tp), upwind(gf)
         ff = ti / xp.where(ci > 1e-10, ci, 1.0) + s * xp.minimum(1.0, 1.0 - s * un) * gi / 2.0
+        if tr.geometric:
+            if g2f is not None:
+                raise ValueError("geometric=True takes the linear slope term only (not 'ccd2')")
+            C, Ac, Mc, Tc, As, Ms, Ts, mid = geo
+            full_s = (C - 1.0) / 2.0  # the full strip's centroid (flipped), the full cell's is 0
+            if tr.inverse:  # the complement of the PLIC region
+                Ac1, Mc1, Tc1, As1, Ms1, Ts1 = 1.0 - Ac, -Mc, -Tc, C - As, C * full_s - Ms, -Ts
+            else:
+                Ac1, Mc1, Tc1, As1, Ms1, Ts1 = Ac, Mc, Tc, As, Ms, Ts
+            ok = mid & (Ac1 > 1e-12) & (As1 > 1e-12)
+            dv = lambda m, a: xp.where(ok, m / xp.where(ok, a, 1.0), 0.0)  # noqa: E731
+            xs = xp.where(ok, dv(Ms1, As1), full_s)
+            # along the sweep (flipped back, x = -s x') and across it (the other axis' slope of the concentration)
+            gt = upwind(_pad(_concentration_gradient(xp, cp, tp, 1 - axis, tr.inverse, tr.gradient
+                                                     if not isinstance(tr.gradient, str) else None), periodic, xp))
+            ff = (ti / xp.where(ci > 1e-10, ci, 1.0) - s * (xs - dv(Mc1, Ac1)) * gi
+                  + (dv(Ts1, As1) - dv(Tc1, Ac1)) * gt)
+        if tr.transverse:
+            ot = 1 - axis
+            vt = uf[ot]
+            vc = 0.5 * (_take(vt, ot, slice(0, grid.n[ot])) + _take(vt, ot, slice(1, grid.n[ot] + 1)))
+            gy = _concentration_gradient(xp, cp, tp, ot, tr.inverse, None) / float(grid.h[ot])
+            ff = ff - 0.5 * dt * upwind(_pad(vc * gy, periodic, xp))
+        if tr.source is not None:  # BCG's source term: the mean of the face's two cells (not the upwind one)
+            sp = _pad(xp.asarray(tr.source), periodic, xp)
+            ff = ff + 0.25 * dt * (_faces(sp, axis, 0) + _faces(sp, axis, 1))
         if g2f is not None:  # the swept mean of the mean-preserving parabola: (1 - |C|)(1 - 2|C|)/12 f'' h^2
             a = xp.minimum(1.0, s * un)
             ff = ff + (1.0 - a) * (1.0 - 2.0 * a) / 12.0 * upwind(g2f)
@@ -218,13 +265,24 @@ def vof_advection(interfaces: list, uf: FaceField, dt: float, i: int) -> float:
             raise NotImplementedError("VOF advection is implemented for uniform 2-D grids")
         periodic = c.bc.periodic_axes(2)
         cc = (c.interior > 0.5).astype(c.interior.dtype)
-        tcs = []
-        for tr in itf.tracers:
-            t = tr.field.interior
-            if tr.inverse:
-                tcs.append(c.grid.xp.where(c.interior < 0.5, t / c.grid.xp.where(c.interior < 0.5, 1.0 - c.interior, 1.0), 0.0))
-            else:
-                tcs.append(c.grid.xp.where(c.interior > 0.5, t / c.grid.xp.where(c.interior > 0.5, c.interior, 1.0), 0.0))
+
+        def concentrations(old=None):
+            out = []
+            for k, tr in enumerate(itf.tracers):
+                if old is not None and not tr.fresh_dilation:
+                    out.append(old[k])  # vof.h: the concentrations of the step's start in both sweeps
+                    continue
+                t = tr.field.interior
+                if tr.inverse:
+                    mine = (c.interior <= 0.5) if tr.complementary else (c.interior < 0.5)
+                    out.append(c.grid.xp.where(mine, t / c.grid.xp.where(mine, 1.0 - c.interior, 1.0), 0.0))
+                else:
+                    out.append(c.grid.xp.where(c.interior > 0.5, t / c.grid.xp.where(c.interior > 0.5, c.interior, 1.0), 0.0))
+            return out
+
+        tcs = concentrations()
         for d in range(2):
+            if d:
+                tcs = concentrations(tcs)
             cfl = max(cfl, _sweep(itf, uf, dt, (i + d) % 2, cc, tcs, periodic))
     return cfl

@@ -24,14 +24,29 @@ RHO1, RHO2, MU = 1.225, 0.1694, 0.00313
 
 def conserving_options(variant: str) -> dict:
     """TwoPhase's options from a variant name: "conserving" (conserving.h), then "-ccd" / "-ccd2" (the gradient of the
-    momentum concentrations) and "-c<NN>" (``conserving_ccd_cmin = NN/100``, e.g. "-c99")."""
+    momentum concentrations), "-c<NN>" (``conserving_ccd_cmin = NN/100``, e.g. "-c99") "-geo"
+    (``conserving_geometric=True``) and "-pred" (``conserving_predict=True``) , "-src"
+    (``conserving_source=True``) , "-tr" (``conserving_transverse=True``) and "-fresh"
+    (``conserving_fresh_dilation=True``), in this order."""
     import re
 
+    fresh = variant.endswith("-fresh")
+    variant = variant.removesuffix("-fresh")
+    tr = variant.endswith("-tr")
+    variant = variant.removesuffix("-tr")
+    src = variant.endswith("-src")
+    variant = variant.removesuffix("-src")
+    pred = variant.endswith("-pred")
+    variant = variant.removesuffix("-pred")
+    geo = variant.endswith("-geo")
+    variant = variant.removesuffix("-geo")
     m = re.search(r"-c(\d\d)$", variant)
     v = variant[: m.start()] if m else variant
     grad = "ccd2" if v.endswith("-ccd2") else "ccd" if v.endswith("-ccd") else None
     return dict(conserving="conserving" in v, conserving_gradient=grad,
-                conserving_ccd_cmin=int(m.group(1)) / 100 if m else None)
+                conserving_ccd_cmin=int(m.group(1)) / 100 if m else None, conserving_geometric=geo,
+                conserving_predict=pred, conserving_source=src, conserving_transverse=tr,
+                conserving_fresh_dilation=fresh)
 
 
 def shear(variant: str, n: int, ratio: float, t_end: float = 2.0, delta: float = 1.0 / 30):
@@ -96,10 +111,14 @@ def shear(variant: str, n: int, ratio: float, t_end: float = 2.0, delta: float =
             "series": series}
 
 
-def translate(variant: str, n: int, ratio: float, t_end: float = 1.0, sigma: float = 0.01, mu: float = 1e-4):
-    """A drop (R = 0.15, density 1, the outer fluid 1/ratio) carried with the uniform velocity (1, 0) across the
-    periodic [0, 1]^2 for one period: exactly a translation, so the velocity error max|u - (1, 0)| and the shape error
-    |f - f0| after t = 1 measure the momentum advection (Galilean invariance)."""
+def translate(variant: str, n: int, ratio: float, t_end: float = 1.0, sigma: float = 0.01, mu: float = 1e-4,
+              speed: float = 1.0, kappa_every: int = 0):
+    """A drop (R = 0.15, density 1, the outer fluid 1/ratio) carried with the uniform velocity (``speed``, 0) across
+    the periodic [0, 1]^2 for one period: exactly a translation, so the velocity error max|u - (speed, 0)| and the
+    shape error |f - f0| after t = 1 measure the momentum advection (Galilean invariance); ``speed = 0``: the same drop
+    at rest (the static spurious currents). Variant suffix "+kccd": ``curvature_method="ccd"``. ``kappa_every``: every
+    so many steps, the relative curvature error |kappa R| - 1 in the interfacial cells (max and RMS, means over the
+    samples in ``kappa_max`` / ``kappa_rms``)."""
     import warnings
 
     warnings.filterwarnings("ignore")
@@ -121,22 +140,35 @@ def translate(variant: str, n: int, ratio: float, t_end: float = 1.0, sigma: flo
             bc.set((ax, side), Periodic())
     f0 = fraction(grid, disc, refine=8)
     f = CellField.from_interior(grid, f0, bc)
-    tp = TwoPhase(ns, f, rho1=1.0, rho2=1.0 / ratio, mu1=mu, mu2=mu, **conserving_options(variant))
-    tp.add_surface_tension(sigma)
-    ns.u[0].interior = 1.0 + 0.0 * ns.u[0].interior
+    base, _, kmethod = variant.partition("+")
+    tp = TwoPhase(ns, f, rho1=1.0, rho2=1.0 / ratio, mu1=mu, mu2=mu, **conserving_options(base))
+    tp.add_surface_tension(sigma, curvature_method="ccd" if kmethod == "kccd" else "basilisk")
+    ns.u[0].interior = speed + 0.0 * ns.u[0].interior
     ns.start(events=[t_end])
     failed = False
     errs = []  # max|u - U| after every step (the spurious currents fluctuate: the final value alone is noisy)
+    kmax, krms = [], []
+    from basilisk_cupy.interface.heights import NODATA
+
     while ns.clock.t < t_end - 1e-12:
         ns.step()
         if not max(float(np.abs(to_numpy(c.interior)).max()) for c in ns.u) < 10.0:
             failed = True
             break
-        errs.append(max(float(np.abs(to_numpy(ns.u[0].interior) - 1.0).max()),
+        errs.append(max(float(np.abs(to_numpy(ns.u[0].interior) - speed).max()),
                         float(np.abs(to_numpy(ns.u[1].interior)).max())))
+        if kappa_every and ns.clock.i % kappa_every == 0:
+            phi = to_numpy(tp.potentials[0](tp))
+            F = to_numpy(f.interior)
+            sel = (phi != NODATA) & (F > 1e-6) & (F < 1 - 1e-6)
+            e = np.abs(phi[sel]) / sigma * 0.15 - 1.0
+            kmax.append(float(np.abs(e).max()))
+            krms.append(float(np.sqrt(np.mean(e ** 2))))
     du = errs[-1] if errs else math.nan
     return {"variant": variant, "n": n, "ratio": ratio, "failed": failed, "du": du,
             "du_max": max(errs, default=math.nan), "du_mean": float(np.mean(errs)) if errs else math.nan,
+            "kappa_max": float(np.mean(kmax)) if kmax else math.nan,
+            "kappa_rms": float(np.mean(krms)) if krms else math.nan,
             "shape": float(np.abs(to_numpy(f.interior) - to_numpy(f0)).sum()) / n / n, "steps": ns.clock.i}
 
 
