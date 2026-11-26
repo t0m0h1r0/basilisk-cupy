@@ -33,6 +33,8 @@ assumes equal densities, so it is refused with a density ratio until the split F
 
 from __future__ import annotations
 
+import math
+
 from ..boundary import BoundaryConditions, Neumann, Periodic
 from ..discretization.ccd import FCCDFaceComplex
 from ..interface.cls import CLSInterface
@@ -156,6 +158,11 @@ def _attach_vof(ns, phi0, *, periodic, rho1, rho2, mu1, mu2, sigma, gravity, jum
         ns.tp = TwoPhase(ns, ns.vof, rho1=rho1, rho2=rho2, mu1=mu1, mu2=mu2)
     if sigma:
         ns.tp.add_surface_tension(sigma, curvature_method=curvature_method)
+        # SBDF2's explicit part amplifies an undamped capillary oscillation by about (omega dt)^4 per step (1.53 at
+        # omega dt = 1, tension.h's grid-scale bound): the static drop blows up at N = 128 with tension.h's step,
+        # which Basilisk's own splitting takes. The IMEX steppers take sqrt(5/12) of it (CCD's factor, not
+        # compounded with it), docs/notes/70
+        ns.tp._curvature_dt_factor = math.sqrt(5.0 / 12.0)
     if gravity is not None:
         G, Z = gravity
         ns.tp.add_reduced_gravity(G, Z)
