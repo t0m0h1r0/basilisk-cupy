@@ -50,7 +50,8 @@ def test_ccd_column_curvature(n, basilisk, ccd):
 
 
 def test_ccd_capillary_step():
-    """CCD's curvature is stiffer at the grid scale: the capillary step shrinks by sqrt(5/12)."""
+    """The IMEX steppers take sqrt(5/12) of tension.h's capillary step for either curvature (SBDF2's explicit
+    capillary term, docs/notes/70; CCD's stiffer grid-scale gain is covered by the same factor, not compounded)."""
     import math
 
     from basilisk_cupy.time.two_phase_imex import TwoPhaseIMEX
@@ -62,7 +63,10 @@ def test_ccd_capillary_step():
                           vof_curvature=method)
         ns.start()
         dts[method] = ns.dtmax
-    assert dts["ccd"] == pytest.approx(dts["basilisk"] * math.sqrt(5.0 / 12.0), rel=1e-12)
+    rhom = (1.0 + 0.001) / 2.0
+    tension = math.sqrt(rhom * (1.0 / 32) ** 3 / math.pi)
+    for method in ("basilisk", "ccd"):
+        assert dts[method] == pytest.approx(tension * math.sqrt(5.0 / 12.0), rel=1e-12)
 
 
 def test_cls_capillary_step_unchanged():

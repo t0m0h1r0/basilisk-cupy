@@ -23,14 +23,14 @@ def test_static_drop(rho2, jump, u_end, u_max):
 
 
 @pytest.mark.parametrize("interface,rho2,jump,u_end,u_max,steps", [
-    ("vof", 1.0, 4.04118, 2.789e-4, 4.475e-3, 42),        # tension.h's CSF (height-function curvature)
-    ("vof", 0.001, 4.04111, 1.106e-4, 5.751e-3, 56),
-    ("vof-gfm", 1.0, 4.04090, 2.908e-4, 4.820e-3, 42),    # the same curvature as a sharp jump (docs/notes/64)
-    ("vof-gfm", 0.001, 4.04072, 2.189e-4, 7.325e-3, 56),
-    ("vof-gfm-plic", 1.0, 4.04093, 2.662e-4, 4.790e-3, 42),  # crossings from the PLIC lines
-    ("vof-gfm-plic", 0.001, 4.04059, 1.941e-4, 6.910e-3, 56),
-    ("vof-gfm-pccd", 1.0, 4.04098, 2.936e-4, 5.286e-3, 42),  # phase-wise CCD faces, no Taylor terms (notes/67)
-    ("vof-gfm-pccd", 0.001, 4.04372, 8.297e-4, 8.361e-3, 56),
+    ("vof", 1.0, 4.04117, 2.848e-4, 4.420e-3, 60),        # tension.h's CSF (height-function curvature)
+    ("vof", 0.001, 4.04123, 7.375e-5, 5.727e-3, 81),     # (the IMEX capillary step, docs/notes/70)
+    ("vof-gfm", 1.0, 4.04088, 2.923e-4, 4.773e-3, 60),    # the same curvature as a sharp jump (docs/notes/64)
+    ("vof-gfm", 0.001, 4.04078, 1.971e-4, 7.233e-3, 81),
+    ("vof-gfm-plic", 1.0, 4.04091, 2.660e-4, 4.740e-3, 60),  # crossings from the PLIC lines
+    ("vof-gfm-plic", 0.001, 4.04070, 1.787e-4, 6.828e-3, 81),
+    ("vof-gfm-pccd", 1.0, 4.04097, 2.912e-4, 5.263e-3, 60),  # phase-wise CCD faces, no Taylor terms (notes/67)
+    ("vof-gfm-pccd", 0.001, 4.04306, 5.104e-4, 8.389e-3, 81),
 ])
 def test_static_drop_vof(interface, rho2, jump, u_end, u_max, steps):
     """The VOF interface on the IMEX stepper (fd2 viscosity): the jump is the heights' curvature at N = 32 (1 %),

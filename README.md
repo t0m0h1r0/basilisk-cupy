@@ -1096,3 +1096,9 @@ viscous operator unchanged) brings the drop's damping to 0.84 times the mode's a
 capillary wave and the drop to the VOF's level (-1.26 % and -1.38 % at N = 64, against -4.22 % and -3.38 %). It is
 the default since `docs/notes/69_cls_sharp_default.md`; the static drop's parasitic currents at density ratio 1000
 grow 1.1-2.9 times and the coupled outer iterations need 2.7 times as many iterations.
+
+The IMEX VOF's capillary step (`docs/notes/70_vof_imex_capillary_step.md`): SBDF2's explicit capillary term
+amplifies an undamped oscillation by about (omega dt)^4 per step (1.53 at omega dt = 1, which tension.h's step
+allows at the grid scale), so the IMEX VOF's static drop blew up at N = 128 where Basilisk's own splitting is
+stable. The IMEX steppers now take sqrt(5/12) of tension.h's capillary step for the VOF (CCD's factor, not
+compounded); the capillary wave and drop results barely change.
