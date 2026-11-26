@@ -98,4 +98,4 @@ N = 64、1 周期までの最大速度（Basilisk の VOF は 0.03）：
 ## まとめと次
 - VOF on IMEX（`interface="vof"`、ab2、fd2 の粘性）は、Basilisk の VOF と同じ精度で、CLS より正確。
 - VOF に CCD の精度を足すには、不連続な係数を避ける必要がある：粘性は fd2 のまま、CCD は相ごとに（phase-ccd と同じ考え方）。
-- 次の候補：VOF-GFM の動く界面での劣化の原因；VOF + phase-ccd（段階 C、VOF の面速度は厳密に発散ゼロである必要がある）；VOF の曲率の精度（高さ関数の CCD 化）。
+- 次の候補：VOF-GFM の動く界面での劣化の原因（→ ノート65：セル中心の補正の係数。`cell_coefficient="mean"` で CSF と同等に）；VOF + phase-ccd（段階 C、VOF の面速度は厳密に発散ゼロである必要がある）；VOF の曲率の精度（高さ関数の CCD 化）。

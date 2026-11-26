@@ -146,7 +146,11 @@ class TwoPhaseCLS(TwoPhase):
                  reinit_method: str = "xi_sdf", curvature_kw: dict | None = None,
                  pressure_jump: bool = False, capillary_dt_factor: float | None = None,
                  surface_viscosity: float = 0.0, implicit_tension: float = 0.0, jump_mode: str = "sharp",
-                 jump_interp: str = "linear") -> None:
+                 jump_interp: str = "linear", cell_coefficient: str = "gfm") -> None:
+        """``cell_coefficient`` (with ``pressure_jump``): the coefficient of the cell-centred velocity correction on
+        the cut faces, ``"gfm"`` (the face's), ``"mean"`` (the net face force rescaled to ``1/rho(psi_face)`` on
+        every face, :class:`~.vof_jump.TwoPhaseVOFJump`) or ``"cut"`` (rescaled on the cut faces only),
+        docs/notes/65."""
         f: CellField = cls.psi
         if f.grid.ndim != 2:
             raise NotImplementedError("two-phase flows are implemented in 2-D")
@@ -171,6 +175,9 @@ class TwoPhaseCLS(TwoPhase):
         if jump_interp not in ("linear", "hermite"):
             raise ValueError("jump_interp is 'linear' or 'hermite'")
         self.jump_interp = jump_interp
+        if cell_coefficient not in ("gfm", "mean", "cut"):
+            raise ValueError("cell_coefficient is 'gfm', 'mean' or 'cut'")
+        self.cell_coefficient = cell_coefficient
         self.j_ext = None
         self.cg_stats = []
         self.capillary_dt_factor = CCD_CAPILLARY_DT_FACTOR if capillary_dt_factor is None else float(capillary_dt_factor)
@@ -254,11 +261,17 @@ class TwoPhaseCLS(TwoPhase):
         if not self.pressure_jump:
             return
         xp = self.f.grid.xp
+        alpha_mean = [ns.alpha[ax].copy() for ax in range(2)] if self.cell_coefficient != "gfm" else None
+        scale = []
         for ax in range(2):
             hl, hr, cut, theta = self._cut(ax)
             rl = xp.where(hl, self.rho1, self.rho2)
             rr = xp.where(hr, self.rho1, self.rho2)
             ns.alpha[ax] = 1.0 / (theta * rl + (1.0 - theta) * rr)
+            if alpha_mean is not None:
+                r = alpha_mean[ax] / ns.alpha[ax]
+                scale.append(xp.where(cut, r, 1.0) if self.cell_coefficient == "cut" else r)
+        ns.g_scale = scale or None
 
     def _add_surface_viscosity(self, ns) -> None:
         """Surface viscosity ``c dt sigma |grad psi|_f`` added to the implicit viscous solve (the term

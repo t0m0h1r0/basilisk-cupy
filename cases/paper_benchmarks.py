@@ -253,9 +253,11 @@ def diagnostics(case, ns, info) -> dict:
 
 
 def run(case: str, n: int | None = None, t_end: float | None = None, samples: int = 200, backend: str = "numpy",
-        umax_limit: float = 5.0, snapshots: tuple = (), **kw) -> dict:
+        umax_limit: float = 5.0, snapshots: tuple = (), after_properties=None, **kw) -> dict:
     """Time series of the diagnostics at ``samples`` equally spaced output times (hit exactly)."""
     ns, info = setup(case, n, backend, **kw)
+    if after_properties is not None:  # a diagnostic hook run after the two-phase properties of every step
+        ns.on("properties", after_properties, after=True)
     t_end = t_end or info["T"]
     times = [t_end * (i + 1) / samples for i in range(samples)]
     ns.start(events=times)
