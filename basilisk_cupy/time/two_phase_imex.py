@@ -54,14 +54,14 @@ def _check_faces(faces: str, rho1: float, rho2: float) -> None:
                                   "(docs/notes/32); use faces='fd2' or 'phase-ccd' with a density ratio")
 
 
-def _face_ops(faces: str):
+def _face_ops(faces: str, taylor: bool = True):
     if faces == "fd2":
         return None
     if faces == "fccd":
         return FCCDFaceComplex()
     from ..discretization.phase_ccd import PhaseCCDFaces  # noqa: PLC0415
 
-    return PhaseCCDFaces(FCCDFaceComplex())
+    return PhaseCCDFaces(FCCDFaceComplex(), taylor=taylor)
 
 
 def _convection(name: str):
@@ -203,7 +203,7 @@ class TwoPhaseIMEX(_TwoPhaseMixin, IMEXMultistepNS):
                  psi_integrator: str = "ssprk3", scheme="sbdf2", cls_divergence: str | None = None,
                  jump_interp: str | None = None, interface: str = "cls", vof_crossing: str = "sum",
                  cell_coefficient: str | None = None, vof_refine: int = 1, vof_curvature: str = "basilisk",
-                 **kw) -> None:
+                 phase_ccd_taylor: bool | None = None, **kw) -> None:
         """``phi0``: cell-centred signed distance, positive in phase 1 (``psi = 1``). ``gravity``: ``(G, Z)`` of
         the reduced gravity (``G`` the acceleration vector). Walls on the non-periodic sides (``uf`` normal
         zero there). ``scheme``: the momentum's multistep IMEX scheme (:class:`~.schemes.MultistepScheme`,
@@ -229,6 +229,8 @@ class TwoPhaseIMEX(_TwoPhaseMixin, IMEXMultistepNS):
         The VOF interfaces take ``faces="fd2"`` (or ``"phase-ccd"`` with ``"vof-gfm"``: vof.h needs a face velocity
         whose fd2 divergence vanishes, so the transport velocity is projected once more with fd2's GFM operator,
         docs/notes/67) and default to the fd2 viscous operator; ``eps``,
+        ``phase_ccd_taylor``: the cut faces' Taylor terms of ``faces="phase-ccd"`` (default: with the CLS, without
+        for the VOF, docs/notes/67);
         the reinitialisation and the curvature options are the CLS's."""
         if transport == "projected":
             transport = "frozen"
@@ -241,7 +243,9 @@ class TwoPhaseIMEX(_TwoPhaseMixin, IMEXMultistepNS):
         kw.setdefault("uf_normal", {w: 0.0 for w in WALLS if _SIDE_AXIS[w] not in periodic})
         # the VOF viscosity jumps at the interface, where CCD's viscous operator grows parasitic currents (notes/64)
         kw.setdefault("viscous", FD2Viscosity() if interface in ("vof", "vof-gfm") else CCDViscosity())
-        super().__init__(grid, scheme=scheme, periodic=periodic, ops=_face_ops(faces),
+        if phase_ccd_taylor is None:  # the VOF's ghost-fluid jump damps moving interfaces with them (notes/67)
+            phase_ccd_taylor = interface == "cls"
+        super().__init__(grid, scheme=scheme, periodic=periodic, ops=_face_ops(faces, phase_ccd_taylor),
                          convection=_convection(convection), **kw)
         if interface not in ("cls", "vof", "vof-gfm"):
             raise ValueError("interface is 'cls', 'vof' (tension.h's CSF) or 'vof-gfm' (sharp pressure jump)")

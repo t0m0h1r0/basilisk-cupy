@@ -116,7 +116,8 @@ class TwoPhase:
         self.sigma = float(sigma)
         # CCD's second derivative has 12/5 of the 3-point difference's gain at the grid scale (as the CLS's CCD
         # curvature, cls_two_phase.CCD_CAPILLARY_DT_FACTOR): the capillary step shrinks by sqrt(5/12)
-        self.capillary_dt_factor = 1.0 if curvature_method == "basilisk" else math.sqrt(5.0 / 12.0)
+        # (not ``capillary_dt_factor``: TwoPhaseCLS applies that name itself on top of this method)
+        self._curvature_dt_factor = 1.0 if curvature_method == "basilisk" else math.sqrt(5.0 / 12.0)
         if curvature_method == "basilisk":
             self.potentials.append(lambda tp: curvature(tp.f.interior, tp.f.bc, tp.f.grid, tp.sigma))
         elif curvature_method == "ccd":
@@ -135,7 +136,7 @@ class TwoPhase:
         from .cls import min_width  # noqa: PLC0415
 
         dmin = min_width(self.f.grid)  # the smallest physical cell width (grid.h is the xi width on a mapped axis)
-        dt = math.sqrt(rhom * (dmin * dmin * dmin) / (PI * self.sigma)) * getattr(self, "capillary_dt_factor", 1.0)
+        dt = math.sqrt(rhom * (dmin * dmin * dmin) / (PI * self.sigma)) * getattr(self, "_curvature_dt_factor", 1.0)
         if dt < ns.dtmax:
             ns.dtmax = dt
 

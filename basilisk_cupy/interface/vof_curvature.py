@@ -51,8 +51,8 @@ def ccd_curvature(f, sigma: float = 1.0, *, min_run: int = 8, trim: int = 1, jum
     value is used only where ``|P'|`` is at most this (the column parametrisation is singular where the interface
     turns vertical, R (1 - 1/sqrt 2) away from 45 degrees on a circle); tension.h's value elsewhere."""
     grid = f.grid
-    if grid.ndim != 2 or not grid.is_uniform:
-        raise NotImplementedError("2-D uniform grids")
+    if grid.ndim != 2 or not grid.is_uniform or abs(float(grid.h[0]) - float(grid.h[1])) > 1e-12 * float(grid.h[0]):
+        raise NotImplementedError("2-D uniform grids of square cells (the slopes are in cells per cell)")
     xp = grid.xp
     c = f.interior
     hs_dev = heights(c, f.bc)

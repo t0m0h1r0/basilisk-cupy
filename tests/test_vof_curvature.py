@@ -63,3 +63,39 @@ def test_ccd_capillary_step():
         ns.start()
         dts[method] = ns.dtmax
     assert dts["ccd"] == pytest.approx(dts["basilisk"] * math.sqrt(5.0 / 12.0), rel=1e-12)
+
+
+def test_cls_capillary_step_unchanged():
+    """The CLS applies its own CCD factor once (a VOF-only factor must not compound with it)."""
+    import math
+
+    from basilisk_cupy.interface.cls_two_phase import CCD_CAPILLARY_DT_FACTOR
+    from basilisk_cupy.time.two_phase_imex import TwoPhaseIMEX
+
+    g = CartesianGrid((32, 32), origin=(-0.5, -0.5))
+    x, y = g.meshgrid()
+    ns = TwoPhaseIMEX(g, 0.25 - np.hypot(x, y), rho1=1.0, rho2=0.001, sigma=1.0)
+    ns.start()
+    rhom = (1.0 + 0.001) / 2.0  # tension.h: the mean of 1/alpha over the extreme faces
+    h = 1.0 / 32
+    assert ns.dtmax == pytest.approx(math.sqrt(rhom * h ** 3 / (math.pi * 1.0)) * CCD_CAPILLARY_DT_FACTOR, rel=1e-12)
+
+
+def test_phase_ccd_transfer_option():
+    """PhaseCCDFaces(transfer="fd2"): fd2's two-point cell <-> face transfers, the phase-wise gradient kept."""
+    from basilisk_cupy.discretization.ccd import FCCDFaceComplex
+    from basilisk_cupy.discretization.fd2 import FD2FaceComplex
+    from basilisk_cupy.discretization.phase_ccd import PhaseCCDFaces
+
+    with pytest.raises(ValueError):
+        PhaseCCDFaces(FCCDFaceComplex(), transfer="cubic")
+    ops = PhaseCCDFaces(FCCDFaceComplex(), transfer="fd2")
+    g = CartesianGrid((16, 16))
+    x, y = g.meshgrid()
+    c = CellField.from_interior(g, np.sin(2 * np.pi * np.asarray(x)) * np.cos(2 * np.pi * np.asarray(y)),
+                                BoundaryConditions())
+    c.fill_ghosts()
+    ref = FD2FaceComplex()
+    for ax in range(2):
+        assert np.allclose(np.asarray(ops.interp_f(c, ax)), np.asarray(ref.interp_f(c, ax)))
+    assert PhaseCCDFaces(FCCDFaceComplex()).interp_f.__self__ is not None  # FCCD's by default

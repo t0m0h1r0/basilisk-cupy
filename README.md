@@ -1082,5 +1082,9 @@ of every column (from Basilisk's heights) by CCD along runs of columns: far more
 radius of curvature exceeds about 30 cells (1/54 of its error at N = 256 on a circle), and it lowers the capillary
 wave's frequency error, but it needs the capillary step times sqrt(5/12). `interface="vof-gfm"` now runs with
 `faces="phase-ccd"`, its transport velocity projected once more with fd2's ghost-fluid operator so that vof.h sees
-a face velocity free of fd2 divergence. The phase-ccd blow-up of the water-air drop stops when the cell-centred
-correction takes the mean coefficient on the cut faces (`cell_coefficient="cut"`).
+a face velocity free of fd2 divergence. Phase-ccd's excess damping of moving interfaces (only with a density ratio)
+came from the one-sided Taylor terms on the cut faces, added for third order on a static manufactured solution:
+without them (`phase_ccd_taylor=False`, the VOF's default) VOF-GFM with phase-ccd faces is the most accurate
+combination so far (frequency errors -0.48 % on the capillary wave and -0.04 % on the drop at N = 64), at four
+times the static drop's jump error. The phase-ccd blow-up of the water-air drop also stops when the cell-centred
+correction takes the mean coefficient on the cut faces (`cell_coefficient="cut"`); the CLS keeps its defaults.

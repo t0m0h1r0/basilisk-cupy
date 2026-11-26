@@ -25,7 +25,8 @@ CURVATURES = {
 }
 
 
-def drop(faces: str, n: int, ratio: float, t_end: float = 0.5, curvature: str = "psi"):
+def drop(faces: str, n: int, ratio: float, t_end: float = 0.5, curvature: str = "psi", taylor: bool = True):
+    """``taylor=False``: phase-ccd without the cut faces' Taylor terms (docs/notes/67)."""
     warnings.filterwarnings("ignore")
     from basilisk_cupy import CartesianGrid
     from basilisk_cupy.time.two_phase_imex import TwoPhaseIMEX
@@ -43,6 +44,8 @@ def drop(faces: str, n: int, ratio: float, t_end: float = 0.5, curvature: str = 
             return np.where((q > PSI_MIN) & (q < 1 - PSI_MIN), 4.0, 0.0)
 
         ns.cls.curvature = exact_curvature
+    if not taylor:
+        ns.ops.taylor = False
     ns.start(events=[t_end])
     umax, t0 = 0.0, time.time()
     while ns.clock.t < t_end - 1e-12:

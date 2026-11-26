@@ -28,8 +28,8 @@ def test_static_drop(rho2, jump, u_end, u_max):
     ("vof-gfm", 0.001, 4.04072, 2.189e-4, 7.325e-3, 56),
     ("vof-gfm-plic", 1.0, 4.04093, 2.662e-4, 4.790e-3, 42),  # crossings from the PLIC lines
     ("vof-gfm-plic", 0.001, 4.04059, 1.941e-4, 6.910e-3, 56),
-    ("vof-gfm-pccd", 1.0, 4.04095, 2.952e-4, 5.306e-3, 42),  # phase-wise CCD faces (docs/notes/67)
-    ("vof-gfm-pccd", 0.001, 4.04357, 1.189e-3, 7.996e-3, 56),
+    ("vof-gfm-pccd", 1.0, 4.04098, 2.936e-4, 5.286e-3, 42),  # phase-wise CCD faces, no Taylor terms (notes/67)
+    ("vof-gfm-pccd", 0.001, 4.04372, 8.297e-4, 8.361e-3, 56),
 ])
 def test_static_drop_vof(interface, rho2, jump, u_end, u_max, steps):
     """The VOF interface on the IMEX stepper (fd2 viscosity): the jump is the heights' curvature at N = 32 (1 %),
