@@ -102,8 +102,24 @@ def fractions(phi, val: float = 0.0):
     return xp.where(full, px[:, :-1], area)
 
 
-def fraction(grid, func, val: float = 0.0):
-    """Basilisk's ``fraction(f, func(x, y))``: ``func`` evaluated on the vertices of ``grid``."""
+def fraction(grid, func, val: float = 0.0, refine: int = 1):
+    """Basilisk's ``fraction(f, func(x, y))``: ``func`` evaluated on the vertices of ``grid``.
+
+    ``refine = k > 1``: the mean of the fractions of the k x k sub-cells of every cell (``func`` on the vertices
+    of a grid k times finer). The edge interpolation of ``func`` misplaces the interface by O(h^2) differently in
+    every cell, which the height functions turn into an O(1) curvature noise that does not converge (a circle:
+    5 % at N = 32-256); the sub-cells divide that offset by k^2 (docs/notes/66)."""
     xp = grid.xp
-    xv, yv = xp.meshgrid(grid.faces(0), grid.faces(1), indexing="ij")
-    return fractions(func(xv, yv), val)
+    k = int(refine)
+    if k <= 1:
+        xv, yv = xp.meshgrid(grid.faces(0), grid.faces(1), indexing="ij")
+        return fractions(func(xv, yv), val)
+    fx, fy = (xp.asarray(grid.faces(ax)) for ax in range(2))
+    t = xp.arange(k + 1) / k
+    sub = [(f[:-1, None] + t[None, :] * (f[1:] - f[:-1])[:, None]) for f in (fx, fy)]
+    sx = xp.concatenate([sub[0][:, :-1].reshape(-1), fx[-1:]])
+    sy = xp.concatenate([sub[1][:, :-1].reshape(-1), fy[-1:]])
+    xv, yv = xp.meshgrid(sx, sy, indexing="ij")
+    c = fractions(func(xv, yv), val)
+    n = (fx.size - 1, fy.size - 1)
+    return c.reshape(n[0], k, n[1], k).mean(axis=(1, 3))

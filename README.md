@@ -1073,3 +1073,14 @@ two-phase.h's 1/rho(f_face) before the average, which keeps the static balance; 
 `interface="vof-gfm"` and brings the capillary wave and drop to the CSF's accuracy. For the CLS it overshoots (the
 frequency error changes sign), so the CLS keeps `"gfm"`; its frequency error turns out to depend strongly on the
 density the cells inside the psi band see.
+
+VOF curvature and phase-wise CCD faces (`docs/notes/66_vof_curvature.md`, `docs/notes/67_vof_phase_ccd.md`):
+Basilisk's `fraction()` interpolates the level function linearly on the cell edges, which leaves a 5 % curvature
+noise that does not converge with the grid; `fraction(..., refine=k)` averages k x k sub-cells (`vof_refine`) and
+removes most of the static drop's parasitic currents. `vof_curvature="ccd"` differentiates the interface position
+of every column (from Basilisk's heights) by CCD along runs of columns: far more accurate than tension.h once the
+radius of curvature exceeds about 30 cells (1/54 of its error at N = 256 on a circle), and it lowers the capillary
+wave's frequency error, but it needs the capillary step times sqrt(5/12). `interface="vof-gfm"` now runs with
+`faces="phase-ccd"`, its transport velocity projected once more with fd2's ghost-fluid operator so that vof.h sees
+a face velocity free of fd2 divergence. The phase-ccd blow-up of the water-air drop stops when the cell-centred
+correction takes the mean coefficient on the cut faces (`cell_coefficient="cut"`).

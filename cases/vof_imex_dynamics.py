@@ -13,12 +13,15 @@ DROP = (-0.179428, 59.554813)
 
 
 def run(case: str, variant: str, n: int):
+    """``variant``: a base name, then ``+ccdk`` (``vof_curvature="ccd"``), ``+pccd`` (``faces="phase-ccd"``) and/or
+    ``+r<k>`` (``vof_refine=k``)."""
     import warnings
 
     warnings.filterwarnings("ignore")
     import cases.phase3_capwave as p3
     from cases.paper_benchmarks import run as bench
 
+    variant, *extra = variant.split("+")
     opts = {"centered-vof": dict(method="vof"), "imex-vof": dict(interface="vof"),
             "imex-vof-ab2": dict(interface="vof", transport="ab2"),
             "imex-vof-gfm": dict(interface="vof-gfm", transport="ab2"),
@@ -27,6 +30,13 @@ def run(case: str, variant: str, n: int):
         from basilisk_cupy.terms.viscous import CCDViscosity, FD2Viscosity
 
         opts = dict(opts, viscous=FD2Viscosity() if variant.endswith("-fd2v") else CCDViscosity())
+    for e in extra:
+        if e == "ccdk":
+            opts = dict(opts, vof_curvature="ccd")
+        elif e == "pccd":  # phase-wise CCD faces (the transport velocity reprojected with fd2's, notes/67)
+            opts = dict(opts, faces="phase-ccd")
+        elif e.startswith("r"):
+            opts = dict(opts, vof_refine=int(e[1:]))
     if case == "capwave":
         T = 0.046742983863
         r = bench("capwave", n=n, t_end=5 * T, samples=500, **opts)

@@ -68,3 +68,5 @@
 | [63_phase_ccd_factors.md](63_phase_ccd_factors.md) | 静止液滴の誤差はすべて曲率から（厳密な曲率で丸め誤差）。φ（ロジット）の曲率 + phase-ccd で N = 128 の頭打ちが消える（ジャンプの誤差 1.0e-5）が、動く界面では効かず、phase-ccd は水–空気の振動液滴で密度比により発散。毛管波の減衰の要因、振動液滴の格子の収束、上昇気泡 N = 128（#74） |
 | [64_vof_imex.md](64_vof_imex.md) | VOF + IMEX：`TwoPhaseIMEX(interface="vof" / "vof-gfm")` で VOF を IMEX の時間積分・CCD 粘性と GFM のジャンプで使う。静止液滴は質量を丸め誤差で保ち密度比 1000 で安定、ジャンプの誤差は高さ関数の曲率で決まる。不連続な粘性係数に CCD の粘性をかけると N = 64 で寄生流が育つので VOF の既定は fd2 の粘性；それで Basilisk の VOF と同じ精度（周波数の誤差は CLS の 1/3）、VOF-GFM は動く界面で劣る（#74） |
 | [65_cell_coefficient.md](65_cell_coefficient.md) | VOF-GFM が動く界面で劣る原因は、セル中心の速度の補正に GFM の面係数をそのまま使うこと（密度比 1 では GFM が CSF より正確）。`cell_coefficient="mean"`（面の正味の力を 1/ρ(f) に合わせて平均、静止の釣り合いは不変）で CSF と同等に。CLS では効き過ぎ（周波数の誤差の符号が反転）、CLS の周波数の誤差は帯の中の密度の扱いで大きく動く（#75） |
+| [66_vof_curvature.md](66_vof_curvature.md) | VOF の曲率：`fraction()` の初期化は曲率に収束しない 5% の誤差を残す（小セル平均 `refine` で解消、静止液滴の寄生流の大部分はこれ）。列ごとの界面位置を CCD で微分する曲率は、曲率半径 30 セル以上で tension.h を大きく上回り（N = 256 で 1/54）、毛管波の周波数の誤差を縮める。CCD 曲率は毛管の刻みを √(5/12) に（#76） |
+| [67_vof_phase_ccd.md](67_vof_phase_ccd.md) | VOF-GFM + phase-ccd（輸送の速度を fd2 の GFM で射影し直す）。phase-ccd の振動液滴の発散は、セル中心の補正の係数を切断面だけ平均にすると止まる（#76） |

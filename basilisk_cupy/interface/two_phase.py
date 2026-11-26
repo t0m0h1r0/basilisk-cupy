@@ -108,10 +108,23 @@ class TwoPhase:
             add = ns.alpha[ax] / 1.0 * phif * (fr - fl) / h
             ns.a[ax] = ns.a[ax] + xp.where(fr != fl, add, 0.0)
 
-    def add_surface_tension(self, sigma: float) -> None:
-        """Surface tension (``tension.h``): ``phi = sigma kappa`` and the capillary time-step bound."""
+    def add_surface_tension(self, sigma: float, curvature_method: str = "basilisk") -> None:
+        """Surface tension (``tension.h``): ``phi = sigma kappa`` and the capillary time-step bound.
+        ``curvature_method``: ``"basilisk"`` (tension.h's heights, fd2 along the interface, fits) or ``"ccd"``
+        (the interface position of every column from Basilisk's heights, differentiated by CCD along runs of
+        columns, :func:`.vof_curvature.ccd_curvature`, docs/notes/66)."""
         self.sigma = float(sigma)
-        self.potentials.append(lambda tp: curvature(tp.f.interior, tp.f.bc, tp.f.grid, tp.sigma))
+        # CCD's second derivative has 12/5 of the 3-point difference's gain at the grid scale (as the CLS's CCD
+        # curvature, cls_two_phase.CCD_CAPILLARY_DT_FACTOR): the capillary step shrinks by sqrt(5/12)
+        self.capillary_dt_factor = 1.0 if curvature_method == "basilisk" else math.sqrt(5.0 / 12.0)
+        if curvature_method == "basilisk":
+            self.potentials.append(lambda tp: curvature(tp.f.interior, tp.f.bc, tp.f.grid, tp.sigma))
+        elif curvature_method == "ccd":
+            from .vof_curvature import ccd_curvature  # noqa: PLC0415
+
+            self.potentials.append(lambda tp: ccd_curvature(tp.f, tp.sigma))
+        else:
+            raise ValueError("curvature_method is 'basilisk' or 'ccd'")
         self.ns.on("stability", self._capillary_dtmax)
 
     def _capillary_dtmax(self, ns) -> None:
@@ -122,7 +135,7 @@ class TwoPhase:
         from .cls import min_width  # noqa: PLC0415
 
         dmin = min_width(self.f.grid)  # the smallest physical cell width (grid.h is the xi width on a mapped axis)
-        dt = math.sqrt(rhom * (dmin * dmin * dmin) / (PI * self.sigma))
+        dt = math.sqrt(rhom * (dmin * dmin * dmin) / (PI * self.sigma)) * getattr(self, "capillary_dt_factor", 1.0)
         if dt < ns.dtmax:
             ns.dtmax = dt
 
