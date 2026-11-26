@@ -1109,3 +1109,12 @@ fraction's fluxes, the centred advection switched off). On Basilisk's Rayleigh-T
 it matches the C build to 1e-5 at t = 0.1 (`cases/conserving_compare.py`, `tools/basilisk/rt_conserving.c`). The
 comparison exposed a gap in the port of `centered.h`: the wall pressure `neumann(a.n fm.n/alpha.n)`, which cancels a
 wall-normal acceleration on the boundary faces; without it a fluid at rest under gravity moved at the walls.
+
+Convection and stability in two-phase flow (`docs/notes/72_convection_stability.md` to `74_compact_flux.md`): on a
+forcing-free two-phase double shear layer only the momentum-conserving VOF keeps the kinetic energy from growing;
+UCCD6 / FUCCD4's upwind dissipation delays the central flux's blow-up but not at density ratio 100, and a different
+multistep scheme does not help either. UCCD6 / FUCCD4's explicit step bound was stated for EXT2/BDF2 only; it is now
+scaled by each scheme's real-axis limit (`schemes.explicit_real_limit`), CNLF refused. `conserving_gradient="ccd"`
+takes the momentum concentrations' gradient by phase-wise CCD. Basilisk's `spurious.c` on a uniform grid matches the
+C build to 3-4 digits. A compact BCG flux (fixed left-hand side, CFL-dependent right-hand side matched to the exact
+swept-mean operator) is linearly stable for every CFL number and fifth-order on 1-D constant advection.

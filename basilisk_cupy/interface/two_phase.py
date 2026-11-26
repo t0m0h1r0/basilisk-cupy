@@ -55,7 +55,10 @@ class _MomentumField(CellField):
 
 class TwoPhase:
     def __init__(self, ns, f: CellField, *, rho1: float = 1.0, rho2: float = 1.0, mu1: float = 0.0,
-                 mu2: float = 0.0, vof_first: bool = False, filtered: bool = False, conserving: bool = False) -> None:
+                 mu2: float = 0.0, vof_first: bool = False, filtered: bool = False, conserving: bool = False,
+                 conserving_gradient=None) -> None:
+        """``conserving_gradient``: the gradient of the advected momentum concentrations (Basilisk: the velocity's,
+        centred by default); ``"ccd"``: CCD along each phase's runs of cells (docs/notes/72)."""
         if f.grid.ndim != 2:
             raise NotImplementedError("two-phase flows are implemented in 2-D")
         self.ns, self.f = ns, f
@@ -65,6 +68,7 @@ class TwoPhase:
         self.potentials = []  # callables (two_phase) -> phi (cell array, NODATA outside the interface)
         ns.cfl = min(ns.cfl, 0.5)
         self.conserving = conserving
+        self.conserving_gradient = conserving_gradient
         if conserving:
             if vof_first:
                 raise NotImplementedError("conserving.h advects the momentum in the vof event")
@@ -123,7 +127,8 @@ class TwoPhase:
             q2 = _MomentumField(self.f.grid, bc=u.bc, name="q2").bind(self.f, u, self.rho2, True)
             q1.interior = fc * self.rho1 * u.interior
             q2.interior = (1.0 - fc) * self.rho2 * u.interior
-            tracers += [VOFTracer(q1), VOFTracer(q2, inverse=True)]  # u's gradient: centred (Basilisk's default)
+            g = self.conserving_gradient  # u's gradient: centred (Basilisk's default), or "ccd"
+            tracers += [VOFTracer(q1, gradient=g), VOFTracer(q2, inverse=True, gradient=g)]
             qs.append((q1, q2))
         saved = self.interface.tracers
         self.interface.tracers = list(saved) + tracers

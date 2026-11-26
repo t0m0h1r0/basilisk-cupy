@@ -55,7 +55,9 @@ class VOFRun:
             for side in (0, 1):
                 bc.set((ax, side), Periodic() if ax in periodic else Neumann(0.0))
         self.f = CellField.from_interior(grid, fraction(grid, level), bc)
-        self.tp = TwoPhase(self.ns, self.f, rho1=kw["rho1"], rho2=kw["rho2"], mu1=kw["mu1"], mu2=kw["mu2"])
+        self.tp = TwoPhase(self.ns, self.f, rho1=kw["rho1"], rho2=kw["rho2"], mu1=kw["mu1"], mu2=kw["mu2"],
+                           conserving=bool(kw.get("conserving", False)),
+                           conserving_gradient=kw.get("conserving_gradient"))
         self.tp.add_surface_tension(kw["sigma"])
         if kw.get("gravity") is not None:
             G, Z = kw["gravity"]

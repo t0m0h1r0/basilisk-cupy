@@ -22,6 +22,8 @@ explicit family; other families have other limits (not applied).
 
 from __future__ import annotations
 
+import math
+
 from ..fields import FaceField
 from ..projection.approximate import project
 from .imex_bdf2 import IMEXBDF2NS
@@ -47,6 +49,21 @@ class IMEXMultistepNS(IMEXBDF2NS):
             raise ValueError("force_weights is 'implicit' or 'scheme'")
         self.force_weights = force_weights
         self._a_hist: list = []  # raw face accelerations a^n, a^{n-1}, ... of the steps taken
+        # the explicit convection's real-axis bound (UCCD6 / FUCCD4 state EXT2/BDF2's 4/3): scaled to this scheme
+        from .schemes import explicit_real_limit  # noqa: PLC0415
+
+        self._real_limit = explicit_real_limit(self.scheme)
+        if getattr(self.convection, "max_stable_dt", None) is not None and not self.stokes \
+                and not getattr(self.convection, "implicit", False) and self._real_limit < 1e-2:
+            raise ValueError(f"the explicit part of {getattr(self.scheme, 'name', self.scheme)!r} is unstable on the "
+                             "negative real axis: it cannot carry a dissipative explicit convection (docs/notes/72)")
+
+    def _convection_dt_limit(self) -> float:
+        """The convection's bound (stated for EXT2/BDF2) scaled to this scheme's real-axis limit."""
+        from ..terms.convection.uccd6 import EXT2_REAL_LIMIT  # noqa: PLC0415
+
+        limit = super()._convection_dt_limit()
+        return limit * self._real_limit / EXT2_REAL_LIMIT if math.isfinite(limit) else limit
 
     def step(self) -> None:
         c = self.clock

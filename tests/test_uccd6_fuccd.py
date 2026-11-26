@@ -261,3 +261,25 @@ def test_scheme_registry_builds_convection_terms():
     assert build_scheme({"terms": {"convection": "uccd6", "sigma": 2e-3}}).convection.sigma == 2e-3
     with pytest.raises(ValueError):
         build_scheme({"terms": {"convection": "weno"}})
+
+
+def test_explicit_real_limit_scales_the_hyperviscosity_bound():
+    """The UCCD6 / FUCCD4 bound is stated for EXT2/BDF2 (4/3); other multistep schemes scale it with their own
+    real-axis limit (SBDF3 20/21, AB2/AM2 1), and CNLF's leapfrog cannot carry it at all (docs/notes/72)."""
+    from basilisk_cupy.time.imex_multistep import IMEXMultistepNS
+    from basilisk_cupy.time.schemes import MultistepScheme, explicit_real_limit
+
+    assert explicit_real_limit(MultistepScheme("sbdf2")) == pytest.approx(4.0 / 3.0, rel=1e-9)
+    assert explicit_real_limit(MultistepScheme("sbdf3")) == pytest.approx(20.0 / 21.0, rel=1e-9)
+    assert explicit_real_limit(MultistepScheme("cnab2")) == pytest.approx(1.0, rel=1e-9)
+    assert explicit_real_limit(MultistepScheme("cnlf")) < 1e-6
+    grid = CartesianGrid((16, 16), backend="numpy")
+    with pytest.raises(ValueError):
+        IMEXMultistepNS(grid, scheme="cnlf", periodic=(0, 1), convection=UCCD6Convection())
+    limits = {}
+    for name in ("sbdf2", "sbdf3"):
+        ns = IMEXMultistepNS(grid, scheme=name, periodic=(0, 1), convection=UCCD6Convection())
+        ns.u[0].interior = 1.0 + 0.0 * ns.u[0].interior
+        ns.u.fill_ghosts()
+        limits[name] = ns._convection_dt_limit()
+    assert limits["sbdf3"] / limits["sbdf2"] == pytest.approx((20.0 / 21.0) / (4.0 / 3.0), rel=1e-9)

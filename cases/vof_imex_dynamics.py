@@ -22,7 +22,10 @@ def run(case: str, variant: str, n: int, backend: str = "numpy"):
     from cases.paper_benchmarks import run as bench
 
     variant, *extra = variant.split("+")
-    opts = {"centered-vof": dict(method="vof"), "imex-vof": dict(interface="vof"),
+    opts = {"centered-vof": dict(method="vof"),
+            "centered-conserving": dict(method="vof", conserving=True),
+            "centered-conserving-ccd": dict(method="vof", conserving=True, conserving_gradient="ccd"),
+            "imex-vof": dict(interface="vof"),
             "imex-vof-ab2": dict(interface="vof", transport="ab2"),
             "imex-vof-gfm": dict(interface="vof-gfm", transport="ab2"),
             "imex-vof-gfm-plic": dict(interface="vof-gfm", transport="ab2", vof_crossing="plic")}[variant.removesuffix("-fd2v")]
