@@ -47,8 +47,23 @@ def _kind(bc, axis: int, side: int) -> str:
 class PhaseCCDFaces:
     name = "phase-ccd"
 
-    def __init__(self, fccd) -> None:
+    def __init__(self, fccd, transfer: str = "fccd", taylor: bool = True) -> None:
+        """``transfer``: the cell <-> face transfers (``interp_f``, ``face_to_cell``) of FCCD (``"fccd"``) or of fd2
+        (``"fd2"``, the two-point means; the cell-centred correction g jumps with the density at the interface,
+        docs/notes/67); the gradient is the phase-wise CCD's, the divergence FCCD's either way. ``taylor``: the
+        one-sided Taylor terms and the shift to the face centre on the cut faces (3rd order on a static manufactured
+        solution, notes 55/61); without them the cut faces take the GFM difference alone, which removes an O(1)
+        damping of moving interfaces at a density ratio (docs/notes/67)."""
         self.fccd = fccd
+        if transfer not in ("fccd", "fd2"):
+            raise ValueError("transfer is 'fccd' or 'fd2'")
+        self.transfer = transfer
+        self.taylor = bool(taylor)
+        if transfer == "fd2":
+            from .fd2 import FD2FaceComplex  # noqa: PLC0415
+
+            fd2 = FD2FaceComplex()
+            self.interp_f, self.face_to_cell = fd2.interp_f, fd2.face_to_cell
         self.cuts = self.thetas = self.alphas = self.rho_lower = None
         self.rho_pair = (1.0, 1.0)
 
@@ -137,6 +152,11 @@ class PhaseCCDFaces:
         af = np.moveaxis(self.alphas[axis], axis, 0)[s0, jj]
         rl = np.moveaxis(self.rho_lower[axis], axis, 0)[s0, jj]
         g = (p[R, jj] - p[L, jj]) / h
+        if not self.taylor:
+            out[s0, jj] = g
+            if periodic:
+                out[n, :] = out[0, :]
+            return xp.asarray(np.moveaxis(out, 0, axis))
         qL = np.nan_to_num(q[L, jj], nan=0.0)
         qR = np.nan_to_num(q[R, jj], nan=0.0)
         Lm, Rp = (L - 1) % n, (R + 1) % n

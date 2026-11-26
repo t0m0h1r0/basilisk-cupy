@@ -28,16 +28,21 @@ def test_static_drop(rho2, jump, u_end, u_max):
     ("vof-gfm", 0.001, 4.04072, 2.189e-4, 7.325e-3, 56),
     ("vof-gfm-plic", 1.0, 4.04093, 2.662e-4, 4.790e-3, 42),  # crossings from the PLIC lines
     ("vof-gfm-plic", 0.001, 4.04059, 1.941e-4, 6.910e-3, 56),
+    ("vof-gfm-pccd", 1.0, 4.04098, 2.936e-4, 5.286e-3, 42),  # phase-wise CCD faces, no Taylor terms (notes/67)
+    ("vof-gfm-pccd", 0.001, 4.04372, 8.297e-4, 8.361e-3, 56),
 ])
 def test_static_drop_vof(interface, rho2, jump, u_end, u_max, steps):
     """The VOF interface on the IMEX stepper (fd2 viscosity): the jump is the heights' curvature at N = 32 (1 %),
     mass to round-off."""
     kw = {"vof_crossing": "plic"} if interface.endswith("plic") else {}
-    r = drop(32, rho2, "imex", t_end=0.1, interface=interface.removesuffix("-plic"), **kw)
+    if interface.endswith("pccd"):
+        kw = {"faces": "phase-ccd"}
+    r = drop(32, rho2, "imex", t_end=0.1, interface=interface.removesuffix("-plic").removesuffix("-pccd"), **kw)
     assert r["t"] == pytest.approx(0.1) and r["steps"] == steps
     assert r["jump"] == pytest.approx(jump, abs=1e-4)
     assert r["u_end"] == pytest.approx(u_end, rel=0.05) and r["u_max"] == pytest.approx(u_max, rel=0.05)
-    assert abs(r["mass"]) < 1e-13
+    # the phase-ccd projection leaves an fd2 divergence that the transport's reprojection removes to its tolerance
+    assert abs(r["mass"]) < (1e-10 if interface.endswith("pccd") else 1e-13)
 
 
 @pytest.mark.parametrize("transport,error,damping", [
@@ -66,7 +71,7 @@ def test_options():
         TwoPhaseIMEX(grid, phi, transport="rk2")
     with pytest.raises(ValueError):
         TwoPhaseIMEX(grid, phi, interface="level-set")
-    with pytest.raises(NotImplementedError):  # vof.h needs an exactly divergence-free face velocity
+    with pytest.raises(NotImplementedError):  # phase-ccd's segments end at the sharp jump's cut faces
         TwoPhaseIMEX(grid, phi, interface="vof", faces="phase-ccd")
     with pytest.raises(ValueError):
         TwoPhaseIMEX(grid, phi, interface="vof-gfm", vof_crossing="linear")
@@ -79,3 +84,27 @@ def test_options():
     ns = TwoPhaseIMEX(grid, phi, rho1=1.0, rho2=0.5, sigma=1.0, periodic=(0,))
     assert ns.uf_normal == {"bottom": 0.0, "top": 0.0}
     assert ns.cls.psi.bc.is_periodic(0) and not ns.cls.psi.bc.is_periodic(1)
+
+
+def test_vof_phase_ccd_transport_velocity():
+    """With phase-wise CCD faces the projected u_f is free of FCCD's divergence, not of fd2's; the VOF's transport
+    velocity is projected once more with fd2's GFM operator (docs/notes/67)."""
+    from basilisk_cupy.discretization.fd2 import FD2FaceComplex
+
+    grid = CartesianGrid((32, 32), origin=(-0.5, -0.5))
+    ns = TwoPhaseIMEX(grid, lambda x, y: 0.0625 - x * x - y * y, rho1=1.0, rho2=0.001, mu1=0.1, mu2=0.1, sigma=1.0,
+                      interface="vof-gfm", faces="phase-ccd", transport="ab2", tolerance=1e-8)
+    seen = []
+    project = ns._fd2_project
+
+    def spy(uf):
+        project(uf)
+        seen.append(float(np.abs(np.asarray(FD2FaceComplex().div_f(uf))).max()))
+
+    ns._fd2_project = spy
+    ns.start()
+    for _ in range(4):
+        ns.step()
+    raw = float(np.abs(np.asarray(FD2FaceComplex().div_f(ns.uf))).max())
+    assert raw > 1e-6                    # the momentum's u_f: fd2 divergence left by the phase-ccd projection
+    assert seen and max(seen) < 1e-3 * raw  # the transport velocity's

@@ -2,7 +2,7 @@
 velocity every 10 steps to half a period, with the density ratio, the capillary step, the solver tolerance and the
 transport changed one at a time (phi curvature, xi-SDF every 10 steps).
 
-    python -m cases.phase_ccd_drop_stability [--projection]
+    python -m cases.phase_ccd_drop_stability [--projection | --cell]
 
 ``--projection``: after 20 steps, the rho-weighted kinetic energy of a random face velocity before / after the face
 projection, and the change made by a second projection (fd2 and phase-ccd, density ratio 1 and 830).
@@ -71,6 +71,11 @@ if __name__ == "__main__":
 
     from cases.parallel import pmap
 
+    if "--cell" in sys.argv:  # the cell-centred correction's coefficient (docs/notes/65) with phase-ccd
+        items = [dict(curv="phi", reinit=10, n=n, cell_coefficient=c) for n in (32, 64) for c in ("gfm", "cut", "mean")]
+        for it, h in zip(items, pmap(run, items, 6)):
+            print(it, h[:2], "...", h[-2:], flush=True)
+        sys.exit()
     if "--projection" in sys.argv:
         items = [dict(faces=f, rho2=r) for f in ("fd2", "phase-ccd") for r in (None, 998.2)]
         for it, o in zip(items, pmap(projection, items, 4)):
