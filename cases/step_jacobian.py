@@ -30,7 +30,8 @@ class StepMap:
                         coupled_iterations=K)
         cls = CLSInterface.from_level_set(grid, 0.25 - np.hypot(x, y), BoundaryConditions())
         tp = TwoPhaseCLS(ns, cls, rho1=1.0, rho2=rho2, mu1=mu, mu2=mu if mu2 is None else mu2, pressure_jump=True,
-                         capillary_dt_factor=1e9)  # dt fixed through DT below
+                         capillary_dt_factor=1e9,  # dt fixed through DT below
+                         cell_density="diffuse")  # the study's (docs/notes/36) density; sharp by default since 69
         tp.add_surface_tension(1.0)
         rhom = (1.0 + rho2) / 2.0
         h = 1.0 / n

@@ -80,7 +80,7 @@ def _convection(name: str):
 
 def _attach_two_phase(ns, phi0, *, periodic, faces, rho1, rho2, mu1, mu2, sigma, gravity, eps, reinit_every,
                       reinit_method, curvature_kw, jump_mode, capillary_dt_factor, cls_divergence=None,
-                      jump_interp=None, cell_coefficient=None, cell_density="diffuse") -> None:
+                      jump_interp=None, cell_coefficient=None, cell_density="sharp") -> None:
     """CLS (FCCD face values of order 6, corrected divergence) and TwoPhaseCLS with the GFM pressure jump."""
     grid = ns.grid
     bc = BoundaryConditions()
@@ -203,7 +203,7 @@ class TwoPhaseIMEX(_TwoPhaseMixin, IMEXMultistepNS):
                  psi_integrator: str = "ssprk3", scheme="sbdf2", cls_divergence: str | None = None,
                  jump_interp: str | None = None, interface: str = "cls", vof_crossing: str = "sum",
                  cell_coefficient: str | None = None, vof_refine: int = 1, vof_curvature: str = "basilisk",
-                 phase_ccd_taylor: bool | None = None, cell_density: str = "diffuse", **kw) -> None:
+                 phase_ccd_taylor: bool | None = None, cell_density: str = "sharp", **kw) -> None:
         """``phi0``: cell-centred signed distance, positive in phase 1 (``psi = 1``). ``gravity``: ``(G, Z)`` of
         the reduced gravity (``G`` the acceleration vector). Walls on the non-periodic sides (``uf`` normal
         zero there). ``scheme``: the momentum's multistep IMEX scheme (:class:`~.schemes.MultistepScheme`,
@@ -231,7 +231,7 @@ class TwoPhaseIMEX(_TwoPhaseMixin, IMEXMultistepNS):
         docs/notes/67) and default to the fd2 viscous operator; ``eps``,
         ``phase_ccd_taylor``: the cut faces' Taylor terms of ``faces="phase-ccd"`` (default: with the CLS, without
         for the VOF, docs/notes/67); ``cell_density``: the CLS's cell density of the implicit viscous solve
-        (``"diffuse"`` or ``"sharp"``, docs/notes/68);
+        (``"sharp"``, the default since docs/notes/69, or ``"diffuse"``, docs/notes/68);
         the reinitialisation and the curvature options are the CLS's."""
         if transport == "projected":
             transport = "frozen"

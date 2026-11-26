@@ -1093,5 +1093,6 @@ The CLS's cell density in the viscous solve (`docs/notes/68_cls_cell_density.md`
 of about four times the 2-D viscous mode came from the implicit viscous solve dividing by the band's diffuse
 density rho(psi). `cell_density="sharp"` (rho1 or rho2 by the side of psi = 1/2; the face viscosity and CCD's
 viscous operator unchanged) brings the drop's damping to 0.84 times the mode's and the frequency errors of the
-capillary wave and the drop to the VOF's level (-1.26 % and -1.38 % at N = 64, against -4.22 % and -3.38 %). The
-default stays `"diffuse"` for now.
+capillary wave and the drop to the VOF's level (-1.26 % and -1.38 % at N = 64, against -4.22 % and -3.38 %). It is
+the default since `docs/notes/69_cls_sharp_default.md`; the static drop's parasitic currents at density ratio 1000
+grow 1.1-2.9 times and the coupled outer iterations need 2.7 times as many iterations.

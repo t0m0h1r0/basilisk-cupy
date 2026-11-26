@@ -10,7 +10,8 @@ from cases.two_phase_imex_check import capwave, drop
 
 @pytest.mark.parametrize("rho2,jump,u_end,u_max", [
     (1.0, 4.00977, 1.074e-4, 3.674e-4),
-    (0.001, 4.01030, 1.171e-4, 6.758e-4),  # density ratio 1000 at tension.h's step x sqrt(5/12)
+    (0.001, 4.01075, 1.756e-4, 7.220e-4),  # density ratio 1000 at tension.h's step x sqrt(5/12); sharp cell density
+    # (docs/notes/69; diffuse: 4.01030, 1.171e-4, 6.758e-4)
 ])
 def test_static_drop(rho2, jump, u_end, u_max):
     """R = 0.25, sigma = 1, mu = 0.1, N = 32, t = 0.1 (60 / 81 steps): Laplace jump 4, mass to round-off."""

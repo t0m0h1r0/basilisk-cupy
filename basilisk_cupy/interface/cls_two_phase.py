@@ -147,13 +147,13 @@ class TwoPhaseCLS(TwoPhase):
                  pressure_jump: bool = False, capillary_dt_factor: float | None = None,
                  surface_viscosity: float = 0.0, implicit_tension: float = 0.0, jump_mode: str = "sharp",
                  jump_interp: str = "linear", cell_coefficient: str = "gfm",
-                 cell_density: str = "diffuse") -> None:
+                 cell_density: str = "sharp") -> None:
         """``cell_coefficient`` (with ``pressure_jump``): the coefficient of the cell-centred velocity correction on
         the cut faces, ``"gfm"`` (the face's), ``"mean"`` (the net face force rescaled to ``1/rho(psi_face)`` on
         every face, :class:`~.vof_jump.TwoPhaseVOFJump`) or ``"cut"`` (rescaled on the cut faces only),
-        docs/notes/65. ``cell_density``: the cell density of the implicit viscous solve, ``"diffuse"`` (two-phase.h's
-        ``rho(psi)``) or ``"sharp"`` (``rho1`` where ``psi > 1/2``, else ``rho2``): the diffuse density of the band
-        damps the oscillating drop about four times too much (docs/notes/68)."""
+        docs/notes/65. ``cell_density``: the cell density of the implicit viscous solve, ``"sharp"`` (the default
+        since docs/notes/69: ``rho1`` where ``psi > 1/2``, else ``rho2``) or ``"diffuse"`` (two-phase.h's
+        ``rho(psi)``, which damps the oscillating drop about four times too much, docs/notes/68)."""
         f: CellField = cls.psi
         if f.grid.ndim != 2:
             raise NotImplementedError("two-phase flows are implemented in 2-D")
