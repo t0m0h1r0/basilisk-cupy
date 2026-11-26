@@ -1135,3 +1135,21 @@ Moving the VOF field alone (no flow solve) reproduces it: the split PLIC transpo
 the second derivative turns into an O(1) curvature error; the CCD curvature picks it up most (6% at N = 128). An
 implicit curvature filter `ccd_curvature(filter_alpha=...)` reduces the error but does not restore convergence. On
 the CLS side, one xi-SDF re-initialisation of the exact profile spoils psi's curvature by 60-270%.
+
+Pure advection and momentum transport without surface tension (`docs/notes/77_pure_advection.md`): with a prescribed
+divergence-free velocity, vof.h's concentration flux is about first order near the interface. An exact slope does not
+help while the slope term keeps vof.h's full-cell geometry; with the centroids of the phase's part of the swept strip
+and of the cell (`VOFTracer(geometric=True)`, `geometry.strip_moments`) the exact slope reduces the error tenfold and
+converges, and the CCD slope no longer blows up at N = 256. Basilisk's `conserving.h` is first order in time even on
+single-phase inviscid Taylor-Green (the C build gives the same errors, `tools/basilisk/tg_conserving.c`); adding the
+pressure-gradient source to the momentum face values (`conserving_source=True`) divides the error by six, the rest is
+unexplained. The research turns to building the momentum transport from conservation and energy structure first.
+
+Energy-consistent implicit momentum transport (`docs/notes/78_energy_transport.md`, the user's design): with the
+square-root-mass weighted time average w and pair momentum fluxes M_ij (w_i + w_j)/2 - |M_ij| lambda (w_j - w_i)/2,
+small 1-D matrices with 1000:1 cell masses conserve momentum, keep a free stream and close the energy balance
+(-1/2 sum |M| lambda |dw|^2) to round-off; the system's symmetric part is positive definite and the mass-weighted
+amplification is at most one. A fourth-order pair structure (4/3, -1/6) keeps these properties and is fourth order in
+space (second order in time), also with a mass flux varying in space and time. But a scheme that conserves the
+cell-average energy E_2 exactly drops to second order on a deform-and-return shear: the exact cell averages' E_2
+changes by O(h^2), while E_4 = E_2 + 1/2 sum m h^2/12 |D qbar|^2 is conserved to O(h^4).

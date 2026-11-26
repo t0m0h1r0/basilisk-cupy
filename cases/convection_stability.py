@@ -24,14 +24,29 @@ RHO1, RHO2, MU = 1.225, 0.1694, 0.00313
 
 def conserving_options(variant: str) -> dict:
     """TwoPhase's options from a variant name: "conserving" (conserving.h), then "-ccd" / "-ccd2" (the gradient of the
-    momentum concentrations) and "-c<NN>" (``conserving_ccd_cmin = NN/100``, e.g. "-c99")."""
+    momentum concentrations), "-c<NN>" (``conserving_ccd_cmin = NN/100``, e.g. "-c99") "-geo"
+    (``conserving_geometric=True``) and "-pred" (``conserving_predict=True``) , "-src"
+    (``conserving_source=True``) , "-tr" (``conserving_transverse=True``) and "-fresh"
+    (``conserving_fresh_dilation=True``), in this order."""
     import re
 
+    fresh = variant.endswith("-fresh")
+    variant = variant.removesuffix("-fresh")
+    tr = variant.endswith("-tr")
+    variant = variant.removesuffix("-tr")
+    src = variant.endswith("-src")
+    variant = variant.removesuffix("-src")
+    pred = variant.endswith("-pred")
+    variant = variant.removesuffix("-pred")
+    geo = variant.endswith("-geo")
+    variant = variant.removesuffix("-geo")
     m = re.search(r"-c(\d\d)$", variant)
     v = variant[: m.start()] if m else variant
     grad = "ccd2" if v.endswith("-ccd2") else "ccd" if v.endswith("-ccd") else None
     return dict(conserving="conserving" in v, conserving_gradient=grad,
-                conserving_ccd_cmin=int(m.group(1)) / 100 if m else None)
+                conserving_ccd_cmin=int(m.group(1)) / 100 if m else None, conserving_geometric=geo,
+                conserving_predict=pred, conserving_source=src, conserving_transverse=tr,
+                conserving_fresh_dilation=fresh)
 
 
 def shear(variant: str, n: int, ratio: float, t_end: float = 2.0, delta: float = 1.0 / 30):

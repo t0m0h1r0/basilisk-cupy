@@ -56,12 +56,24 @@ class _MomentumField(CellField):
 class TwoPhase:
     def __init__(self, ns, f: CellField, *, rho1: float = 1.0, rho2: float = 1.0, mu1: float = 0.0,
                  mu2: float = 0.0, vof_first: bool = False, filtered: bool = False, conserving: bool = False,
-                 conserving_gradient=None, conserving_ccd_cmin: float | None = None) -> None:
+                 conserving_gradient=None, conserving_ccd_cmin: float | None = None,
+                 conserving_geometric: bool = False, conserving_predict: bool = False,
+                 conserving_source: bool = False, conserving_transverse: bool = False,
+                 conserving_fresh_dilation: bool = False) -> None:
         """``conserving_gradient``: the gradient of the advected momentum concentrations (Basilisk: the velocity's,
         centred by default); ``"ccd"``: CCD along each phase's runs of cells (docs/notes/72); ``"ccd2"``: with the
         swept mean of the mean-preserving parabola from the same CCD solve (docs/notes/75). ``conserving_ccd_cmin``: the
         phase fraction from which a cell joins a CCD run (None: vof.h's CMIN = 0.5; 0.99 leaves the interfacial cells to
-        the centred gradient, docs/notes/75)."""
+        the centred gradient, docs/notes/75). ``conserving_geometric``: the slope terms of the momentum concentrations' flux
+        at the centroids of the phase's part of the swept strip and of the cell (``VOFTracer(geometric=True)``,
+        docs/notes/77). ``conserving_predict``: f and the momentum are carried with the face velocity predicted to
+        t + dt/2 (centred.h's BCG prediction and the projection over dt/2, as the plain solver's advection) instead of
+        the projected face velocity of time t that conserving.h uses (docs/notes/77). ``conserving_source``: the
+        momentum concentrations' face values get + dt/2 rho_k g (the centred pressure-gradient acceleration of the last
+        step, as BCG's prediction of the plain solver; vof.h's face value has no source, docs/notes/77).
+        ``conserving_transverse``: and BCG's transverse term (``VOFTracer(transverse=True)``, docs/notes/77).
+        ``conserving_fresh_dilation``: the second sweep's dilation term with the momentum concentration after the
+        first sweep (``VOFTracer(fresh_dilation=True)``, docs/notes/77)."""
         if f.grid.ndim != 2:
             raise NotImplementedError("two-phase flows are implemented in 2-D")
         self.ns, self.f = ns, f
@@ -73,6 +85,11 @@ class TwoPhase:
         self.conserving = conserving
         self.conserving_gradient = conserving_gradient
         self.conserving_ccd_cmin = conserving_ccd_cmin
+        self.conserving_geometric = conserving_geometric
+        self.conserving_predict = conserving_predict
+        self.conserving_source = conserving_source
+        self.conserving_transverse = conserving_transverse
+        self.conserving_fresh_dilation = conserving_fresh_dilation
         if conserving:
             if vof_first:
                 raise NotImplementedError("conserving.h advects the momentum in the vof event")
@@ -126,19 +143,40 @@ class TwoPhase:
         fc = xp.minimum(xp.maximum(self.f.interior, 0.0), 1.0)
         tracers = []
         qs = []
-        for u in ns.u.components:
+        for ax, u in enumerate(ns.u.components):
             q1 = _MomentumField(self.f.grid, bc=u.bc, name="q1").bind(self.f, u, self.rho1, False)
             q2 = _MomentumField(self.f.grid, bc=u.bc, name="q2").bind(self.f, u, self.rho2, True)
             q1.interior = fc * self.rho1 * u.interior
             q2.interior = (1.0 - fc) * self.rho2 * u.interior
             g = self.conserving_gradient  # u's gradient: centred (Basilisk's default), or "ccd"
             kw = {} if self.conserving_ccd_cmin is None else {"ccd_cmin": float(self.conserving_ccd_cmin)}
-            tracers += [VOFTracer(q1, gradient=g, **kw), VOFTracer(q2, inverse=True, gradient=g, **kw)]
+            if self.conserving_geometric:
+                kw["geometric"] = True
+            if self.conserving_transverse:
+                kw["transverse"] = True
+            if self.conserving_fresh_dilation:
+                kw["fresh_dilation"] = True
+            s1 = s2 = None
+            if self.conserving_source:
+                s1, s2 = self.rho1 * ns.g[ax].interior, self.rho2 * ns.g[ax].interior
+            tracers += [VOFTracer(q1, gradient=g, source=s1, **kw), VOFTracer(q2, inverse=True, gradient=g, source=s2,
+                                                                                **kw)]
             qs.append((q1, q2))
+        uf = ns.uf
+        if self.conserving_predict:
+            from ..projection.approximate import project  # noqa: PLC0415
+            from ..terms.convection.bcg import prediction  # noqa: PLC0415
+
+            dt = ns.clock.dt
+            uf = prediction(ns.u, ns.g, dt)
+            ns._apply_uf_bc(uf)
+            ns.mgpf = project(uf, ns.pf, ns.alpha, dt / 2.0, ops=ns.ops, nrelax=ns.mgpf.nrelax or 4,
+                              tolerance=ns.tolerance, basilisk_tolerance=True)
+            ns._apply_uf_bc(uf)
         saved = self.interface.tracers
         self.interface.tracers = list(saved) + tracers
         try:
-            vof_advection([self.interface], ns.uf, ns.clock.dt, ns.clock.i)
+            vof_advection([self.interface], uf, ns.clock.dt, ns.clock.i)
         finally:
             self.interface.tracers = saved
         rho = self.rho(self.f.interior)
