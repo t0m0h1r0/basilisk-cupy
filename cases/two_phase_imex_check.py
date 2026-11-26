@@ -36,21 +36,22 @@ def _sync(grid):
 
 
 def drop(n: int, rho2: float, integrator: str, t_end: float = 0.5, backend: str = "numpy", mu: float = 0.1,
-         transport: str = "projected"):
+         transport: str = "projected", interface: str = "cls", **kw):
     grid = CartesianGrid((n, n), origin=(-0.5, -0.5), backend=backend)
     xp = grid.xp
     x, y = grid.meshgrid()
     phi = 0.25 - xp.sqrt(x * x + y * y)
     if integrator == "imex":
         ns = TwoPhaseIMEX(grid, phi, rho1=1.0, rho2=rho2, mu1=mu, mu2=mu, sigma=1.0, tolerance=1e-8,
-                          transport=transport)
-        tp = ns.tp
+                          transport=transport, interface=interface, **kw)
+        tp = ns
     else:
         ns = CenteredNS(grid, uf_normal={w: 0.0 for w in WALLS}, tolerance=1e-8, viscous=CCDViscosity())
         cls = CLSInterface.from_level_set(grid, phi, BoundaryConditions(), divergence="fccd",
                                           ops=FCCDFaceComplex(order=6))
         tp = TwoPhaseCLS(ns, cls, rho1=1.0, rho2=rho2, mu1=mu, mu2=mu, pressure_jump=True)
         tp.add_surface_tension(1.0)
+        tp.pressure = lambda: tp.full_pressure(ns)
     ns.start()
     m0 = float(tp.cls.mass())
     umax_hist, t0 = 0.0, time.time()
@@ -63,7 +64,7 @@ def drop(n: int, rho2: float, integrator: str, t_end: float = 0.5, backend: str 
         umax_hist = max(umax_hist, u)
     _sync(grid)
     wall = time.time() - t0
-    p = to_numpy(tp.full_pressure(ns))
+    p = to_numpy(tp.pressure())
     r = np.hypot(to_numpy(x), to_numpy(y))
     return {"jump": float(p[r < 0.1].mean() - p[r > 0.4].mean()), "u_end": u, "u_max": umax_hist,
             "mass": float(tp.cls.mass()) / m0 - 1.0, "steps": ns.clock.i, "t": ns.clock.t, "wall": wall}

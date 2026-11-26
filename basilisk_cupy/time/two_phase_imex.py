@@ -37,7 +37,7 @@ from ..boundary import BoundaryConditions, Neumann, Periodic
 from ..discretization.ccd import FCCDFaceComplex
 from ..interface.cls import CLSInterface
 from ..interface.cls_two_phase import TwoPhaseCLS
-from ..terms.viscous import CCDViscosity
+from ..terms.viscous import CCDViscosity, FD2Viscosity
 from .imex_multistep import IMEXMultistepNS
 from .schemes import EXPLICIT_RK, ab_beta
 
@@ -105,6 +105,59 @@ def _attach_two_phase(ns, phi0, *, periodic, faces, rho1, rho2, mu1, mu2, sigma,
         ns.tp.add_reduced_gravity(G, Z)
 
 
+class _VOFState:
+    """The volume fraction with the interface the two-phase steppers expect of ``ns.cls`` (``psi``, ``mass``,
+    ``sharp_volume``): ``psi`` is the VOF fraction ``f``."""
+
+    def __init__(self, f) -> None:
+        self.psi = f
+        self.dv = float(f.grid.h[0] * f.grid.h[1])
+
+    def mass(self) -> float:
+        return float(self.psi.grid.xp.sum(self.psi.interior)) * self.dv
+
+    def sharp_volume(self) -> float:
+        return self.mass()
+
+
+def _attach_vof(ns, phi0, *, periodic, rho1, rho2, mu1, mu2, sigma, gravity, jump: bool = False,
+                crossing: str = "sum") -> None:
+    """Basilisk's VOF (vof.h, PLIC) with two-phase.h, tension.h (height-function curvature, CSF in iforce.h form)
+    and reduced.h; ``phi0`` a level function ``(x, y) -> value`` positive in phase 1 (evaluated on the vertices),
+    or cell values of a signed distance (averaged to the vertices)."""
+    from ..boundary import BoundaryConditions as BC  # noqa: PLC0415
+    from ..fields import CellField  # noqa: PLC0415
+    from ..interface.fractions import fraction, fractions  # noqa: PLC0415
+    from ..interface.two_phase import TwoPhase  # noqa: PLC0415
+
+    grid = ns.grid
+    bc = BC()
+    for ax in range(grid.ndim):
+        for side in (0, 1):
+            bc.set((ax, side), Periodic() if ax in periodic else Neumann(0.0))
+    if callable(phi0):
+        f = fraction(grid, phi0)
+    else:
+        xp = grid.xp
+        q = xp.asarray(phi0)
+        qp = xp.pad(q, 1, mode="wrap" if periodic else "edge")
+        vert = 0.25 * (qp[:-1, :-1] + qp[1:, :-1] + qp[:-1, 1:] + qp[1:, 1:])
+        f = fractions(vert)
+    ns.vof = CellField.from_interior(grid, f, bc)
+    ns.cls = _VOFState(ns.vof)
+    if jump:
+        from ..interface.vof_jump import TwoPhaseVOFJump  # noqa: PLC0415
+
+        ns.tp = TwoPhaseVOFJump(ns, ns.vof, rho1=rho1, rho2=rho2, mu1=mu1, mu2=mu2, crossing=crossing)
+    else:
+        ns.tp = TwoPhase(ns, ns.vof, rho1=rho1, rho2=rho2, mu1=mu1, mu2=mu2)
+    if sigma:
+        ns.tp.add_surface_tension(sigma)
+    if gravity is not None:
+        G, Z = gravity
+        ns.tp.add_reduced_gravity(G, Z)
+
+
 class _TwoPhaseMixin:
     """Diagnostics shared by the two-phase steppers."""
 
@@ -114,7 +167,8 @@ class _TwoPhaseMixin:
 
     def pressure(self):
         """The pressure with its jump (``p~ + H j_ext`` in the smooth form)."""
-        return self.tp.full_pressure(self)
+        full = getattr(self.tp, "full_pressure", None)
+        return full(self) if full is not None else self.p.interior
 
     def mass(self) -> float:
         """``sum psi dV`` (the diffuse CLS mass the transport conserves)."""
@@ -144,7 +198,7 @@ class TwoPhaseIMEX(_TwoPhaseMixin, IMEXMultistepNS):
                  reinit_method: str = "xi_sdf", curvature_kw: dict | None = None, jump_mode: str | None = None,
                  capillary_dt_factor: float | None = None, transport: str = "frozen",
                  psi_integrator: str = "ssprk3", scheme="sbdf2", cls_divergence: str | None = None,
-                 jump_interp: str | None = None, **kw) -> None:
+                 jump_interp: str | None = None, interface: str = "cls", vof_crossing: str = "sum", **kw) -> None:
         """``phi0``: cell-centred signed distance, positive in phase 1 (``psi = 1``). ``gravity``: ``(G, Z)`` of
         the reduced gravity (``G`` the acceleration vector). Walls on the non-periodic sides (``uf`` normal
         zero there). ``scheme``: the momentum's multistep IMEX scheme (:class:`~.schemes.MultistepScheme`,
@@ -158,7 +212,12 @@ class TwoPhaseIMEX(_TwoPhaseMixin, IMEXMultistepNS):
         * ``"pc"``: predictor--corrector (Heun on the kinematics): the step is taken with ``u_f^n``, then
           repeated from the same state with ``(u_f^n + u_f^{n+1})/2`` (twice the cost).
 
-        ``psi_integrator``: ``"ssprk3"`` (the paper's TVD-RK3), ``"ssprk2"``, ``"rk4"``, ``"heun3"``, ``"euler"``."""
+        ``psi_integrator``: ``"ssprk3"`` (the paper's TVD-RK3), ``"ssprk2"``, ``"rk4"``, ``"heun3"``, ``"euler"``.
+
+        ``interface``: ``"cls"`` (the conservative level set), ``"vof"`` (Basilisk's VOF with tension.h's CSF) or
+        ``"vof-gfm"`` (VOF with the sharp pressure jump, :class:`~..interface.vof_jump.TwoPhaseVOFJump`; its crossings
+        from ``vof_crossing``: ``"sum"``, the line sum of f, or ``"plic"``, the PLIC line), docs/notes/64. The VOF
+        interfaces need ``faces="fd2"`` and default to the fd2 viscous operator; ``eps``, the reinitialisation and the curvature options are the CLS's."""
         if transport == "projected":
             transport = "frozen"
         if transport not in TRANSPORTS:
@@ -168,15 +227,26 @@ class TwoPhaseIMEX(_TwoPhaseMixin, IMEXMultistepNS):
         periodic = tuple(periodic)
         _check_faces(faces, rho1, rho2)
         kw.setdefault("uf_normal", {w: 0.0 for w in WALLS if _SIDE_AXIS[w] not in periodic})
-        kw.setdefault("viscous", CCDViscosity())
+        # the VOF viscosity jumps at the interface, where CCD's viscous operator grows parasitic currents (notes/64)
+        kw.setdefault("viscous", FD2Viscosity() if interface in ("vof", "vof-gfm") else CCDViscosity())
         super().__init__(grid, scheme=scheme, periodic=periodic, ops=_face_ops(faces),
                          convection=_convection(convection), **kw)
-        _attach_two_phase(self, phi0, periodic=periodic, faces=faces, rho1=rho1, rho2=rho2, mu1=mu1, mu2=mu2,
-                          sigma=sigma, gravity=gravity, eps=eps, reinit_every=reinit_every,
-                          reinit_method=reinit_method, curvature_kw=curvature_kw, jump_mode=jump_mode,
-                          capillary_dt_factor=capillary_dt_factor, cls_divergence=cls_divergence,
-                          jump_interp=jump_interp)
-        self.cls.integrator = psi_integrator
+        if interface not in ("cls", "vof", "vof-gfm"):
+            raise ValueError("interface is 'cls', 'vof' (tension.h's CSF) or 'vof-gfm' (sharp pressure jump)")
+        self.interface = interface
+        if interface in ("vof", "vof-gfm"):
+            if faces != "fd2":
+                raise NotImplementedError("the VOF interface needs fd2 faces (vof.h assumes an exactly "
+                                          "divergence-free face velocity)")
+            _attach_vof(self, phi0, periodic=periodic, rho1=rho1, rho2=rho2, mu1=mu1, mu2=mu2, sigma=sigma,
+                        gravity=gravity, jump=interface == "vof-gfm", crossing=vof_crossing)
+        else:
+            _attach_two_phase(self, phi0, periodic=periodic, faces=faces, rho1=rho1, rho2=rho2, mu1=mu1, mu2=mu2,
+                              sigma=sigma, gravity=gravity, eps=eps, reinit_every=reinit_every,
+                              reinit_method=reinit_method, curvature_kw=curvature_kw, jump_mode=jump_mode,
+                              capillary_dt_factor=capillary_dt_factor, cls_divergence=cls_divergence,
+                              jump_interp=jump_interp)
+            self.cls.integrator = psi_integrator
         self.faces, self.convection_name = faces, convection
         self.transport, self.psi_integrator = transport, psi_integrator
         self._uf_hist: list = []  # u_f^n, u_f^{n-1}, ... (after the steps taken)
@@ -252,7 +322,7 @@ class TwoPhaseIMEX(_TwoPhaseMixin, IMEXMultistepNS):
             "clock": copy.deepcopy(self.clock), "dtmax": self.dtmax,
             "lists": {k: list(getattr(self, k)) for k in ("_u_hist", "_e_hist", "_v_hist", "_dts", "_uf_hist", "_uf_dts", "_a_hist")},
             "prev": (self._u_prev, self._c_prev, self._dt_prev),
-            "tp": (self.tp._steps, self.tp.j_ext),
+            "tp": (getattr(self.tp, "_steps", None), getattr(self.tp, "j_ext", None)),
         }
 
     def _restore(self, s: dict) -> None:
@@ -274,4 +344,5 @@ class TwoPhaseIMEX(_TwoPhaseMixin, IMEXMultistepNS):
         for k, v in s["lists"].items():
             setattr(self, k, list(v))
         self._u_prev, self._c_prev, self._dt_prev = s["prev"]
-        self.tp._steps, self.tp.j_ext = s["tp"]
+        if s["tp"][0] is not None:
+            self.tp._steps, self.tp.j_ext = s["tp"]

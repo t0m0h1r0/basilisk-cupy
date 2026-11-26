@@ -96,6 +96,8 @@ def _stepper(grid, phi, kw, level=None):
     kw = dict(kw)
     if kw.pop("method", None) == "vof":
         return VOFRun(grid, level, kw)
+    if str(kw.get("interface", "cls")).startswith("vof"):
+        phi = level  # the VOF fraction is built from the level function on the vertices
     # dimensional problems: bound the relative volume change per projection step (Basilisk's project())
     kw.setdefault("volume_tolerance", True)
     kw.setdefault("tolerance", 1e-8)  # converged to 1e-5 in the capillary wave's amplitude ratio
