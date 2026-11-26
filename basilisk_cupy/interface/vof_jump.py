@@ -25,13 +25,24 @@ WINDOW = 3  # cells on each side of a face for the crossing
 
 
 class TwoPhaseVOFJump(TwoPhase):
-    def __init__(self, ns, f, *, crossing: str = "sum", **kw) -> None:
-        """``crossing``: ``"sum"`` (the line sum of f, above) or ``"plic"`` (the PLIC line of the interfacial cell on
+    def __init__(self, ns, f, *, crossing: str = "sum", cell_coefficient: str = "mean", **kw) -> None:
+        """``cell_coefficient``: the coefficient of the cell-centred velocity correction ``g`` on cut faces:
+        ``"mean"`` (the face's net force ``a - alpha grad p`` rescaled to two-phase.h's ``1/rho(f_face)``, so the
+        cells take it with the density of their own mixture; the static balance is kept since the net force
+        vanishes there) or ``"gfm"`` (the GFM coefficient, as for the face velocity). With ``"gfm"`` the capillary
+        wave's amplitude grows at a density ratio (docs/notes/65).
+
+        ``crossing``: ``"sum"`` (the line sum of f, above) or ``"plic"`` (the PLIC line of the interfacial cell on
         either side: ``theta = alpha_L / n_ax`` in the lower cell's frame if it falls in [0, 1/2], else
         ``1 + alpha_R / n_ax`` from the upper cell if in [1/2, 1], else the line sum)."""
         if crossing not in ("sum", "plic"):
             raise ValueError("crossing is 'sum' or 'plic'")
+        if cell_coefficient not in ("mean", "gfm"):
+            raise ValueError("cell_coefficient is 'mean' or 'gfm'")
+        self.cell_coefficient = cell_coefficient
         self.crossing = crossing
+        self.coefficient = "gfm"  # "mean": two-phase.h's 1/rho(f_face) on cut faces too (diagnostics, notes/64)
+        self.jump_weights = "theta"  # "mean": iforce.h's mean of the two cells' potentials (diagnostics)
         super().__init__(ns, f, **kw)
 
     def _faces(self, cell, ax, width: int = 1):
@@ -75,12 +86,18 @@ class TwoPhaseVOFJump(TwoPhase):
 
     def _properties(self, ns) -> None:
         super()._properties(ns)
+        alpha_mean = [ns.alpha[ax].copy() for ax in range(2)]  # two-phase.h's 1/rho(f_face)
+        ns.g_scale = None
+        if self.coefficient == "mean":
+            return
         xp = self.f.grid.xp
         for ax in range(2):
             hl, hr, cut, theta = self._cut(ax)
             rl = xp.where(hl, self.rho1, self.rho2)
             rr = xp.where(hr, self.rho1, self.rho2)
             ns.alpha[ax] = 1.0 / (theta * rl + (1.0 - theta) * rr)
+        if self.cell_coefficient == "mean":
+            ns.g_scale = [alpha_mean[ax] / ns.alpha[ax] for ax in range(2)]
 
     def _interfacial_force(self, ns) -> None:
         if not self.potentials:
@@ -97,6 +114,7 @@ class TwoPhaseVOFJump(TwoPhase):
             hl, hr, cut, theta = self._cut(ax)
             pl, pr = self._faces(phi, ax)
             okl, okr = pl < NODATA, pr < NODATA
-            j = xp.where(okl & okr, (1.0 - theta) * pl + theta * pr, xp.where(okl, pl, xp.where(okr, pr, 0.0)))
+            w = theta if self.jump_weights == "theta" else 0.5
+            j = xp.where(okl & okr, (1.0 - w) * pl + w * pr, xp.where(okl, pl, xp.where(okr, pr, 0.0)))
             sign = hr.astype(phi.dtype) - hl.astype(phi.dtype)
             ns.a[ax] = ns.a[ax] + xp.where(cut, ns.alpha[ax] * j * sign / h[ax], 0.0)

@@ -80,7 +80,7 @@ def _convection(name: str):
 
 def _attach_two_phase(ns, phi0, *, periodic, faces, rho1, rho2, mu1, mu2, sigma, gravity, eps, reinit_every,
                       reinit_method, curvature_kw, jump_mode, capillary_dt_factor, cls_divergence=None,
-                      jump_interp=None) -> None:
+                      jump_interp=None, cell_coefficient=None) -> None:
     """CLS (FCCD face values of order 6, corrected divergence) and TwoPhaseCLS with the GFM pressure jump."""
     grid = ns.grid
     bc = BoundaryConditions()
@@ -94,7 +94,8 @@ def _attach_two_phase(ns, phi0, *, periodic, faces, rho1, rho2, mu1, mu2, sigma,
     ns.tp = TwoPhaseCLS(ns, ns.cls, rho1=rho1, rho2=rho2, mu1=mu1, mu2=mu2, pressure_jump=True,
                         jump_mode=jump_mode, reinit_every=reinit_every, reinit_method=reinit_method,
                         curvature_kw=curvature_kw, capillary_dt_factor=capillary_dt_factor,
-                        jump_interp=jump_interp or ("hermite" if faces == "phase-ccd" else "linear"))
+                        jump_interp=jump_interp or ("hermite" if faces == "phase-ccd" else "linear"),
+                        cell_coefficient=cell_coefficient or "gfm")
     if faces == "phase-ccd":
         # the cut faces move with the interface: refresh the operator once the properties are set
         ns.on("properties", lambda _ns: _ns.ops.update(_ns.tp, _ns.alpha), after=True)
@@ -121,7 +122,7 @@ class _VOFState:
 
 
 def _attach_vof(ns, phi0, *, periodic, rho1, rho2, mu1, mu2, sigma, gravity, jump: bool = False,
-                crossing: str = "sum") -> None:
+                crossing: str = "sum", cell_coefficient: str = "mean") -> None:
     """Basilisk's VOF (vof.h, PLIC) with two-phase.h, tension.h (height-function curvature, CSF in iforce.h form)
     and reduced.h; ``phi0`` a level function ``(x, y) -> value`` positive in phase 1 (evaluated on the vertices),
     or cell values of a signed distance (averaged to the vertices)."""
@@ -148,7 +149,8 @@ def _attach_vof(ns, phi0, *, periodic, rho1, rho2, mu1, mu2, sigma, gravity, jum
     if jump:
         from ..interface.vof_jump import TwoPhaseVOFJump  # noqa: PLC0415
 
-        ns.tp = TwoPhaseVOFJump(ns, ns.vof, rho1=rho1, rho2=rho2, mu1=mu1, mu2=mu2, crossing=crossing)
+        ns.tp = TwoPhaseVOFJump(ns, ns.vof, rho1=rho1, rho2=rho2, mu1=mu1, mu2=mu2, crossing=crossing,
+                                    cell_coefficient=cell_coefficient)
     else:
         ns.tp = TwoPhase(ns, ns.vof, rho1=rho1, rho2=rho2, mu1=mu1, mu2=mu2)
     if sigma:
@@ -198,7 +200,8 @@ class TwoPhaseIMEX(_TwoPhaseMixin, IMEXMultistepNS):
                  reinit_method: str = "xi_sdf", curvature_kw: dict | None = None, jump_mode: str | None = None,
                  capillary_dt_factor: float | None = None, transport: str = "frozen",
                  psi_integrator: str = "ssprk3", scheme="sbdf2", cls_divergence: str | None = None,
-                 jump_interp: str | None = None, interface: str = "cls", vof_crossing: str = "sum", **kw) -> None:
+                 jump_interp: str | None = None, interface: str = "cls", vof_crossing: str = "sum",
+                 cell_coefficient: str | None = None, **kw) -> None:
         """``phi0``: cell-centred signed distance, positive in phase 1 (``psi = 1``). ``gravity``: ``(G, Z)`` of
         the reduced gravity (``G`` the acceleration vector). Walls on the non-periodic sides (``uf`` normal
         zero there). ``scheme``: the momentum's multistep IMEX scheme (:class:`~.schemes.MultistepScheme`,
@@ -215,9 +218,11 @@ class TwoPhaseIMEX(_TwoPhaseMixin, IMEXMultistepNS):
         ``psi_integrator``: ``"ssprk3"`` (the paper's TVD-RK3), ``"ssprk2"``, ``"rk4"``, ``"heun3"``, ``"euler"``.
 
         ``interface``: ``"cls"`` (the conservative level set), ``"vof"`` (Basilisk's VOF with tension.h's CSF) or
-        ``"vof-gfm"`` (VOF with the sharp pressure jump, :class:`~..interface.vof_jump.TwoPhaseVOFJump`; its crossings
-        from ``vof_crossing``: ``"sum"``, the line sum of f, or ``"plic"``, the PLIC line), docs/notes/64. The VOF
-        interfaces need ``faces="fd2"`` and default to the fd2 viscous operator; ``eps``, the reinitialisation and the curvature options are the CLS's."""
+        ``"vof-gfm"`` (VOF with the sharp pressure jump, :class:`~..interface.vof_jump.TwoPhaseVOFJump`), docs/notes/64:
+        its crossings from ``vof_crossing`` (``"sum"``, the line sum of f, or ``"plic"``, the PLIC line), the
+        coefficient of the cell-centred correction on cut faces from ``cell_coefficient`` (``"mean"`` or ``"gfm"``,
+        docs/notes/65; default ``"mean"`` for ``"vof-gfm"``, ``"gfm"`` for the CLS). The VOF interfaces need ``faces="fd2"`` and default to the fd2 viscous operator; ``eps``,
+        the reinitialisation and the curvature options are the CLS's."""
         if transport == "projected":
             transport = "frozen"
         if transport not in TRANSPORTS:
@@ -239,13 +244,14 @@ class TwoPhaseIMEX(_TwoPhaseMixin, IMEXMultistepNS):
                 raise NotImplementedError("the VOF interface needs fd2 faces (vof.h assumes an exactly "
                                           "divergence-free face velocity)")
             _attach_vof(self, phi0, periodic=periodic, rho1=rho1, rho2=rho2, mu1=mu1, mu2=mu2, sigma=sigma,
-                        gravity=gravity, jump=interface == "vof-gfm", crossing=vof_crossing)
+                        gravity=gravity, jump=interface == "vof-gfm", crossing=vof_crossing,
+                        cell_coefficient=cell_coefficient or "mean")
         else:
             _attach_two_phase(self, phi0, periodic=periodic, faces=faces, rho1=rho1, rho2=rho2, mu1=mu1, mu2=mu2,
                               sigma=sigma, gravity=gravity, eps=eps, reinit_every=reinit_every,
                               reinit_method=reinit_method, curvature_kw=curvature_kw, jump_mode=jump_mode,
                               capillary_dt_factor=capillary_dt_factor, cls_divergence=cls_divergence,
-                              jump_interp=jump_interp)
+                              jump_interp=jump_interp, cell_coefficient=cell_coefficient)
             self.cls.integrator = psi_integrator
         self.faces, self.convection_name = faces, convection
         self.transport, self.psi_integrator = transport, psi_integrator

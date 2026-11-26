@@ -1064,3 +1064,12 @@ curvature, not by how the force enters. CCD's viscous operator on the VOF's disc
 currents at N = 64 (a halved step does not help), so the VOF interfaces default to the fd2 viscous operator; with it,
 VOF on SBDF2 + ab2 matches Basilisk's VOF on the paper's capillary wave and drop (frequency errors -1.33 % / -1.04 % at
 N = 64, three times smaller than the CLS's), while the ghost-fluid variant is less accurate on moving interfaces.
+
+The cell-centred correction at a density ratio (`docs/notes/65_cell_coefficient.md`): the VOF ghost-fluid jump lost
+accuracy on moving interfaces because the cell-centred velocity correction averaged the face accelerations with the
+GFM coefficient, handing the light cells the heavy side's mass (with equal densities the GFM beats the CSF:
+frequency error -0.39 % against -1.28 % at N = 64). `cell_coefficient="mean"` rescales the net face force to
+two-phase.h's 1/rho(f_face) before the average, which keeps the static balance; it is the default of
+`interface="vof-gfm"` and brings the capillary wave and drop to the CSF's accuracy. For the CLS it overshoots (the
+frequency error changes sign), so the CLS keeps `"gfm"`; its frequency error turns out to depend strongly on the
+density the cells inside the psi band see.

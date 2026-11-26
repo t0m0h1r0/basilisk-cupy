@@ -25,9 +25,9 @@ def test_static_drop(rho2, jump, u_end, u_max):
     ("vof", 1.0, 4.04118, 2.789e-4, 4.475e-3, 42),        # tension.h's CSF (height-function curvature)
     ("vof", 0.001, 4.04111, 1.106e-4, 5.751e-3, 56),
     ("vof-gfm", 1.0, 4.04090, 2.908e-4, 4.820e-3, 42),    # the same curvature as a sharp jump (docs/notes/64)
-    ("vof-gfm", 0.001, 4.04122, 4.370e-5, 7.750e-3, 56),
+    ("vof-gfm", 0.001, 4.04072, 2.189e-4, 7.325e-3, 56),
     ("vof-gfm-plic", 1.0, 4.04093, 2.662e-4, 4.790e-3, 42),  # crossings from the PLIC lines
-    ("vof-gfm-plic", 0.001, 4.04138, 2.396e-4, 7.303e-3, 56),
+    ("vof-gfm-plic", 0.001, 4.04059, 1.941e-4, 6.910e-3, 56),
 ])
 def test_static_drop_vof(interface, rho2, jump, u_end, u_max, steps):
     """The VOF interface on the IMEX stepper (fd2 viscosity): the jump is the heights' curvature at N = 32 (1 %),
@@ -70,6 +70,12 @@ def test_options():
         TwoPhaseIMEX(grid, phi, interface="vof", faces="phase-ccd")
     with pytest.raises(ValueError):
         TwoPhaseIMEX(grid, phi, interface="vof-gfm", vof_crossing="linear")
+    with pytest.raises(ValueError):
+        TwoPhaseIMEX(grid, phi, interface="vof-gfm", cell_coefficient="harmonic")
+    with pytest.raises(ValueError):
+        TwoPhaseIMEX(grid, phi, cell_coefficient="harmonic")
+    assert TwoPhaseIMEX(grid, phi, interface="vof-gfm").tp.cell_coefficient == "mean"
+    assert TwoPhaseIMEX(grid, phi).tp.cell_coefficient == "gfm"
     ns = TwoPhaseIMEX(grid, phi, rho1=1.0, rho2=0.5, sigma=1.0, periodic=(0,))
     assert ns.uf_normal == {"bottom": 0.0, "top": 0.0}
     assert ns.cls.psi.bc.is_periodic(0) and not ns.cls.psi.bc.is_periodic(1)
