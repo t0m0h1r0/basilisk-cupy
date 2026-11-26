@@ -42,7 +42,9 @@ def test_paper_capillary_wave_volume_tolerance():
     0.898932 / 0.898929); the absolute residual bound 1e-3 is too loose in these units (0.956)."""
     from cases.paper_benchmarks import run
 
-    r = run("capwave", samples=40)  # the output times split the steps: 8 samples give 0.9046
+    # the output times split the steps: 8 samples give 0.9046; the diffuse cell density of these measurements (the
+    # default became "sharp" in docs/notes/69)
+    r = run("capwave", samples=40, cell_density="diffuse")
     s = r["series"]
     assert s[-1]["amplitude"] / s[0]["amplitude"] == pytest.approx(0.898932, abs=2e-5)
     assert abs(s[-1]["mass"] / s[0]["mass"] - 1.0) < 1e-13

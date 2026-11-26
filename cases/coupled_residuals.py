@@ -28,7 +28,9 @@ from basilisk_cupy.interface.cls_two_phase import TwoPhaseCLS
 from basilisk_cupy.time.basilisk_centered import CenteredNS
 
 
-def drop(n=32, rho2=0.01, mu=0.1, factor=1.6, warm=40, mu2=None, jump_mode="sharp", **ns_kw):
+def drop(n=32, rho2=0.01, mu=0.1, factor=1.6, warm=40, mu2=None, jump_mode="sharp", cell_density="diffuse", **ns_kw):
+    """``cell_density``: the study (docs/notes/36) used two-phase.h's diffuse cell density; with the sharp one (the
+    default since docs/notes/69) the outer iterations converge more slowly."""
     grid = CartesianGrid((n, n), origin=(-0.5, -0.5))
     x, y = grid.meshgrid()
     kw = {"coupled_iterations": 30, "coupled_tolerance": 1e-13, "coupled_on_failure": "ignore"}
@@ -37,7 +39,7 @@ def drop(n=32, rho2=0.01, mu=0.1, factor=1.6, warm=40, mu2=None, jump_mode="shar
     th = np.arctan2(y, x)
     cls = CLSInterface.from_level_set(grid, 0.25 * (1 + 0.05 * np.cos(2 * th)) - np.hypot(x, y), BoundaryConditions())
     tp = TwoPhaseCLS(ns, cls, rho1=1.0, rho2=rho2, mu1=mu, mu2=mu if mu2 is None else mu2, pressure_jump=True,
-                     capillary_dt_factor=factor, jump_mode=jump_mode)
+                     capillary_dt_factor=factor, jump_mode=jump_mode, cell_density=cell_density)
     tp.add_surface_tension(1.0)
     ns.start()
     for _ in range(warm):

@@ -38,7 +38,8 @@ class Ops:
         x, y = grid.meshgrid()
         ns = CenteredNS(grid, uf_normal={w: 0.0 for w in ("left", "right", "bottom", "top")}, tolerance=1e-14)
         cls = CLSInterface.from_level_set(grid, 0.25 - np.hypot(x, y), BoundaryConditions())
-        TwoPhaseCLS(ns, cls, rho1=1.0, rho2=rho2, mu1=mu1, mu2=mu2)
+        TwoPhaseCLS(ns, cls, rho1=1.0, rho2=rho2, mu1=mu1, mu2=mu2,
+                    cell_density="diffuse")  # the study's (docs/notes/36) density; sharp by default since 69
         ns.start()
         h = 1.0 / n
         self.dt = factor * math.sqrt((1.0 + rho2) / 2.0 * h ** 3 / PI)

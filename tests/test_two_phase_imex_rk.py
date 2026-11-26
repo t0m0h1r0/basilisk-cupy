@@ -36,10 +36,11 @@ def test_temporal_order_stokes(name, rate):
 
 
 @pytest.mark.parametrize("name,jump,umax", [
-    ("ars111", 4.00972, 1.99e-4), ("ars222", 4.00888, 3.90e-4), ("ars343", 4.00967, 2.24e-4),
+    ("ars111", 4.00972, 1.99e-4), ("ars222", 4.00933, 7.74e-4), ("ars343", 4.01126, 3.62e-4),
 ])
 def test_static_drop(name, jump, umax):
-    """R = 0.25, sigma = 1, mu = 0.1, N = 32, 40 steps; density ratio 1000 except ars111 (1)."""
+    """R = 0.25, sigma = 1, mu = 0.1, N = 32, 40 steps; density ratio 1000 except ars111 (1). The CLS's sharp cell
+    density (docs/notes/69; diffuse: ars222 4.00888 / 3.90e-4, ars343 4.00967 / 2.24e-4)."""
     grid = CartesianGrid((32, 32), origin=(-0.5, -0.5))
     x, y = grid.meshgrid()
     rho2 = 1.0 if name == "ars111" else 0.001

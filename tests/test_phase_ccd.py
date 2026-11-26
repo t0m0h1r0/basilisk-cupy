@@ -42,7 +42,8 @@ def test_manufactured_density_ratio(ratio, u_res):
 
 
 def test_static_drop_density_ratio_1000():
-    """Walls, R = 0.25, sigma = 1, mu = 0.1, N = 32, 40 steps: jump 4.0024 (fd2 GFM 4.0098), max |u| 8.9e-5 (2.0e-4)."""
+    """Walls, R = 0.25, sigma = 1, mu = 0.1, N = 32, 40 steps: jump 4.0018, max |u| 2.6e-4 with the sharp cell density
+    (docs/notes/69; the diffuse one: 4.0024, 8.9e-5)."""
     g = CartesianGrid((32, 32), origin=(-0.5, -0.5))
     x, y = g.meshgrid()
     ns = TwoPhaseIMEX(g, 0.25 - np.hypot(x, y), rho1=1.0, rho2=0.001, mu1=0.1, mu2=0.1, sigma=1.0,
@@ -52,8 +53,8 @@ def test_static_drop_density_ratio_1000():
         ns.step()
     p = ns.pressure()
     r = np.hypot(x, y)
-    assert float(p[r < 0.1].mean() - p[r > 0.4].mean()) == pytest.approx(4.00238, abs=2e-5)
-    assert ns.max_velocity() == pytest.approx(8.88e-5, rel=0.03)
+    assert float(p[r < 0.1].mean() - p[r > 0.4].mean()) == pytest.approx(4.00183, abs=2e-5)
+    assert ns.max_velocity() == pytest.approx(2.594e-4, rel=0.03)
 
 
 @pytest.mark.parametrize("periodic", [True, False])

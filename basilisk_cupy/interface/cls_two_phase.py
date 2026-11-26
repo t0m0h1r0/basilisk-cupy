@@ -146,11 +146,14 @@ class TwoPhaseCLS(TwoPhase):
                  reinit_method: str = "xi_sdf", curvature_kw: dict | None = None,
                  pressure_jump: bool = False, capillary_dt_factor: float | None = None,
                  surface_viscosity: float = 0.0, implicit_tension: float = 0.0, jump_mode: str = "sharp",
-                 jump_interp: str = "linear", cell_coefficient: str = "gfm") -> None:
+                 jump_interp: str = "linear", cell_coefficient: str = "gfm",
+                 cell_density: str = "sharp") -> None:
         """``cell_coefficient`` (with ``pressure_jump``): the coefficient of the cell-centred velocity correction on
         the cut faces, ``"gfm"`` (the face's), ``"mean"`` (the net face force rescaled to ``1/rho(psi_face)`` on
         every face, :class:`~.vof_jump.TwoPhaseVOFJump`) or ``"cut"`` (rescaled on the cut faces only),
-        docs/notes/65."""
+        docs/notes/65. ``cell_density``: the cell density of the implicit viscous solve, ``"sharp"`` (the default
+        since docs/notes/69: ``rho1`` where ``psi > 1/2``, else ``rho2``) or ``"diffuse"`` (two-phase.h's
+        ``rho(psi)``, which damps the oscillating drop about four times too much, docs/notes/68)."""
         f: CellField = cls.psi
         if f.grid.ndim != 2:
             raise NotImplementedError("two-phase flows are implemented in 2-D")
@@ -178,6 +181,9 @@ class TwoPhaseCLS(TwoPhase):
         if cell_coefficient not in ("gfm", "mean", "cut"):
             raise ValueError("cell_coefficient is 'gfm', 'mean' or 'cut'")
         self.cell_coefficient = cell_coefficient
+        if cell_density not in ("diffuse", "sharp"):
+            raise ValueError("cell_density is 'diffuse' or 'sharp'")
+        self.cell_density = cell_density
         self.j_ext = None
         self.cg_stats = []
         self.capillary_dt_factor = CCD_CAPILLARY_DT_FACTOR if capillary_dt_factor is None else float(capillary_dt_factor)
@@ -256,6 +262,9 @@ class TwoPhaseCLS(TwoPhase):
 
     def _properties(self, ns) -> None:
         super()._properties(ns)
+        if self.cell_density == "sharp":
+            q = self.f.interior
+            ns.rho = self.f.grid.xp.where(q > 0.5, self.rho1, self.rho2)
         if self.surface_viscosity and getattr(self, "sigma", 0.0):
             self._add_surface_viscosity(ns)
         if not self.pressure_jump:
