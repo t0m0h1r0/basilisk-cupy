@@ -21,6 +21,25 @@ def test_static_drop(rho2, jump, u_end, u_max):
     assert abs(r["mass"]) < 1e-13
 
 
+@pytest.mark.parametrize("interface,rho2,jump,u_end,u_max,steps", [
+    ("vof", 1.0, 4.04118, 2.789e-4, 4.475e-3, 42),        # tension.h's CSF (height-function curvature)
+    ("vof", 0.001, 4.04111, 1.106e-4, 5.751e-3, 56),
+    ("vof-gfm", 1.0, 4.04090, 2.908e-4, 4.820e-3, 42),    # the same curvature as a sharp jump (docs/notes/64)
+    ("vof-gfm", 0.001, 4.04122, 4.370e-5, 7.750e-3, 56),
+    ("vof-gfm-plic", 1.0, 4.04093, 2.662e-4, 4.790e-3, 42),  # crossings from the PLIC lines
+    ("vof-gfm-plic", 0.001, 4.04138, 2.396e-4, 7.303e-3, 56),
+])
+def test_static_drop_vof(interface, rho2, jump, u_end, u_max, steps):
+    """The VOF interface on the IMEX stepper (fd2 viscosity): the jump is the heights' curvature at N = 32 (1 %),
+    mass to round-off."""
+    kw = {"vof_crossing": "plic"} if interface.endswith("plic") else {}
+    r = drop(32, rho2, "imex", t_end=0.1, interface=interface.removesuffix("-plic"), **kw)
+    assert r["t"] == pytest.approx(0.1) and r["steps"] == steps
+    assert r["jump"] == pytest.approx(jump, abs=1e-4)
+    assert r["u_end"] == pytest.approx(u_end, rel=0.05) and r["u_max"] == pytest.approx(u_max, rel=0.05)
+    assert abs(r["mass"]) < 1e-13
+
+
 @pytest.mark.parametrize("transport,error,damping", [
     ("projected", 0.20320, -0.3601),  # the paper's stage 1: psi moved by u_f^n, first order in time
     ("ab2", 0.19070, -0.3011),        # midpoint velocity (1 + w/2) u_f^n - (w/2) u_f^{n-1}
@@ -45,6 +64,12 @@ def test_options():
         TwoPhaseIMEX(grid, phi, convection="weno")
     with pytest.raises(ValueError):
         TwoPhaseIMEX(grid, phi, transport="rk2")
+    with pytest.raises(ValueError):
+        TwoPhaseIMEX(grid, phi, interface="level-set")
+    with pytest.raises(NotImplementedError):  # vof.h needs an exactly divergence-free face velocity
+        TwoPhaseIMEX(grid, phi, interface="vof", faces="phase-ccd")
+    with pytest.raises(ValueError):
+        TwoPhaseIMEX(grid, phi, interface="vof-gfm", vof_crossing="linear")
     ns = TwoPhaseIMEX(grid, phi, rho1=1.0, rho2=0.5, sigma=1.0, periodic=(0,))
     assert ns.uf_normal == {"bottom": 0.0, "top": 0.0}
     assert ns.cls.psi.bc.is_periodic(0) and not ns.cls.psi.bc.is_periodic(1)

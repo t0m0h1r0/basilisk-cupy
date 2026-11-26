@@ -65,3 +65,5 @@
 | [60_paper_verdict.md](60_paper_verdict.md) | フェーズ4：論文の主張 15 項目の検証表（成立・不成立・条件付き、根拠、PR）と、実用上の推奨構成（SBDF2 + ab2 の輸送 + ξ-SDF 10 + 閉じた界面は高さ関数の曲率） |
 | [61_phase_ccd.md](61_phase_ccd.md) | 相ごとの CCD の射影をライブラリに（`faces="phase-ccd"`）：静止液滴のジャンプの誤差は粗い格子で 3.5〜4.9 倍小さいが N = 128 で頭打ち（曲率が床）、毛管波は周波数が少し良く減衰は大きい、費用 2〜4 倍。既定は fd2 のまま（#72） |
 | [62_rk_force_weights.md](62_rk_force_weights.md) | IMEX-RK の段の表面張力を陰的な重みで混ぜる（`force_weights="scheme"`）と 1 次の刻み依存が消える（CN 系と同じ規則）。論文の実装の現在の版は、14 章の 4 ベンチマークが自身の設定で最初のステップで止まる（#73） |
+| [63_phase_ccd_factors.md](63_phase_ccd_factors.md) | 静止液滴の誤差はすべて曲率から（厳密な曲率で丸め誤差）。φ（ロジット）の曲率 + phase-ccd で N = 128 の頭打ちが消える（ジャンプの誤差 1.0e-5）が、動く界面では効かず、phase-ccd は水–空気の振動液滴で密度比により発散。毛管波の減衰の要因、振動液滴の格子の収束、上昇気泡 N = 128（#74） |
+| [64_vof_imex.md](64_vof_imex.md) | VOF + IMEX：`TwoPhaseIMEX(interface="vof" / "vof-gfm")` で VOF を IMEX の時間積分・CCD 粘性と GFM のジャンプで使う。静止液滴は質量を丸め誤差で保ち密度比 1000 で安定、ジャンプの誤差は高さ関数の曲率で決まる。不連続な粘性係数に CCD の粘性をかけると N = 64 で寄生流が育つので VOF の既定は fd2 の粘性；それで Basilisk の VOF と同じ精度（周波数の誤差は CLS の 1/3）、VOF-GFM は動く界面で劣る（#74） |

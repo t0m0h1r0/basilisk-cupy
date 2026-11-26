@@ -27,6 +27,11 @@ OPTS = {
     "imex-ab2-comp10": dict(transport="ab2", reinit_every=10, reinit_method="compression"),
     "imex-ab2-xi10-heights": dict(transport="ab2", reinit_every=10, reinit_method="xi_sdf",
                                   curvature_kw={"method": "heights", "heights_method": "fd2"}),
+    # the same re-initialisation interval in physical time as every 10 steps at N = 32 (steps scale ~ N^1.3)
+    "imex-ab2-xi20-heights": dict(transport="ab2", reinit_every=20, reinit_method="xi_sdf",
+                                  curvature_kw={"method": "heights", "heights_method": "fd2"}),
+    "imex-ab2-xi60-heights": dict(transport="ab2", reinit_every=60, reinit_method="xi_sdf",
+                                  curvature_kw={"method": "heights", "heights_method": "fd2"}),
 }
 
 

@@ -23,7 +23,7 @@ Design document: see the project's design doc ("Basilisk → CuPy 移植設計�
 | Two-phase coupling | `TwoPhaseCLS` on `CenteredNS`: CSF, or the paper's pressure-jump closure as a ghost-fluid method (phase-wise constant densities, GFM coefficient on cut faces; `pressure_jump=True`), with the jump either sharp or in the smooth form `p̃ = p − H j_ext` that FCCD's projection can differentiate (`jump_mode="smooth"`); capillary step bound × √(5/12) for the CCD curvature (stable to density ratio 1000 for a static drop); sharp GFM also on mapped grids |
 | Coupled iterations | `CenteredNS(coupled_iterations=K, coupled_rtol=..., coupled_anderson=m)`: outer iterations of viscosity, interfacial acceleration and projection within a step, with change / momentum-residual criteria and Anderson acceleration |
 | Paper's two-phase step | `TwoPhaseIMEX` (`time/two_phase_imex.py`): IMEX-BDF2 + CLS + pressure-jump GFM as one combination of the existing parts (§11b1's seven stages), options for the face operators, convection and the interface-transport velocity |
-| Not yet | GPU lines for the phase-wise CCD projection (`faces="phase-ccd"`, host only); HFE in the paper's iterative form; defect correction of the split PPE; FCCD projection with a density ratio (the smooth form assumes equal densities) |
+| Not yet | VOF with phase-wise CCD faces (step C); the phase-ccd blow-up on moving closed interfaces at a density ratio; GPU lines for the phase-wise CCD projection (`faces="phase-ccd"`, host only); HFE in the paper's iterative form; defect correction of the split PPE; FCCD projection with a density ratio (the smooth form assumes equal densities) |
 
 ## Usage
 
@@ -1050,3 +1050,17 @@ mixes the stage jump accelerations with the implicit weights, which removes the 
 2nd- and 3rd-order tableaux on the capillary wave (ars222: -5.8 / -9.3 / -11.0 % becomes -12.55 / -12.63 / -12.68 %),
 as `force_weights` does for Crank-Nicolson. The paper's own implementation at its current commit stops in the first
 step of each chapter-14 benchmark configuration at one of its built-in admission checks.
+
+Curvature as the accuracy floor and VOF on the IMEX steppers (`docs/notes/63_phase_ccd_factors.md`,
+`docs/notes/64_vof_imex.md`): with the exact curvature the static drop balances to round-off for every face
+operator, so its whole error comes from the curvature. The curvature of the logit phi (`curvature_kw={"source": "phi"}`)
+with `faces="phase-ccd"` removes the N = 128 floor (jump error 4.9e-4 / 4.7e-5 / 1.0e-5 at N = 32 / 64 / 128, 27 times
+below the default), but on moving interfaces it does not help: the oscillating drop's amplitude still grows with fd2,
+and phase-ccd blows up on the water-air drop whatever the curvature, step, tolerance or transport (stable at density
+ratio 1 and 10). `TwoPhaseIMEX(interface="vof" | "vof-gfm")` runs Basilisk's VOF (PLIC transport, height-function
+curvature) on the IMEX steppers, with tension.h's CSF or with the sharp ghost-fluid jump; both keep the mass to
+round-off and are stable at density ratio 1000, and their static-drop jump error (1 % at N = 32) is set by the heights'
+curvature, not by how the force enters. CCD's viscous operator on the VOF's discontinuous viscosity grows parasitic
+currents at N = 64 (a halved step does not help), so the VOF interfaces default to the fd2 viscous operator; with it,
+VOF on SBDF2 + ab2 matches Basilisk's VOF on the paper's capillary wave and drop (frequency errors -1.33 % / -1.04 % at
+N = 64, three times smaller than the CLS's), while the ghost-fluid variant is less accurate on moving interfaces.
