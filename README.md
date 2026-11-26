@@ -1088,3 +1088,10 @@ without them (`phase_ccd_taylor=False`, the VOF's default) VOF-GFM with phase-cc
 combination so far (frequency errors -0.48 % on the capillary wave and -0.04 % on the drop at N = 64), at four
 times the static drop's jump error. The phase-ccd blow-up of the water-air drop also stops when the cell-centred
 correction takes the mean coefficient on the cut faces (`cell_coefficient="cut"`); the CLS keeps its defaults.
+
+The CLS's cell density in the viscous solve (`docs/notes/68_cls_cell_density.md`): the oscillating drop's damping
+of about four times the 2-D viscous mode came from the implicit viscous solve dividing by the band's diffuse
+density rho(psi). `cell_density="sharp"` (rho1 or rho2 by the side of psi = 1/2; the face viscosity and CCD's
+viscous operator unchanged) brings the drop's damping to 0.84 times the mode's and the frequency errors of the
+capillary wave and the drop to the VOF's level (-1.26 % and -1.38 % at N = 64, against -4.22 % and -3.38 %). The
+default stays `"diffuse"` for now.

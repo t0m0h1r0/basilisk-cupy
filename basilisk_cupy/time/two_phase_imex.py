@@ -80,7 +80,7 @@ def _convection(name: str):
 
 def _attach_two_phase(ns, phi0, *, periodic, faces, rho1, rho2, mu1, mu2, sigma, gravity, eps, reinit_every,
                       reinit_method, curvature_kw, jump_mode, capillary_dt_factor, cls_divergence=None,
-                      jump_interp=None, cell_coefficient=None) -> None:
+                      jump_interp=None, cell_coefficient=None, cell_density="diffuse") -> None:
     """CLS (FCCD face values of order 6, corrected divergence) and TwoPhaseCLS with the GFM pressure jump."""
     grid = ns.grid
     bc = BoundaryConditions()
@@ -95,7 +95,7 @@ def _attach_two_phase(ns, phi0, *, periodic, faces, rho1, rho2, mu1, mu2, sigma,
                         jump_mode=jump_mode, reinit_every=reinit_every, reinit_method=reinit_method,
                         curvature_kw=curvature_kw, capillary_dt_factor=capillary_dt_factor,
                         jump_interp=jump_interp or ("hermite" if faces == "phase-ccd" else "linear"),
-                        cell_coefficient=cell_coefficient or "gfm")
+                        cell_coefficient=cell_coefficient or "gfm", cell_density=cell_density)
     if faces == "phase-ccd":
         # the cut faces move with the interface: refresh the operator once the properties are set
         ns.on("properties", lambda _ns: _ns.ops.update(_ns.tp, _ns.alpha), after=True)
@@ -203,7 +203,7 @@ class TwoPhaseIMEX(_TwoPhaseMixin, IMEXMultistepNS):
                  psi_integrator: str = "ssprk3", scheme="sbdf2", cls_divergence: str | None = None,
                  jump_interp: str | None = None, interface: str = "cls", vof_crossing: str = "sum",
                  cell_coefficient: str | None = None, vof_refine: int = 1, vof_curvature: str = "basilisk",
-                 phase_ccd_taylor: bool | None = None, **kw) -> None:
+                 phase_ccd_taylor: bool | None = None, cell_density: str = "diffuse", **kw) -> None:
         """``phi0``: cell-centred signed distance, positive in phase 1 (``psi = 1``). ``gravity``: ``(G, Z)`` of
         the reduced gravity (``G`` the acceleration vector). Walls on the non-periodic sides (``uf`` normal
         zero there). ``scheme``: the momentum's multistep IMEX scheme (:class:`~.schemes.MultistepScheme`,
@@ -230,7 +230,8 @@ class TwoPhaseIMEX(_TwoPhaseMixin, IMEXMultistepNS):
         whose fd2 divergence vanishes, so the transport velocity is projected once more with fd2's GFM operator,
         docs/notes/67) and default to the fd2 viscous operator; ``eps``,
         ``phase_ccd_taylor``: the cut faces' Taylor terms of ``faces="phase-ccd"`` (default: with the CLS, without
-        for the VOF, docs/notes/67);
+        for the VOF, docs/notes/67); ``cell_density``: the CLS's cell density of the implicit viscous solve
+        (``"diffuse"`` or ``"sharp"``, docs/notes/68);
         the reinitialisation and the curvature options are the CLS's."""
         if transport == "projected":
             transport = "frozen"
@@ -266,7 +267,8 @@ class TwoPhaseIMEX(_TwoPhaseMixin, IMEXMultistepNS):
                               sigma=sigma, gravity=gravity, eps=eps, reinit_every=reinit_every,
                               reinit_method=reinit_method, curvature_kw=curvature_kw, jump_mode=jump_mode,
                               capillary_dt_factor=capillary_dt_factor, cls_divergence=cls_divergence,
-                              jump_interp=jump_interp, cell_coefficient=cell_coefficient)
+                              jump_interp=jump_interp, cell_coefficient=cell_coefficient,
+                              cell_density=cell_density)
             self.cls.integrator = psi_integrator
         self.faces, self.convection_name = faces, convection
         self.transport, self.psi_integrator = transport, psi_integrator

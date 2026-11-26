@@ -108,3 +108,22 @@ def test_vof_phase_ccd_transport_velocity():
     raw = float(np.abs(np.asarray(FD2FaceComplex().div_f(ns.uf))).max())
     assert raw > 1e-6                    # the momentum's u_f: fd2 divergence left by the phase-ccd projection
     assert seen and max(seen) < 1e-3 * raw  # the transport velocity's
+
+
+def test_cls_cell_density():
+    """cell_density="sharp": the implicit viscous solve divides by rho1 / rho2 by the side of psi = 1/2
+    (docs/notes/68); the default keeps two-phase.h's rho(psi)."""
+    grid = CartesianGrid((16, 16), origin=(-0.5, -0.5))
+    x, y = grid.meshgrid()
+    phi = 0.25 - np.hypot(x, y)
+    with pytest.raises(ValueError):
+        TwoPhaseIMEX(grid, phi, rho2=0.1, cell_density="harmonic")
+    for density in ("diffuse", "sharp"):
+        ns = TwoPhaseIMEX(grid, phi, rho1=1.0, rho2=0.1, mu1=0.1, mu2=0.1, sigma=1.0, cell_density=density)
+        ns.start()
+        rho = np.asarray(ns.rho)
+        values = set(np.round(np.unique(rho), 12))
+        if density == "sharp":
+            assert values == {0.1, 1.0}
+        else:
+            assert len(values) > 2  # the band's intermediate densities
