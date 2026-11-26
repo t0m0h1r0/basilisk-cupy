@@ -1164,3 +1164,11 @@ is fourth order at all times, conservative to round-off for a steady mass flux, 
 varies (the discrete continuity of the reconstructed density does not hold exactly). Moving the density in point
 space with the same skew operator (rho*_t = -D (rho* U*)) makes it fourth order with mass, momentum and E* conserved
 exactly in the semi-discrete form; the cell-average mass is then R^-1 rho*, not a geometric VOF update.
+
+Geometry-consistent Galerkin transport (`docs/notes/80_galerkin_transport.md`, the user's design): with a
+reconstruction basis that reproduces constants and the mass-weighted cell averages, the Gram matrix
+G = int rho phi_i phi_j and the mixed matrix C = int rho^n phi_i^{n+1}(Phi(x)) phi_j^n(x), the step
+G^{n+1} u^{n+1} = C u^n carries a discontinuous density (ratio 1000, exact interface, 1-D) at fourth order with a quartic
+local reconstruction, keeps a free stream and the total momentum to round-off, never increases the reconstructed
+kinetic energy, and its update decays exponentially with the cell distance. A velocity whose gradient jumps at the
+interface drops it to first order.
