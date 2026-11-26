@@ -1127,3 +1127,11 @@ interfacial cells in the CCD runs: with `conserving_ccd_cmin=0.99` the error ret
 but the capillary-wave damping gain reported in note 72 (1.12 -> 1.06 times) disappears with it. The CCD gradient is
 not adopted (default unchanged); the velocity error in these tests is set by spurious currents, not by the momentum
 advection.
+
+Spurious currents of a moving interface (`docs/notes/76_moving_spurious.md`): for a drop at rest the curvature and the
+spurious velocity converge (heights: second order; the CCD column curvature 5 times more accurate at N = 128), but for
+the same drop carried by a uniform flow the curvature error stalls at about 2% and the velocity error at about 2e-3.
+Moving the VOF field alone (no flow solve) reproduces it: the split PLIC transport leaves a grid-scale ruggedness that
+the second derivative turns into an O(1) curvature error; the CCD curvature picks it up most (6% at N = 128). An
+implicit curvature filter `ccd_curvature(filter_alpha=...)` reduces the error but does not restore convergence. On
+the CLS side, one xi-SDF re-initialisation of the exact profile spoils psi's curvature by 60-270%.

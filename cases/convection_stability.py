@@ -96,10 +96,14 @@ def shear(variant: str, n: int, ratio: float, t_end: float = 2.0, delta: float =
             "series": series}
 
 
-def translate(variant: str, n: int, ratio: float, t_end: float = 1.0, sigma: float = 0.01, mu: float = 1e-4):
-    """A drop (R = 0.15, density 1, the outer fluid 1/ratio) carried with the uniform velocity (1, 0) across the
-    periodic [0, 1]^2 for one period: exactly a translation, so the velocity error max|u - (1, 0)| and the shape error
-    |f - f0| after t = 1 measure the momentum advection (Galilean invariance)."""
+def translate(variant: str, n: int, ratio: float, t_end: float = 1.0, sigma: float = 0.01, mu: float = 1e-4,
+              speed: float = 1.0, kappa_every: int = 0):
+    """A drop (R = 0.15, density 1, the outer fluid 1/ratio) carried with the uniform velocity (``speed``, 0) across
+    the periodic [0, 1]^2 for one period: exactly a translation, so the velocity error max|u - (speed, 0)| and the
+    shape error |f - f0| after t = 1 measure the momentum advection (Galilean invariance); ``speed = 0``: the same drop
+    at rest (the static spurious currents). Variant suffix "+kccd": ``curvature_method="ccd"``. ``kappa_every``: every
+    so many steps, the relative curvature error |kappa R| - 1 in the interfacial cells (max and RMS, means over the
+    samples in ``kappa_max`` / ``kappa_rms``)."""
     import warnings
 
     warnings.filterwarnings("ignore")
@@ -121,22 +125,35 @@ def translate(variant: str, n: int, ratio: float, t_end: float = 1.0, sigma: flo
             bc.set((ax, side), Periodic())
     f0 = fraction(grid, disc, refine=8)
     f = CellField.from_interior(grid, f0, bc)
-    tp = TwoPhase(ns, f, rho1=1.0, rho2=1.0 / ratio, mu1=mu, mu2=mu, **conserving_options(variant))
-    tp.add_surface_tension(sigma)
-    ns.u[0].interior = 1.0 + 0.0 * ns.u[0].interior
+    base, _, kmethod = variant.partition("+")
+    tp = TwoPhase(ns, f, rho1=1.0, rho2=1.0 / ratio, mu1=mu, mu2=mu, **conserving_options(base))
+    tp.add_surface_tension(sigma, curvature_method="ccd" if kmethod == "kccd" else "basilisk")
+    ns.u[0].interior = speed + 0.0 * ns.u[0].interior
     ns.start(events=[t_end])
     failed = False
     errs = []  # max|u - U| after every step (the spurious currents fluctuate: the final value alone is noisy)
+    kmax, krms = [], []
+    from basilisk_cupy.interface.heights import NODATA
+
     while ns.clock.t < t_end - 1e-12:
         ns.step()
         if not max(float(np.abs(to_numpy(c.interior)).max()) for c in ns.u) < 10.0:
             failed = True
             break
-        errs.append(max(float(np.abs(to_numpy(ns.u[0].interior) - 1.0).max()),
+        errs.append(max(float(np.abs(to_numpy(ns.u[0].interior) - speed).max()),
                         float(np.abs(to_numpy(ns.u[1].interior)).max())))
+        if kappa_every and ns.clock.i % kappa_every == 0:
+            phi = to_numpy(tp.potentials[0](tp))
+            F = to_numpy(f.interior)
+            sel = (phi != NODATA) & (F > 1e-6) & (F < 1 - 1e-6)
+            e = np.abs(phi[sel]) / sigma * 0.15 - 1.0
+            kmax.append(float(np.abs(e).max()))
+            krms.append(float(np.sqrt(np.mean(e ** 2))))
     du = errs[-1] if errs else math.nan
     return {"variant": variant, "n": n, "ratio": ratio, "failed": failed, "du": du,
             "du_max": max(errs, default=math.nan), "du_mean": float(np.mean(errs)) if errs else math.nan,
+            "kappa_max": float(np.mean(kmax)) if kmax else math.nan,
+            "kappa_rms": float(np.mean(krms)) if krms else math.nan,
             "shape": float(np.abs(to_numpy(f.interior) - to_numpy(f0)).sum()) / n / n, "steps": ns.clock.i}
 
 
