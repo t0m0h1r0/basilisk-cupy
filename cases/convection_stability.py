@@ -22,6 +22,18 @@ import math
 RHO1, RHO2, MU = 1.225, 0.1694, 0.00313
 
 
+def conserving_options(variant: str) -> dict:
+    """TwoPhase's options from a variant name: "conserving" (conserving.h), then "-ccd" / "-ccd2" (the gradient of the
+    momentum concentrations) and "-c<NN>" (``conserving_ccd_cmin = NN/100``, e.g. "-c99")."""
+    import re
+
+    m = re.search(r"-c(\d\d)$", variant)
+    v = variant[: m.start()] if m else variant
+    grad = "ccd2" if v.endswith("-ccd2") else "ccd" if v.endswith("-ccd") else None
+    return dict(conserving="conserving" in v, conserving_gradient=grad,
+                conserving_ccd_cmin=int(m.group(1)) / 100 if m else None)
+
+
 def shear(variant: str, n: int, ratio: float, t_end: float = 2.0, delta: float = 1.0 / 30):
     """Two-phase double shear layer without forcing (periodic [0, 1]^2, inviscid, no gravity or tension): a heavy band
     0.25 < y < 0.75 (density ``ratio`` times the light fluid's) carried by u = tanh((y - 1/4)/delta) below y = 1/2 and
@@ -50,8 +62,7 @@ def shear(variant: str, n: int, ratio: float, t_end: float = 2.0, delta: float =
             for side in (0, 1):
                 bc.set((ax, side), Periodic())
         f = CellField.from_interior(grid, fraction(grid, band), bc)
-        tp = TwoPhase(ns, f, rho1=rho1, rho2=rho2, conserving="conserving" in variant,
-                      conserving_gradient="ccd" if variant.endswith("-ccd") else None)
+        tp = TwoPhase(ns, f, rho1=rho1, rho2=rho2, **conserving_options(variant))
         rho = lambda: tp.rho(f.interior)  # noqa: E731
     else:
         from basilisk_cupy.time.two_phase_imex import TwoPhaseIMEX
@@ -85,6 +96,50 @@ def shear(variant: str, n: int, ratio: float, t_end: float = 2.0, delta: float =
             "series": series}
 
 
+def translate(variant: str, n: int, ratio: float, t_end: float = 1.0, sigma: float = 0.01, mu: float = 1e-4):
+    """A drop (R = 0.15, density 1, the outer fluid 1/ratio) carried with the uniform velocity (1, 0) across the
+    periodic [0, 1]^2 for one period: exactly a translation, so the velocity error max|u - (1, 0)| and the shape error
+    |f - f0| after t = 1 measure the momentum advection (Galilean invariance)."""
+    import warnings
+
+    warnings.filterwarnings("ignore")
+    import numpy as np
+
+    from basilisk_cupy import BoundaryConditions, CartesianGrid, CellField
+    from basilisk_cupy.backend import to_numpy
+    from basilisk_cupy.boundary import Periodic
+    from basilisk_cupy.interface.fractions import fraction
+    from basilisk_cupy.interface.two_phase import TwoPhase
+    from basilisk_cupy.time.basilisk_centered import CenteredNS
+
+    grid = CartesianGrid((n, n))
+    disc = lambda x, y: 0.15 ** 2 - (x - 0.5) ** 2 - (y - 0.5) ** 2  # noqa: E731
+    ns = CenteredNS(grid, periodic=(0, 1), tolerance=1e-8)
+    bc = BoundaryConditions()
+    for ax in range(2):
+        for side in (0, 1):
+            bc.set((ax, side), Periodic())
+    f0 = fraction(grid, disc, refine=8)
+    f = CellField.from_interior(grid, f0, bc)
+    tp = TwoPhase(ns, f, rho1=1.0, rho2=1.0 / ratio, mu1=mu, mu2=mu, **conserving_options(variant))
+    tp.add_surface_tension(sigma)
+    ns.u[0].interior = 1.0 + 0.0 * ns.u[0].interior
+    ns.start(events=[t_end])
+    failed = False
+    errs = []  # max|u - U| after every step (the spurious currents fluctuate: the final value alone is noisy)
+    while ns.clock.t < t_end - 1e-12:
+        ns.step()
+        if not max(float(np.abs(to_numpy(c.interior)).max()) for c in ns.u) < 10.0:
+            failed = True
+            break
+        errs.append(max(float(np.abs(to_numpy(ns.u[0].interior) - 1.0).max()),
+                        float(np.abs(to_numpy(ns.u[1].interior)).max())))
+    du = errs[-1] if errs else math.nan
+    return {"variant": variant, "n": n, "ratio": ratio, "failed": failed, "du": du,
+            "du_max": max(errs, default=math.nan), "du_mean": float(np.mean(errs)) if errs else math.nan,
+            "shape": float(np.abs(to_numpy(f.interior) - to_numpy(f0)).sum()) / n / n, "steps": ns.clock.i}
+
+
 def run(variant: str, n: int, mu: float, t_end: float = 1.0):
     import warnings
 
@@ -104,8 +159,7 @@ def run(variant: str, n: int, mu: float, t_end: float = 1.0):
 
         ns = CenteredNS(grid, uf_normal={w: 0.0 for w in ("left", "right", "bottom", "top")}, tolerance=1e-6, DT=5e-3)
         f = CellField.from_interior(grid, fraction(grid, level), BoundaryConditions())
-        tp = TwoPhase(ns, f, rho1=RHO1, rho2=RHO2, mu1=mu, mu2=mu, conserving="conserving" in variant,
-                      conserving_gradient="ccd" if variant.endswith("-ccd") else None)
+        tp = TwoPhase(ns, f, rho1=RHO1, rho2=RHO2, mu1=mu, mu2=mu, **conserving_options(variant))
         tp.add_reduced_gravity(*G)
         rho = lambda: tp.rho(f.interior)  # noqa: E731
     else:
@@ -142,11 +196,23 @@ def main() -> None:
     ap.add_argument("--out", default=None)
     ap.add_argument("--n", type=int, nargs="*", default=[64, 128])
     ap.add_argument("--shear", action="store_true", help="the forcing-free two-phase double shear layer")
+    ap.add_argument("--translate", action="store_true", help="a drop carried by a uniform flow (Galilean invariance)")
     ap.add_argument("--variants", nargs="*", default=None,
                     help="e.g. imex-central@sbdf3 imex-uccd6@cnlf (the multistep scheme after @)")
     args = ap.parse_args()
     from cases.parallel import pmap
 
+    if args.translate:
+        variants = args.variants or ("centered-vof", "centered-conserving", "centered-conserving-ccd",
+                                     "centered-conserving-ccd2", "centered-conserving-ccd-c99",
+                                     "centered-conserving-ccd2-c99")
+        items = [dict(variant=v, n=n, ratio=r) for n in (128, 64, 32) for r in (10.0, 1000.0) for v in variants]
+        pmap(translate, items, args.jobs, on_result=lambda k, it, r: print(
+            f"translate {it['variant']:26s} N {it['n']:3d} ratio {it['ratio']:6g}: "
+            + ("FAILED " if r["failed"] else "") + f"max|u - U| end {r['du']:.3e} over t {r['du_max']:.3e}"
+            f" mean {r['du_mean']:.3e} shape L1 {r['shape']:.3e}"
+            f" ({r['steps']} steps)", flush=True))
+        return
     if args.shear:
         variants = args.variants or ("centered-vof", "centered-conserving", "imex-central", "imex-uccd6", "imex-fuccd")
         items = [dict(variant=v, n=n, ratio=r) for n in args.n for r in (10.0, 100.0) for v in variants]

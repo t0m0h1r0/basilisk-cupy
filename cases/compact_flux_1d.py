@@ -8,7 +8,7 @@ the stencil mirrored for u_f < 0). Compared with BCG (r = q + (1 - C)/2 * centre
 the convergence of a sine wave advected one period at constant velocity, the same with a variable velocity
 u(x) = 1 + 0.5 sin(2 pi x) (against a fine-grid solution), and the overshoot of a square wave.
 
-    python -m cases.compact_flux_1d
+    python -m cases.compact_flux_1d [--fct]    # --fct: Zalesak's flux correction (sine order, square wave bounds)
 """
 
 from __future__ import annotations
@@ -118,5 +118,58 @@ def main() -> None:
         print(f"   {name:24s} min {q.min():+.4f} max {q.max():.4f}")
 
 
+
+
+def fct_advect(high, q0, velocity, n, t_end, cfl):
+    """Zalesak's flux-corrected transport: F = F_L + theta (F_H - F_L), F_L first-order upwind, theta per face the
+    largest that creates no new extremum beyond the upwind solution's local bounds (docs/notes/74, P5)."""
+    h = 1.0 / n
+    uf = velocity(np.arange(n) * h)
+    dt = cfl * h / np.abs(uf).max()
+    steps = int(math.ceil(t_end / dt - 1e-9))
+    dt = t_end / steps
+    lam = dt / h
+    q = q0.copy()
+    for _ in range(steps):
+        FL = uf * upwind_faces(q, uf, dt, h)
+        FH = uf * high(q, uf, dt, h)
+        qtd = q - lam * (np.roll(FL, -1) - FL)          # the monotone low-order solution
+        A = FH - FL                                      # antidiffusive flux on face k (between k - 1 and k)
+        qmax = np.maximum.reduce([np.roll(q, 1), q, np.roll(q, -1), np.roll(qtd, 1), qtd, np.roll(qtd, -1)])
+        qmin = np.minimum.reduce([np.roll(q, 1), q, np.roll(q, -1), np.roll(qtd, 1), qtd, np.roll(qtd, -1)])
+        Ain = np.maximum(A, 0.0) - np.minimum(np.roll(A, -1), 0.0)   # into cell k: +A_k, -A_{k+1}
+        Aout = np.maximum(np.roll(A, -1), 0.0) - np.minimum(A, 0.0)
+        Pp, Pm = lam * Ain, lam * Aout
+        Qp, Qm = qmax - qtd, qtd - qmin
+        Rp = np.where(Pp > 0, np.minimum(1.0, Qp / np.where(Pp > 0, Pp, 1.0)), 0.0)
+        Rm = np.where(Pm > 0, np.minimum(1.0, Qm / np.where(Pm > 0, Pm, 1.0)), 0.0)
+        # face k: A > 0 moves into cell k (from k - 1), A < 0 out of cell k into k - 1
+        C = np.where(A >= 0, np.minimum(Rp, np.roll(Rm, 1)), np.minimum(np.roll(Rp, 1), Rm))
+        F = FL + C * A
+        q = q - lam * (np.roll(F, -1) - F)
+    return q
+
+
+def fct_main() -> None:
+    cf = CompactFlux(1.0 / 3.0, (-2, -1, 0, 1, 2))
+    const = lambda x: np.ones_like(x)  # noqa: E731
+    sine = lambda x: np.sin(2 * np.pi * x)  # noqa: E731
+    square = lambda x: ((x > 0.25) & (x < 0.75)).astype(float)  # noqa: E731
+    for name, run in (("compact", lambda q0, n: advect(cf.faces, q0, const, n, 1.0, 0.5)),
+                      ("compact + FCT", lambda q0, n: fct_advect(cf.faces, q0, const, n, 1.0, 0.5)),
+                      ("bcg + FCT", lambda q0, n: fct_advect(bcg_faces, q0, const, n, 1.0, 0.5))):
+        errs = []
+        for n in (16, 32, 64, 128):
+            q0 = cell_average(sine, n)
+            errs.append(float(np.abs(run(q0, n) - q0).max()))
+        orders = [math.log2(errs[k] / errs[k + 1]) for k in range(3)]
+        qs = run(cell_average(square, 128), 128)
+        q0s = cell_average(square, 128)
+        print(f"{name:14s} sine: " + " ".join(f"{e:.2e}" for e in errs) + "  order " + " ".join(f"{o:.2f}" for o in orders)
+              + f" | square N=128: min {qs.min():+.4f} max {qs.max():.4f} L1 {np.abs(qs - q0s).mean():.3e}", flush=True)
+
+
 if __name__ == "__main__":
-    main()
+    import sys
+
+    fct_main() if "--fct" in sys.argv else main()

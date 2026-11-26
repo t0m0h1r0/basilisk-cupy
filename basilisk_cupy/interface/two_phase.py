@@ -56,9 +56,12 @@ class _MomentumField(CellField):
 class TwoPhase:
     def __init__(self, ns, f: CellField, *, rho1: float = 1.0, rho2: float = 1.0, mu1: float = 0.0,
                  mu2: float = 0.0, vof_first: bool = False, filtered: bool = False, conserving: bool = False,
-                 conserving_gradient=None) -> None:
+                 conserving_gradient=None, conserving_ccd_cmin: float | None = None) -> None:
         """``conserving_gradient``: the gradient of the advected momentum concentrations (Basilisk: the velocity's,
-        centred by default); ``"ccd"``: CCD along each phase's runs of cells (docs/notes/72)."""
+        centred by default); ``"ccd"``: CCD along each phase's runs of cells (docs/notes/72); ``"ccd2"``: with the
+        swept mean of the mean-preserving parabola from the same CCD solve (docs/notes/75). ``conserving_ccd_cmin``: the
+        phase fraction from which a cell joins a CCD run (None: vof.h's CMIN = 0.5; 0.99 leaves the interfacial cells to
+        the centred gradient, docs/notes/75)."""
         if f.grid.ndim != 2:
             raise NotImplementedError("two-phase flows are implemented in 2-D")
         self.ns, self.f = ns, f
@@ -69,6 +72,7 @@ class TwoPhase:
         ns.cfl = min(ns.cfl, 0.5)
         self.conserving = conserving
         self.conserving_gradient = conserving_gradient
+        self.conserving_ccd_cmin = conserving_ccd_cmin
         if conserving:
             if vof_first:
                 raise NotImplementedError("conserving.h advects the momentum in the vof event")
@@ -128,7 +132,8 @@ class TwoPhase:
             q1.interior = fc * self.rho1 * u.interior
             q2.interior = (1.0 - fc) * self.rho2 * u.interior
             g = self.conserving_gradient  # u's gradient: centred (Basilisk's default), or "ccd"
-            tracers += [VOFTracer(q1, gradient=g), VOFTracer(q2, inverse=True, gradient=g)]
+            kw = {} if self.conserving_ccd_cmin is None else {"ccd_cmin": float(self.conserving_ccd_cmin)}
+            tracers += [VOFTracer(q1, gradient=g, **kw), VOFTracer(q2, inverse=True, gradient=g, **kw)]
             qs.append((q1, q2))
         saved = self.interface.tracers
         self.interface.tracers = list(saved) + tracers

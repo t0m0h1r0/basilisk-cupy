@@ -77,3 +77,4 @@
 | [72_convection_stability.md](72_convection_stability.md) | 二相流の対流と安定性：外力のない二相のせん断層で、運動量保存形だけが運動エネルギーを増やさない。UCCD6・FUCCD₄ の風上の散逸は中心差分の不安定を遅らせるが密度比 100 で発散、時間積分（SBDF3・CNLF）でも直らない。UCCD6・FUCCD₄ の刻みの上限が SBDF2 に固定されていた不具合を修正。運動量保存形 + CCD の勾配（`conserving_gradient="ccd"`）、CCD-BCG の試作（#82） |
 | [73_verification_spurious.md](73_verification_spurious.md) | 検証の拡充（1）：寄生流の標準の試験 `spurious.c` を一様な格子で C 版と照合、形と曲率の誤差が 3〜4 桁一致（#82） |
 | [74_compact_flux.md](74_compact_flux.md) | BCG 型の流束をコンパクトに：厳密な演算子 R_C(D)、`ccd2` の式の誤り（点の値の展開）を線形安定性で確認、左辺を固定し右辺を CFL 数に依存させるコンパクトな流束（α = 1/3、5 点）は全 CFL 数で安定、一次元の定速移流で 5 次（#82） |
+| [75_conserving_ccd_cmin.md](75_conserving_ccd_cmin.md) | 運動量保存形 + CCD の勾配を並進する液滴で確かめた：格子を細かくすると誤差が増える（N = 128 で中心差分の 3.5〜4 倍）。原因は CCD の区間に入る界面のセル（`conserving_ccd_cmin=0.99` で中心差分並みに戻る）。ただし毛管波の改善も消えるので不採用、ノート72 の候補を取り下げ。放物線の項（`"ccd2"`）も同じ |

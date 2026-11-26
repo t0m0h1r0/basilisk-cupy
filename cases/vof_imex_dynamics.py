@@ -22,13 +22,19 @@ def run(case: str, variant: str, n: int, backend: str = "numpy"):
     from cases.paper_benchmarks import run as bench
 
     variant, *extra = variant.split("+")
+    cmin = None
+    if variant.startswith("centered-conserving-ccd") and variant[-4:-2] == "-c":  # "-c<NN>": conserving_ccd_cmin
+        variant, cmin = variant[:-4], int(variant[-2:]) / 100
     opts = {"centered-vof": dict(method="vof"),
             "centered-conserving": dict(method="vof", conserving=True),
             "centered-conserving-ccd": dict(method="vof", conserving=True, conserving_gradient="ccd"),
+            "centered-conserving-ccd2": dict(method="vof", conserving=True, conserving_gradient="ccd2"),
             "imex-vof": dict(interface="vof"),
             "imex-vof-ab2": dict(interface="vof", transport="ab2"),
             "imex-vof-gfm": dict(interface="vof-gfm", transport="ab2"),
             "imex-vof-gfm-plic": dict(interface="vof-gfm", transport="ab2", vof_crossing="plic")}[variant.removesuffix("-fd2v")]
+    if cmin is not None:
+        opts = dict(opts, conserving_ccd_cmin=cmin)
     if variant.startswith("imex"):  # "-fd2v": the fd2 viscous operator (the VOF default since notes/64), else CCD
         from basilisk_cupy.terms.viscous import CCDViscosity, FD2Viscosity
 
