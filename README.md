@@ -1150,6 +1150,17 @@ square-root-mass weighted time average w and pair momentum fluxes M_ij (w_i + w_
 small 1-D matrices with 1000:1 cell masses conserve momentum, keep a free stream and close the energy balance
 (-1/2 sum |M| lambda |dw|^2) to round-off; the system's symmetric part is positive definite and the mass-weighted
 amplification is at most one. A fourth-order pair structure (4/3, -1/6) keeps these properties and is fourth order in
-space (second order in time), also with a mass flux varying in space and time. But a scheme that conserves the
+space at constant density (second order in time; second order with a varying velocity, corrected in note 79). A
+scheme that conserves the
 cell-average energy E_2 exactly drops to second order on a deform-and-return shear: the exact cell averages' E_2
 changes by O(h^2), while E_4 = E_2 + 1/2 sum m h^2/12 |D qbar|^2 is conserved to O(h^4).
+
+Re-check and reconstruction (`docs/notes/79_energy_transport_recheck.md`): pair4's fourth order with a varying
+velocity was an end-of-period cancellation (second order at intermediate times and in the local residual; pointed
+out by the user). The user's similarity transform R^-1 A R (a skew transport of point values v = R qbar,
+R = I - h^2/24 Delta_h, with point velocities) is fourth order on the deform-and-return shear and conserves
+E_R = 1/2 |R qbar|^2 to round-off; with variable density (rho* = R rhobar, (rho q)* = R (rho q)bar, the split form) it
+is fourth order at all times, conservative to round-off for a steady mass flux, but not exactly when the mass flux
+varies (the discrete continuity of the reconstructed density does not hold exactly). Moving the density in point
+space with the same skew operator (rho*_t = -D (rho* U*)) makes it fourth order with mass, momentum and E* conserved
+exactly in the semi-discrete form; the cell-average mass is then R^-1 rho*, not a geometric VOF update.

@@ -20,6 +20,8 @@ crossing every face is still M_f: 4/3 and -1/6 of a constant flux, the fourth-or
 
     python -m cases.energy_transport [--semi | --shear]    # P0-4a (the space error alone, variable density) /
                                                            # P0-4b (deform and return: the discrete energy)
+    python -m cases.energy_transport --reconstructed       # P0-4b-1: R^-1 A R (the user's similarity transform)
+    python -m cases.energy_transport --reconstructed-semi | --point-space    # P0-4b-2: variable density
 """
 
 from __future__ import annotations
@@ -144,7 +146,7 @@ def _cell_integrals(f, n, t, order: int = 8):
     return sum(0.5 * h * w * f(c + 0.5 * h * a, t) for a, w in zip(xg, wg))
 
 
-def semi_discrete(structure: str, n: int, case: str, t_end: float = 1.0, cfl: float = 0.02):
+def semi_discrete(structure: str, n: int, case: str, t_end: float = 1.0, cfl: float = 0.02, times=None):
     """The pair transport without its time discretisation: d(m q)/dt = -sum_j P_ij, P_ij = M_ij (q_i + q_j)/2 with the
     exact cell masses m(t) and face mass-flux rates M(t) (consistent: dm/dt = -D M exactly), integrated by classical
     RK4 at a tiny step; max error of the mass-weighted cell averages int rho q / int rho at t_end."""
@@ -167,17 +169,160 @@ def semi_discrete(structure: str, n: int, case: str, t_end: float = 1.0, cfl: fl
 
     y = _cell_integrals(lambda x, t: rho(x, t) * q(x, t), n, 0.0)
     steps = int(math.ceil(t_end / (cfl * h)))
+    steps = 4 * int(math.ceil(steps / 4))  # t = 1/4, 1/2, ... on the steps
     dt = t_end / steps
     t = 0.0
-    for _ in range(steps):
+    times = [t_end] if times is None else times
+    out = {}
+    for s in range(steps):
         k1 = rhs(t, y)
         k2 = rhs(t + dt / 2, y + dt / 2 * k1)
         k3 = rhs(t + dt / 2, y + dt / 2 * k2)
         k4 = rhs(t + dt, y + dt * k3)
         y = y + dt / 6 * (k1 + 2 * k2 + 2 * k3 + k4)
-        t += dt
-    exact = _cell_integrals(lambda x, s: rho(x, s) * q(x, s), n, t_end) / mass(t_end)
-    return float(np.abs(y / mass(t_end) - exact).max())
+        t = (s + 1) * dt
+        for tt in times:
+            if abs(t - tt) < 1e-9:
+                exact = _cell_integrals(lambda x, s_: rho(x, s_) * q(x, s_), n, t) / mass(t)
+                out[tt] = float(np.abs(y / mass(t) - exact).max())
+    return out[t_end] if len(times) == 1 else out
+
+
+def reconstructed_semi(n: int, case: str, times=(0.25, 0.5, 1.0), cfl: float = 0.02, D: str = "4"):
+    """P0-4b-2: variable density with the reconstruction of the user's design, rho* = R rhobar, (rho q)* = R (rho q)bar
+    (R = I - delta^2/24, the cell average's inverse to O(h^4)), q* = (rho q)* / rho*, the point values moved by the
+    split (skew-symmetric) form rho* q*_t = -1/2 [F* D q* + D (F* q*) - q* D F*] (F* the point mass flux at the cell
+    centres, D the fourth-order centred difference), rho*_t = R rhobar_t from the exact face fluxes, and
+    (rho q)bar = R^-1 (rho q)*. Semi-discrete, RK4 at a tiny step; max error of qbar_rho at ``times``."""
+    rho, F, q = CASES[case]
+    h = 1.0 / n
+    xf = np.arange(n) * h + h
+    xc = (np.arange(n) + 0.5) * h
+
+    def R(a):
+        return a - (np.roll(a, -1) - 2 * a + np.roll(a, 1)) / 24.0
+
+    k = np.fft.fftfreq(n, d=h) * 2 * np.pi
+    Rsym = 1.0 + np.sin(k * h / 2) ** 2 / 6.0
+
+    def Rinv(a):
+        return np.real(np.fft.ifft(np.fft.fft(a) / Rsym))
+
+    def Dx(a):
+        return (8 * (np.roll(a, -1) - np.roll(a, 1)) - (np.roll(a, -2) - np.roll(a, 2))) / (12 * h)
+
+    def rhs(t, y):  # y = cell integrals of rho q
+        rb = _cell_integrals(rho, n, t) / h
+        Ff = F(xf, t)
+        rbt = (np.roll(Ff, 1) - Ff) / h  # rhobar_t from the exact face fluxes
+        rs, rst = R(rb), R(rbt)
+        qs = R(y / h) / rs
+        Fs = F(xc, t)
+        qst = -0.5 * (Fs * Dx(qs) + Dx(Fs * qs) - qs * Dx(Fs)) / rs
+        return h * Rinv(rst * qs + rs * qst)
+
+    def invariants(t, y):  # total momentum and E* = 1/2 sum h rho* q*^2
+        rs = R(_cell_integrals(rho, n, t) / h)
+        qs = R(y / h) / rs
+        return float(np.sum(y)), 0.5 * h * float(np.sum(rs * qs ** 2))
+
+    y = _cell_integrals(lambda x, t: rho(x, t) * q(x, t), n, 0.0)
+    P0, E0 = invariants(0.0, y)
+    steps = int(math.ceil(max(times) / (cfl * h)))
+    steps = 4 * int(math.ceil(steps / 4))
+    dt = max(times) / steps
+    t, out = 0.0, {}
+    for s_ in range(steps):
+        k1 = rhs(t, y)
+        k2 = rhs(t + dt / 2, y + dt / 2 * k1)
+        k3 = rhs(t + dt / 2, y + dt / 2 * k2)
+        k4 = rhs(t + dt, y + dt * k3)
+        y = y + dt / 6 * (k1 + 2 * k2 + 2 * k3 + k4)
+        t = (s_ + 1) * dt
+        for tt in times:
+            if abs(t - tt) < 1e-9:
+                m = _cell_integrals(rho, n, t)
+                exact = _cell_integrals(lambda x, s2: rho(x, s2) * q(x, s2), n, t) / m
+                out[tt] = float(np.abs(y / m - exact).max())
+                P1, E1 = invariants(t, y)
+                out[("momentum", tt)] = abs(P1 - P0) / (abs(P0) + float(np.sum(np.abs(y))))
+                out[("energy", tt)] = abs(E1 / E0 - 1)
+    return out
+
+
+def point_space_semi(n: int, case: str, times=(0.25, 0.5, 1.0), cfl: float = 0.02):
+    """P0-4b-2, the discrete continuity by construction: rho* and (rho q)* evolve in point space, rho*_t = -D F*
+    (F* = rho* U*, U* the point velocity at the cell centres), q* = (rho q)* / rho* by the split form; the cell
+    averages are R^-1 of the point values (R preserves the sums: total mass and momentum are conserved, and
+    E* = 1/2 h sum rho* q*^2 exactly in the semi-discrete form). The cell-average mass is then R^-1 rho*, not a
+    geometric (VOF) update. Max error of qbar_rho at ``times`` and the drifts."""
+    rho, F, q = CASES[case]
+    h = 1.0 / n
+    xc = (np.arange(n) + 0.5) * h
+
+    def R(a):
+        return a - (np.roll(a, -1) - 2 * a + np.roll(a, 1)) / 24.0
+
+    k = np.fft.fftfreq(n, d=h) * 2 * np.pi
+    Rsym = 1.0 + np.sin(k * h / 2) ** 2 / 6.0
+
+    def Rinv(a):
+        return np.real(np.fft.ifft(np.fft.fft(a) / Rsym))
+
+    def Dx(a):
+        return (8 * (np.roll(a, -1) - np.roll(a, 1)) - (np.roll(a, -2) - np.roll(a, 2))) / (12 * h)
+
+    def rhs(t, z):
+        rs, ps = z
+        Fs = rs * (F(xc, t) / rho(xc, t))  # rho* times the point velocity
+        qs = ps / rs
+        rst = -Dx(Fs)
+        qst = -0.5 * (Fs * Dx(qs) + Dx(Fs * qs) - qs * Dx(Fs)) / rs
+        return np.array([rst, rst * qs + rs * qst])
+
+    z = np.array([R(_cell_integrals(rho, n, 0.0) / h), R(_cell_integrals(lambda x, t: rho(x, t) * q(x, t), n, 0.0) / h)])
+    M0, P0, E0 = np.sum(z[0]), np.sum(z[1]), 0.5 * np.sum(z[1] ** 2 / z[0])
+    steps = 4 * int(math.ceil(math.ceil(max(times) / (cfl * h)) / 4))
+    dt = max(times) / steps
+    t, out = 0.0, {}
+    for s_ in range(steps):
+        k1 = rhs(t, z)
+        k2 = rhs(t + dt / 2, z + dt / 2 * k1)
+        k3 = rhs(t + dt / 2, z + dt / 2 * k2)
+        k4 = rhs(t + dt, z + dt * k3)
+        z = z + dt / 6 * (k1 + 2 * k2 + 2 * k3 + k4)
+        t = (s_ + 1) * dt
+        for tt in times:
+            if abs(t - tt) < 1e-9:
+                m = _cell_integrals(rho, n, t)
+                exact = _cell_integrals(lambda x, s2: rho(x, s2) * q(x, s2), n, t) / m
+                out[tt] = float(np.abs(Rinv(z[1]) / Rinv(z[0]) - exact).max())
+                out[("mass", tt)] = abs(np.sum(z[0]) / M0 - 1)
+                out[("momentum", tt)] = abs(np.sum(z[1]) - P0) / np.sum(np.abs(z[1]))
+                out[("energy", tt)] = abs(0.5 * np.sum(z[1] ** 2 / z[0]) / E0 - 1)
+    return out
+
+
+def local_residual(structure: str, n: int, case: str, t: float = 0.3):
+    """The exact solution put into the semi-discrete operator: max |d(m qbar)/dt (exact, from the exact face fluxes)
+    + sum_j P_ij(qbar exact)| / m, i.e. the truncation error of the operator at time t."""
+    rho, F, q = CASES[case]
+    h = 1.0 / n
+    xf = np.arange(n) * h + h
+
+    def y(s):
+        return _cell_integrals(lambda x, s_: rho(x, s_) * q(x, s_), n, s)
+
+    m = _cell_integrals(rho, n, t)
+    qq = y(t) / m
+    op = np.zeros(n)
+    for i, j, Mij in pairs(F(xf, t), structure):
+        P = Mij * 0.5 * (qq[i] + qq[j])
+        op[i] -= P
+        op[j] += P
+    flux = F(xf, t) * q(xf, t)  # the exact flux through face i + 1/2: d(m qbar)_i/dt = flux_{i-1/2} - flux_{i+1/2}
+    dydt = np.roll(flux, 1) - flux
+    return float(np.abs((dydt - op) / m).max())
 
 
 def main() -> None:
@@ -253,13 +398,70 @@ def shear_return(structure: str, n: int, A: float = 0.25, cfl: float = 0.02, sam
 
 
 def main_semi() -> None:
-    print("-- P0-4a: the space error alone (semi-discrete, RK4 at CFL 0.02), t = 1, max error")
+    ns = (16, 32, 64, 128, 256)
+    print("-- P0-4a: the space error alone (semi-discrete, RK4 at CFL 0.02): max error at t = 1/4, 1/2, 1 and the local "
+          "residual of the exact solution (t = 0.3); orders between the last two N")
     for case in CASES:
         for st in ("pair2", "pair4"):
-            errs = [semi_discrete(st, n, case) for n in (16, 32, 64, 128)]
-            orders = [math.log2(errs[k] / errs[k + 1]) for k in range(3)]
-            print(f"   {case:24s} {st}: " + " ".join(f"{e:.2e}" for e in errs) + "  order "
-                  + " ".join(f"{o:.2f}" for o in orders), flush=True)
+            rs = [semi_discrete(st, n, case, times=[0.25, 0.5, 1.0]) for n in ns]
+            res = [local_residual(st, n, case) for n in ns]
+            cols = []
+            for tt in (0.25, 0.5, 1.0):
+                e = [r[tt] for r in rs]
+                cols.append(f"t={tt:g}: " + " ".join(f"{v:.2e}" for v in e) + f" (order {math.log2(e[-2] / e[-1]):.2f})")
+            cols.append("residual: " + " ".join(f"{v:.2e}" for v in res) + f" (order {math.log2(res[-2] / res[-1]):.2f})")
+            print(f"   {case:24s} {st}:\n      " + "\n      ".join(cols), flush=True)
+
+
+def _exact_cell_averages(n: int, t: float, A: float = 0.25):
+    h = 1.0 / n
+    xg, wg = np.polynomial.legendre.leggauss(8)
+    c = (np.arange(n) + 0.5) * h
+    a = A * math.sin(math.pi * t) ** 2
+    Q = np.zeros((n, n))
+    for p_, wp in zip(xg, wg):
+        for q_, wq in zip(xg, wg):
+            X, Y = np.meshgrid(c + 0.5 * h * p_, c + 0.5 * h * q_, indexing="ij")
+            Q += 0.25 * wp * wq * np.sin(2 * np.pi * (X - a * np.sin(2 * np.pi * Y)))
+    return Q
+
+
+def reconstructed_shear(variant: str, n: int, t: float = 0.5, A: float = 0.25):
+    """P0-4b-1 (the user's similarity transform): the deform-and-return shear moved exactly in time (Fourier in x:
+    pair4's symbol kappa(k) = (8 sin kh - sin 2kh) / 6h, the rows uncoupled in the transported variable).
+
+    "A": pair4 on the cell averages with each row's mean velocity (the scheme of ``shear_return``);
+    "B": pair4 on v = R qbar (R = I - h^2/24 Delta_h, the 5-point Laplacian), the rows' mean velocities;
+    "C": pair4 on v = R qbar with the point velocity a'(t) sin 2 pi y_j of the row centres.
+    The transport of v is skew, so E_R = 1/2 h^2 |R qbar|^2 is conserved exactly. Returns the max error of qbar
+    against the exact cell averages at t and |E_R(t)/E_R(0) - 1|."""
+    h = 1.0 / n
+    xg, wg = np.polynomial.legendre.leggauss(8)
+    c = (np.arange(n) + 0.5) * h
+    smean = sum(0.5 * w * np.sin(2 * np.pi * (c + 0.5 * h * b)) for b, w in zip(xg, wg))
+    s_ = np.sin(2 * np.pi * c) if variant == "C" else smean
+    a = A * math.sin(math.pi * t) ** 2
+    k = np.fft.fftfreq(n, d=h) * 2 * np.pi
+    kappa = (8 * np.sin(k * h) - np.sin(2 * k * h)) / (6 * h)
+    Q0 = _exact_cell_averages(n, 0.0, A)
+    if variant == "A":
+        Qh = np.fft.fft(Q0, axis=0) * np.exp(-1j * kappa[:, None] * a * s_[None, :])
+        Q = np.real(np.fft.ifft(Qh, axis=0))
+        return float(np.abs(Q - _exact_cell_averages(n, t, A)).max()), 0.0
+    # R = I - h^2/24 (Delta_x + Delta_y): per x-mode, I + sin^2(kh/2)/6 - (h^2/24) Delta_y (rows, periodic)
+    lap_y = (np.roll(np.eye(n), 1, axis=1) + np.roll(np.eye(n), -1, axis=1) - 2 * np.eye(n))
+    Vh = np.zeros((n, n), dtype=complex)
+    Q0h = np.fft.fft(Q0, axis=0)
+    Rk = []
+    for m in range(n):
+        Rm = (1.0 + np.sin(k[m] * h / 2) ** 2 / 6.0) * np.eye(n) - lap_y / 24.0
+        Rk.append(Rm)
+        Vh[m] = Rm @ Q0h[m]
+    E0 = np.sum(np.abs(Vh) ** 2)
+    Vh = Vh * np.exp(-1j * kappa[:, None] * a * s_[None, :])
+    Qh = np.array([np.linalg.solve(Rk[m], Vh[m]) for m in range(n)])
+    Q = np.real(np.fft.ifft(Qh, axis=0))
+    return float(np.abs(Q - _exact_cell_averages(n, t, A)).max()), float(abs(np.sum(np.abs(Vh) ** 2) / E0 - 1))
 
 
 def exact_energies(n: int, t: float, A: float = 0.25):
@@ -279,6 +481,45 @@ def exact_energies(n: int, t: float, A: float = 0.25):
     dx, dy = np.real(np.fft.ifft2(1j * k[:, None] * F)), np.real(np.fft.ifft2(1j * k[None, :] * F))
     E2 = 0.5 * h * h * np.sum(Q ** 2)
     return E2, E2 + 0.5 * h ** 4 / 12.0 * np.sum(dx ** 2 + dy ** 2)
+
+
+def main_reconstructed_semi() -> None:
+    ns = (16, 32, 64, 128, 256)
+    print("-- P0-4b-2: variable density, R reconstruction + split form, max error at t = 1/4, 1/2, 1")
+    for case in CASES:
+        rs = [reconstructed_semi(n, case) for n in ns]
+        cols = []
+        for tt in (0.25, 0.5, 1.0):
+            e = [r[tt] for r in rs]
+            cols.append(f"t={tt:g}: " + " ".join(f"{v:.2e}" for v in e) + f" (order {math.log2(e[-2] / e[-1]):.2f})")
+        cols.append("drift at t = 1 (momentum / E*): " + " ".join(
+            f"{r[('momentum', 1.0)]:.1e}/{r[('energy', 1.0)]:.1e}" for r in rs))
+        print(f"   {case:24s}\n      " + "\n      ".join(cols), flush=True)
+
+
+def main_point_space() -> None:
+    ns = (16, 32, 64, 128)
+    print("-- P0-4b-2: density and momentum in point space (rho*_t = -D F*), max error at t = 1/4, 1/2, 1 and drifts")
+    for case in CASES:
+        rs = [point_space_semi(n, case) for n in ns]
+        cols = []
+        for tt in (0.25, 0.5, 1.0):
+            e = [r[tt] for r in rs]
+            cols.append(f"t={tt:g}: " + " ".join(f"{v:.2e}" for v in e) + f" (order {math.log2(e[-2] / e[-1]):.2f})")
+        cols.append("drift at t = 1 (mass / momentum / E*): " + " ".join(
+            f"{r[('mass', 1.0)]:.0e}/{r[('momentum', 1.0)]:.0e}/{r[('energy', 1.0)]:.0e}" for r in rs))
+        print(f"   {case:24s}\n      " + "\n      ".join(cols), flush=True)
+
+
+def main_reconstructed() -> None:
+    ns = (16, 32, 64, 128, 256)
+    print("-- P0-4b-1: deform and return, max error at t = 1/2 (exact in time)")
+    for v, label in (("A", "pair4 on the cell averages"), ("B", "R^-1 pair4 R, row-mean velocity"),
+                     ("C", "R^-1 pair4 R, point velocity")):
+        rs = [reconstructed_shear(v, n) for n in ns]
+        e = [r[0] for r in rs]
+        print(f"   {v} {label:34s}: " + " ".join(f"{x:.2e}" for x in e) + f"  order {math.log2(e[-2] / e[-1]):.2f}"
+              + f"  |E_R - 1| max {max(r[1] for r in rs):.1e}", flush=True)
 
 
 def main_shear() -> None:
@@ -301,6 +542,12 @@ if __name__ == "__main__":
 
     if "--semi" in sys.argv:
         main_semi()
+    elif "--reconstructed" in sys.argv:
+        main_reconstructed()
+    elif "--reconstructed-semi" in sys.argv:
+        main_reconstructed_semi()
+    elif "--point-space" in sys.argv:
+        main_point_space()
     elif "--shear" in sys.argv:
         main_shear()
     else:
