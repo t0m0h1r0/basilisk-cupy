@@ -1102,3 +1102,10 @@ amplifies an undamped oscillation by about (omega dt)^4 per step (1.53 at omega 
 allows at the grid scale), so the IMEX VOF's static drop blew up at N = 128 where Basilisk's own splitting is
 stable. The IMEX steppers now take sqrt(5/12) of tension.h's capillary step for the VOF (CCD's factor, not
 compounded); the capillary wave and drop results barely change.
+
+Momentum-conserving VOF and centered.h's wall pressure (`docs/notes/71_conserving.md`): `TwoPhase(conserving=True)` is
+Basilisk's `navier-stokes/conserving.h` (the momentum of each phase advected as a VOF concentration with the volume
+fraction's fluxes, the centred advection switched off). On Basilisk's Rayleigh-Taylor test (`rt.c`, uniform 64^2)
+it matches the C build to 1e-5 at t = 0.1 (`cases/conserving_compare.py`, `tools/basilisk/rt_conserving.c`). The
+comparison exposed a gap in the port of `centered.h`: the wall pressure `neumann(a.n fm.n/alpha.n)`, which cancels a
+wall-normal acceleration on the boundary faces; without it a fluid at rest under gravity moved at the walls.

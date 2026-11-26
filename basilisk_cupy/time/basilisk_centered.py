@@ -172,8 +172,19 @@ class CenteredNS:
         density, docs/notes/65)."""
         self.p.fill_ghosts()
         scale = getattr(self, "g_scale", None)
+        xp = self.grid.xp
         for ax in range(self.grid.ndim):
             gf = self.a[ax] - self.alpha[ax] * self.ops.grad_f(self.p, ax)
+            if not self.p.bc.is_periodic(ax):
+                # centered.h's wall pressure: p = neumann (a.n fm.n / alpha.n), whose face gradient cancels the
+                # acceleration on the boundary faces; here the pressure keeps Neumann(0) and the boundary faces'
+                # net acceleration is set to zero, as it results there (docs/notes/71)
+                for side, k in ((0, 0), (1, -1)):
+                    if isinstance(self.p.bc.get(ax, side), Neumann):
+                        idx = [slice(None)] * self.grid.ndim
+                        idx[ax] = slice(k, k + 1) if k == 0 else slice(-1, None)
+                        gf = xp.array(gf, copy=True) if gf is self.a[ax] else gf
+                        gf[tuple(idx)] = 0.0
             if scale is not None:
                 gf = gf * scale[ax]
             self.g[ax].interior = self.ops.face_to_cell(gf, ax, periodic=self.p.bc.is_periodic(ax))

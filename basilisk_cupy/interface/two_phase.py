@@ -14,6 +14,12 @@ Attached to a :class:`~basilisk_cupy.time.basilisk_centered.CenteredNS` through 
   curvature), with tension's explicit time-step bound ``sqrt(rho_m Delta^3 / (pi sigma))``.
 
 The VOF scheme caps the CFL number at 1/2.
+
+``conserving=True`` is Basilisk's ``navier-stokes/conserving.h`` (momentum-conserving VOF advection of the velocity):
+the centred solver's advection is switched off (``stokes``), the step takes the CFL bound of the face velocity, and
+the momentum of each phase, ``q1 = f rho1 u`` and ``q2 = (1 - f) rho2 u`` (the latter carried with ``1 - f``), is
+advected as a VOF concentration of ``f`` with the same fluxes; the velocity is then ``u = (q1 + q2)/rho(f)``. The
+ghost values of ``q`` follow the definition (``f rho u`` of the ghost cells), as Basilisk's ``boundary_q`` functions.
 """
 
 from __future__ import annotations
@@ -24,12 +30,32 @@ from ..fields import CellField, FaceField
 from ..constants import PI
 from .curvature import curvature
 from .heights import NODATA, pad_bc, position
-from .vof import VOFInterface, vof_advection
+from .vof import VOFInterface, VOFTracer, vof_advection
+
+
+class _MomentumField(CellField):
+    """A phase's momentum component ``q = clamp(f) rho u`` (or ``(1 - clamp(f)) rho u``) whose ghost cells follow
+    that definition from the ghosts of ``f`` and ``u`` (Basilisk ``boundary_q1_x`` / ``boundary_q2_x``)."""
+
+    def bind(self, f, u, rho: float, inverse: bool):
+        self._f, self._u, self._rho, self._inverse = f, u, rho, inverse
+        return self
+
+    def fill_ghosts(self):
+        xp = self.grid.xp
+        self._f.fill_ghosts()
+        self._u.fill_ghosts()
+        fc = xp.minimum(xp.maximum(self._f.data, 0.0), 1.0)
+        full = ((1.0 - fc) if self._inverse else fc) * self._rho * self._u.data
+        inner = self.interior.copy()
+        self.data[...] = full
+        self.interior = inner
+        return self
 
 
 class TwoPhase:
     def __init__(self, ns, f: CellField, *, rho1: float = 1.0, rho2: float = 1.0, mu1: float = 0.0,
-                 mu2: float = 0.0, vof_first: bool = False, filtered: bool = False) -> None:
+                 mu2: float = 0.0, vof_first: bool = False, filtered: bool = False, conserving: bool = False) -> None:
         if f.grid.ndim != 2:
             raise NotImplementedError("two-phase flows are implemented in 2-D")
         self.ns, self.f = ns, f
@@ -38,6 +64,12 @@ class TwoPhase:
         self.interface = VOFInterface(f)
         self.potentials = []  # callables (two_phase) -> phi (cell array, NODATA outside the interface)
         ns.cfl = min(ns.cfl, 0.5)
+        self.conserving = conserving
+        if conserving:
+            if vof_first:
+                raise NotImplementedError("conserving.h advects the momentum in the vof event")
+            ns.stokes = True  # conserving.h switches the centred advection off ...
+            ns.on("stability", self._cfl_dtmax)  # ... and takes the CFL bound itself
         ns.on("set_dtmax" if vof_first else "vof", self._vof)
         ns.on("properties", self._properties)
         ns.on("acceleration", self._interfacial_force)
@@ -79,7 +111,36 @@ class TwoPhase:
 
     # -- VOF ------------------------------------------------------------------------------
     def _vof(self, ns) -> None:
-        vof_advection([self.interface], ns.uf, ns.clock.dt, ns.clock.i)
+        if not self.conserving:
+            vof_advection([self.interface], ns.uf, ns.clock.dt, ns.clock.i)
+            return
+        xp = self.f.grid.xp
+        fc = xp.minimum(xp.maximum(self.f.interior, 0.0), 1.0)
+        tracers = []
+        qs = []
+        for u in ns.u.components:
+            q1 = _MomentumField(self.f.grid, bc=u.bc, name="q1").bind(self.f, u, self.rho1, False)
+            q2 = _MomentumField(self.f.grid, bc=u.bc, name="q2").bind(self.f, u, self.rho2, True)
+            q1.interior = fc * self.rho1 * u.interior
+            q2.interior = (1.0 - fc) * self.rho2 * u.interior
+            tracers += [VOFTracer(q1), VOFTracer(q2, inverse=True)]  # u's gradient: centred (Basilisk's default)
+            qs.append((q1, q2))
+        saved = self.interface.tracers
+        self.interface.tracers = list(saved) + tracers
+        try:
+            vof_advection([self.interface], ns.uf, ns.clock.dt, ns.clock.i)
+        finally:
+            self.interface.tracers = saved
+        rho = self.rho(self.f.interior)
+        for u, (q1, q2) in zip(ns.u.components, qs):
+            u.interior = (q1.interior + q2.interior) / rho
+        ns.u.fill_ghosts()
+
+    def _cfl_dtmax(self, ns) -> None:
+        """conserving.h's ``event stability``: ``dtmax = timestep (uf, dtmax)``."""
+        from ..time.stepping import timestep  # noqa: PLC0415
+
+        ns.dtmax = timestep(ns.uf, ns.dtmax, ns.cfl, ns.clock)
 
     # -- interfacial forces (iforce.h) ------------------------------------------------------
     def _interfacial_force(self, ns) -> None:

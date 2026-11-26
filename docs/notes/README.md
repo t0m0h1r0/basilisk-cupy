@@ -73,3 +73,4 @@
 | [68_cls_cell_density.md](68_cls_cell_density.md) | CLS の振動液滴の過大な減衰（3.9 倍）は、陰的な粘性の解のぼやけたセル密度 ρ(ψ)：`cell_density="sharp"` で 0.84 倍、毛管波・液滴の周波数の誤差が VOF 並み（N = 64 で −1.26% / −1.38%）。VOF の各構成の上昇気泡、VOF の静止液滴は列の CCD 曲率でジャンプの誤差 1/8（#79） |
 | [69_cls_sharp_default.md](69_cls_sharp_default.md) | CLS の `cell_density` の既定を `"sharp"` に：密度比 1000 の静止液滴の寄生流は 1.1〜2.9 倍、連成反復の収束は 2.7 倍の反復。研究用の測定は `"diffuse"` を明示（#79） |
 | [70_vof_imex_capillary_step.md](70_vof_imex_capillary_step.md) | IMEX 上の VOF の静止液滴が N = 128 で崩れる：SBDF2 の陽的な表面張力は 1 ステップに (ωΔt)⁴ 程度増幅し、tension.h の上限（ωΔt ≈ 1）では粘性が抑えきれない。毛管の刻みを √(5/12) 倍にして解消、動く界面の結果はほぼ不変（#80） |
+| [71_conserving.md](71_conserving.md) | 運動量保存形の VOF（`TwoPhase(conserving=True)`、Basilisk の `conserving.h`）：`rt.c` を一様な 64² で C 版と照合し t = 0.1 で 1e-5 の一致。照合で `centered.h` の壁の圧力（`neumann_pressure`）の移植漏れを見つけて修正（#81） |
