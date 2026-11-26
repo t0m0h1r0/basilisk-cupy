@@ -1118,3 +1118,12 @@ scaled by each scheme's real-axis limit (`schemes.explicit_real_limit`), CNLF re
 takes the momentum concentrations' gradient by phase-wise CCD. Basilisk's `spurious.c` on a uniform grid matches the
 C build to 3-4 digits. A compact BCG flux (fixed left-hand side, CFL-dependent right-hand side matched to the exact
 swept-mean operator) is linearly stable for every CFL number and fifth-order on 1-D constant advection.
+
+Momentum-conserving VOF with a CCD gradient, revisited (`docs/notes/75_conserving_ccd_cmin.md`): on a drop carried by a
+uniform flow (Galilean invariance; error = mean over all steps of max|u - U|), the phase-wise CCD gradient of the
+momentum concentrations makes the error grow under refinement (N = 128: 3.5-4 times the centred gradient's at density
+ratios 10 and 1000), with or without the swept-parabola term (`conserving_gradient="ccd2"`). The cause is the
+interfacial cells in the CCD runs: with `conserving_ccd_cmin=0.99` the error returns to the centred gradient's level,
+but the capillary-wave damping gain reported in note 72 (1.12 -> 1.06 times) disappears with it. The CCD gradient is
+not adopted (default unchanged); the velocity error in these tests is set by spurious currents, not by the momentum
+advection.

@@ -57,7 +57,8 @@ class VOFRun:
         self.f = CellField.from_interior(grid, fraction(grid, level), bc)
         self.tp = TwoPhase(self.ns, self.f, rho1=kw["rho1"], rho2=kw["rho2"], mu1=kw["mu1"], mu2=kw["mu2"],
                            conserving=bool(kw.get("conserving", False)),
-                           conserving_gradient=kw.get("conserving_gradient"))
+                           conserving_gradient=kw.get("conserving_gradient"),
+                           conserving_ccd_cmin=kw.get("conserving_ccd_cmin"))
         self.tp.add_surface_tension(kw["sigma"])
         if kw.get("gravity") is not None:
             G, Z = kw["gravity"]

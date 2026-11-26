@@ -33,7 +33,10 @@ class VOFTracer:
 
     field: CellField
     inverse: bool = False
-    gradient: object = None  # slope limiter g(l, c, r) of f, None for centred differences, or "ccd" (docs/notes/72)
+    gradient: object = None  # slope limiter g(l, c, r) of f, None for centred differences, "ccd" (docs/notes/72) or
+    #                          "ccd2" (with the parabola term, docs/notes/75)
+    ccd_cmin: float = CMIN  # the phase fraction from which a cell joins a CCD run (0.99: the interfacial cells keep
+    #                         vof.h's gradient, docs/notes/75)
 
 
 @dataclass
@@ -87,11 +90,13 @@ def _concentration_gradient(xp, cp, tp, axis, inverse, limiter):
 MIN_CCD_RUN = 6  # the shortest run of a phase's cells differentiated by CCD (shorter runs keep vof.h's gradient)
 
 
-def _ccd_concentration_gradient(xp, cp, tp, axis, inverse, base, periodic_axis: bool):
-    """``f'`` (times Delta) of the concentration ``f = t / c`` by CCD along runs of the phase's cells (``c >= CMIN``,
+def _ccd_concentration_gradient(xp, cp, tp, axis, inverse, base, periodic_axis: bool, second: bool = False,
+                                cmin: float = CMIN):
+    """``f'`` (times Delta) of the concentration ``f = t / c`` by CCD along runs of the phase's cells (``c >= cmin``,
     or ``1 - c`` for ``inverse``), with extrapolation closures at the run ends (the phase ends there); runs shorter
     than ``MIN_CCD_RUN`` keep ``base`` (vof.h's gradient). The concentration is smooth within its phase, so its CCD
-    derivative does not cross the interface."""
+    derivative does not cross the interface. ``second``: also ``f''`` (times Delta^2, zero outside the CCD runs), for
+    the parabola term of the flux (docs/notes/75)."""
     import numpy as np  # noqa: PLC0415
 
     from ..backend import to_numpy  # noqa: PLC0415
@@ -103,13 +108,15 @@ def _ccd_concentration_gradient(xp, cp, tp, axis, inverse, base, periodic_axis: 
         c = 1.0 - c
     f = np.where(c > 0.0, t / np.where(c > 0.0, c, 1.0), 0.0)
     out = to_numpy(base).copy()
-    F, C, O = (np.moveaxis(a, axis, 0) for a in (f, c, out))
+    out2 = np.zeros_like(out)
+    F, C, O, O2 = (np.moveaxis(a, axis, 0) for a in (f, c, out, out2))
     n, m = F.shape
     for j in range(m):
-        ok = C[:, j] >= CMIN
+        ok = C[:, j] >= cmin
         if periodic_axis and ok.all():
-            d1 = ccd_matrices(n, 1.0, "periodic", "periodic")[0]
+            d1, d2 = ccd_matrices(n, 1.0, "periodic", "periodic")[:2]
             O[:, j] = d1 @ F[:, j]
+            O2[:, j] = d2 @ F[:, j]
             continue
         k = 0
         while k < n:
@@ -120,9 +127,12 @@ def _ccd_concentration_gradient(xp, cp, tp, axis, inverse, base, periodic_axis: 
             while e < n and ok[e]:
                 e += 1
             if e - k >= MIN_CCD_RUN:
-                d1 = ccd_matrices(e - k, 1.0, "extrapolate", "extrapolate")[0]
+                d1, d2 = ccd_matrices(e - k, 1.0, "extrapolate", "extrapolate")[:2]
                 O[k:e, j] = d1 @ F[k:e, j]
+                O2[k:e, j] = d2 @ F[k:e, j]
             k = e
+    if second:
+        return xp.asarray(out), xp.asarray(out2)
     return xp.asarray(out)
 
 
@@ -155,9 +165,16 @@ def _sweep(interface: VOFInterface, uf: FaceField, dt: float, axis: int, cc, tcs
     tfluxes = []
     for tr, tcl in zip(interface.tracers, tcs):
         tp = _with_ghosts(tr.field)
-        if isinstance(tr.gradient, str) and tr.gradient == "ccd":
+        g2f = None
+        if isinstance(tr.gradient, str) and tr.gradient in ("ccd", "ccd2"):
             base = _concentration_gradient(xp, cp, tp, axis, tr.inverse, None)
-            g = _ccd_concentration_gradient(xp, cp, tp, axis, tr.inverse, base, bool(periodic[axis]))
+            if tr.gradient == "ccd2":
+                g, g2 = _ccd_concentration_gradient(xp, cp, tp, axis, tr.inverse, base, bool(periodic[axis]), True,
+                                                    tr.ccd_cmin)
+                g2f = _pad(g2, periodic, xp)
+            else:
+                g = _ccd_concentration_gradient(xp, cp, tp, axis, tr.inverse, base, bool(periodic[axis]),
+                                                cmin=tr.ccd_cmin)
         else:
             g = _concentration_gradient(xp, cp, tp, axis, tr.inverse, tr.gradient)
         gf = _pad(g, periodic, xp)
@@ -165,6 +182,9 @@ def _sweep(interface: VOFInterface, uf: FaceField, dt: float, axis: int, cc, tcs
         cf1 = 1.0 - cf if tr.inverse else cf
         ti, gi = upwind(tp), upwind(gf)
         ff = ti / xp.where(ci > 1e-10, ci, 1.0) + s * xp.minimum(1.0, 1.0 - s * un) * gi / 2.0
+        if g2f is not None:  # the swept mean of the mean-preserving parabola: (1 - |C|)(1 - 2|C|)/12 f'' h^2
+            a = xp.minimum(1.0, s * un)
+            ff = ff + (1.0 - a) * (1.0 - 2.0 * a) / 12.0 * upwind(g2f)
         tfluxes.append(xp.where(ci > 1e-10, ff * cf1 * u, 0.0))
     n = grid.n[axis]
     lo, hi = (slice(0, n), slice(1, n + 1))
