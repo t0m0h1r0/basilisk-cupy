@@ -1211,3 +1211,11 @@ comes from the constrained fit pushing a mixed cell's average mismatch into the 
 brings ||T||_inf from 272 to 13 at density ratio 1e6 with accuracy, continuity, conditioning and viscous stiffness
 unchanged. The small-CFL saturated loss is rank one per interface (one oracle mode removes it); a mass-coordinate
 continuity correction multiplies the viscous stiffness by up to 1e9 and is rejected.
+
+Review checks (`docs/notes/86_review_checks.md`): the fit's rows now integrate the actual density (they assumed one
+density on each side of the interface, wrong when a second interface lies in the window); with two interfaces less
+than about 7 cells apart, accuracy drops to 1e-2 and the operator jumps again. The energy loss over physically
+meaningful velocities is 1 to 3 orders below the all-state worst case; enriching both the old and new spaces with
+interface-following tents does not reduce the worst loss. Direct high-order remap, Galerkin and adjoint-corrected
+transports are all fourth order; the remap is the most dissipative and slightly gains energy. The 1-D study stops
+here; next is the 2-D oblique planar interface.

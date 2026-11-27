@@ -166,26 +166,29 @@ class Reconstruction:
             self.parts.append(comps)
 
     def _rows(self, zz, cells):
-        """Mass-weighted averages of the basis [1, xi^r left, xi^r right] over the (unwrapped) cells, and the
-        cells' masses."""
+        """Mass-weighted averages of the basis [1, xi^r left of zz, xi^r right of zz] over the (unwrapped) cells, and
+        the cells' masses. The density is integrated as it is (every interface cuts the pieces; docs/notes/86: the
+        earlier version assumed one density on each side of zz and was wrong when another interface lay in the
+        window)."""
         h, p = self.h, self.p
-        rl, rr = float(rho_at(np.array([zz - 1e-12]), self.s, self.ratio)[0]), \
-            float(rho_at(np.array([zz + 1e-12]), self.s, self.ratio)[0])
+        cuts = [z + m for z in interfaces(self.s) for m in (-2, -1, 0, 1, 2)] + [zz]
+        xg, wg = np.polynomial.legendre.leggauss(p + 1)
         A = np.zeros((len(cells), 2 * p + 1))
         mass = np.zeros(len(cells))
         for row, c in enumerate(cells):
-            a, b = c * h, (c + 1) * h
-            la, lb = a, min(b, zz)
-            ra, rb = max(a, zz), b
-            wl = rl * max(lb - la, 0.0)
-            wr = rr * max(rb - ra, 0.0)
-            m = wl + wr
+            mom = np.zeros(2 * p + 1)
+            m = 0.0
+            for a, b in _pieces(c * h, (c + 1) * h, cuts):
+                x = 0.5 * (b - a) * xg + 0.5 * (a + b)
+                w = 0.5 * (b - a) * wg * rho_at(x, self.s, self.ratio)
+                m += float(np.sum(w))
+                xi = (x - zz) / h
+                off = 1 if 0.5 * (a + b) < zz else p + 1
+                for r in range(1, p + 1):
+                    mom[off + r - 1] += float(np.sum(w * xi ** r))
             mass[row] = m
             A[row, 0] = 1.0
-            if lb > la:
-                A[row, 1:p + 1] = [rl * _mono_integral(la, lb, zz, h, r) / m for r in range(1, p + 1)]
-            if rb > ra:
-                A[row, p + 1:] = [rr * _mono_integral(ra, rb, zz, h, r) / m for r in range(1, p + 1)]
+            A[row, 1:] = mom[1:] / m
         return A, mass
 
     def _ls_fit(self, zz, cz, theta, c):
