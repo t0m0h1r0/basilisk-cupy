@@ -21,7 +21,7 @@ import math
 import numpy as np
 
 from cases.pccd_floquet import step
-from cases.pccd_jump import A_, B_
+from cases.pccd_jump import A_ as A0, B_ as B0
 from cases.pccd_twophase import averages
 from cases.viscous_minenergy import MinEnergy, _gen_eig, eigenfunction
 from cases.viscous_stress import Setup, mus, stokes_rate
@@ -32,7 +32,16 @@ def _visc(G, K, dt):
     return V @ np.diag(np.exp(-ev * dt)) @ V.T @ G
 
 
-def run(N, ratio, kind, scale=0.01, U=1.0, p=1, q=4, t_end=0.5, samples=(0.25,), advect=True):
+def _l2m(N, ratio, a, b, e, ex):
+    m = Setup(N, ratio, a, b, 1.0, 1.0).m
+    return float(math.sqrt((m * e * e).sum() / (m * ex * ex).sum()))
+
+
+def run(N, ratio, kind, scale=0.01, U=1.0, p=1, q=4, t_end=0.5, samples=(0.25,), advect=True, return_state=False,
+        off=0.0):
+    """``off`` shifts both interfaces (the position of the interface inside its cell changes with N; docs/notes/103
+    measures several offsets). Errors: relative max and mass-weighted L2 of the cell averages."""
+    A_, B_ = (A0 + off) % 1.0, (B0 + off) % 1.0
     mu_H, mu_L = mus(ratio, kind)
     mu_H, mu_L = mu_H * scale, mu_L * scale
     lam = stokes_rate(mu_H, mu_L, ratio, A_, B_, which=1)[0]
@@ -57,9 +66,13 @@ def run(N, ratio, kind, scale=0.01, U=1.0, p=1, q=4, t_end=0.5, samples=(0.25,),
         maps.append((_visc(G0, K0, dt / 2), T, _visc(G1, K1, dt / 2), G0, G1))
     q0 = averages(N, A_, B_, ratio, lambda x: w(x % 1.0))
     u = q0.copy()
-    errs, E, mom = {}, [], []
+    errs, errs2, E, mom = {}, {}, [], []
     at = {int(round(t / dt)): t for t in samples}
     pp = p if advect else 0
+    # the Gram matrix across the period boundary: geometry q (end of step q-1) equals geometry 0 shifted by p cells
+    if advect and q > 0:
+        S = np.roll(np.eye(N), pp, axis=0)
+        eps_G = max(eps_G, float(np.abs(maps[q - 1][4] - S @ maps[0][3] @ S.T).max() / np.abs(maps[0][3]).max()))
     for n in range(steps):
         j, k = divmod(n, q)
         sh = j * pp
@@ -71,43 +84,94 @@ def run(N, ratio, kind, scale=0.01, U=1.0, p=1, q=4, t_end=0.5, samples=(0.25,),
             mscale = float((G0 @ np.ones(N)) @ np.abs(x))      # sum m |q0| (the mode's total momentum is ~ 0)
         x = Vpost @ (T @ (Vpre @ x))
         u = np.roll(x, sh)
+        if n == steps - 1:                                      # docs/notes/103: the state after the last update
+            E.append(float(x @ G1 @ x))
+            mom.append(float(np.ones(N) @ G1 @ x))
         if n + 1 in at:
             t = (n + 1) * dt
             ex = averages(N, (A_ + U * t * advect) % 1.0, (B_ + U * t * advect) % 1.0, ratio,
                           lambda y: w((y - U * t * advect) % 1.0) * math.exp(-lam * t))
             errs[at[n + 1]] = float(np.abs(u - ex).max() / np.abs(q0).max())
+            errs2[at[n + 1]] = _l2m(N, ratio, (A_ + U * t * advect) % 1.0, (B_ + U * t * advect) % 1.0, u - ex, ex)
     t = steps * dt
     ex = averages(N, (A_ + U * t * advect) % 1.0, (B_ + U * t * advect) % 1.0, ratio,
                   lambda y: w((y - U * t * advect) % 1.0) * math.exp(-lam * t))
     errs[t_end] = float(np.abs(u - ex).max() / np.abs(q0).max())
+    errs2[t_end] = _l2m(N, ratio, (A_ + U * t * advect) % 1.0, (B_ + U * t * advect) % 1.0, u - ex, ex)
     dE = np.diff(E)
-    return {"lambda": lam, "errors": errs, "eps_G": eps_G, "energy_max_increase": float(max(dE.max(), 0.0) / E[0]),
+    extra = {"state": u, "q0max": float(np.abs(q0).max())} if return_state else {}
+    return {**extra, "lambda": lam, "errors": errs, "errors_L2m": errs2, "eps_G": eps_G, "energy_max_increase": float(max(dE.max(), 0.0) / E[0]),
             "momentum_drift": float(abs(mom[-1] - mom[0]) / mscale), "steps": steps}
 
 
+NS = (24, 32, 40, 48, 56, 64, 80, 96, 112, 128, 160, 192)
+OFFS = (0.0, 0.0071, 0.0193)
+
+
+def slopes(Ns, errs, nmin=96):
+    """Least-squares order over all N, and over N >= nmin (docs/notes/103: the convergence protocol of #121)."""
+    Ns, errs = np.asarray(Ns, float), np.asarray(errs, float)
+    full = -np.polyfit(np.log(Ns), np.log(errs), 1)[0]
+    k = Ns >= nmin
+    fine = -np.polyfit(np.log(Ns[k]), np.log(errs[k]), 1)[0]
+    return float(full), float(fine)
+
+
 def main() -> None:
+    """docs/notes/103: the boost test remeasured with the protocol (12 N, 3 interface offsets, max and L2m, all
+    properties, with and without advection), and the time step against a CFL 1/128 reference."""
     from concurrent.futures import ProcessPoolExecutor
 
-    jobs = []
-    for kind in ("mu", "water-air", "nu"):
-        for N in (32, 64, 128):
-            jobs.append(("space", dict(N=N, ratio=1e3, kind=kind)))
-            jobs.append(("U=0", dict(N=N, ratio=1e3, kind=kind, advect=False)))
-    for kind in ("mu", "water-air"):
-        for pq in ((1, 2), (1, 4), (1, 8), (1, 16)):
-            jobs.append(("time", dict(N=64, ratio=1e3, kind=kind, p=pq[0], q=pq[1])))
-    res = []
+    jobs = [("space", dict(N=N, ratio=1e3, kind=k, off=o, advect=adv))
+            for k in ("mu", "water-air", "nu") for adv in (True, False) for o in OFFS for N in NS]
+    tjobs = [dict(N=64, ratio=r, kind=k, qs=(2, 4, 8, 16, 32), q_ref=128) for r in (1.0, 1e3) for k in ("mu", "water-air", "nu")]
+    res = {"space": [], "time": []}
     with ProcessPoolExecutor(26) as ex:
-        futs = [(n, kw, ex.submit(run, **kw)) for n, kw in jobs]
-        for n, kw, f in futs:
-            try:
-                r = f.result()
-            except Exception as e:  # noqa: BLE001
-                r = {"error": repr(e)}
-            res.append({"test": n, **kw, **r})
-            print(n, kw, r, flush=True)
-    json.dump(res, open("docs/figures/coupled_boost.json", "w"), indent=1, default=float)
+        tf = [(kw, ex.submit(time_reference, **kw)) for kw in tjobs]
+        futs = [(kw, ex.submit(run, **kw)) for _, kw in sorted(jobs, key=lambda j: -j[1]["N"])]
+        for kw, f in futs:
+            r = f.result()
+            res["space"].append({**kw, **r})
+        for kw, f in tf:
+            res["time"].append({**kw, "diff": f.result()})
+    res["orders"] = []
+    for k in ("mu", "water-air", "nu"):
+        for adv in (True, False):
+            for key in ("errors", "errors_L2m"):
+                for t in (0.25, 0.5):
+                    rows = {o: sorted((r["N"], r[key][t]) for r in res["space"]
+                                      if r["kind"] == k and r["advect"] == adv and r["off"] == o) for o in OFFS}
+                    worst = [max(rows[o][i][1] for o in OFFS) for i in range(len(NS))]
+                    od = {"kind": k, "advect": adv, "norm": key, "t": t,
+                          "per_offset": {o: slopes(NS, [e for _, e in rows[o]]) for o in OFFS},
+                          "worst": slopes(NS, worst), "worst_errors": worst}
+                    res["orders"].append(od)
+                    print(k, "adv" if adv else "U=0", key, t, "worst", "%.2f / %.2f" % od["worst"],
+                          " ".join("%.2f/%.2f" % v for v in od["per_offset"].values()), flush=True)
+    for r in res["time"]:
+        print("time", r["kind"], r["ratio"], {q: f"{v:.2e}" for q, v in r["diff"].items()})
+    struct = {"energy_max_increase": max(r["energy_max_increase"] for r in res["space"]),
+              "momentum_drift": max(r["momentum_drift"] for r in res["space"]),
+              "eps_G": max(r["eps_G"] for r in res["space"] if r["advect"])}
+    res["structure"] = struct
+    print(struct)
+    json.dump(res, open("docs/figures/coupled_boost.json", "w"), indent=1, default=lambda x: x.tolist() if hasattr(x, "tolist") else float(x))
+
+
+def time_reference(N=64, ratio=1e3, kind="mu", t_end=0.25, qs=(2, 4, 8, 16), q_ref=64):
+    """docs/notes/103 (the user's review): the time error of the Strang split at a fixed grid, against a run with a
+    much smaller step (CFL 1/q_ref): max difference of the solution vectors, relative to max |q0|."""
+    out = {}
+    def final(q):
+        r = run(N, ratio, kind, q=q, t_end=t_end, samples=(), return_state=True)
+        return r["state"], r["q0max"]
+    ref, q0m = final(q_ref)
+    for q in qs:
+        st, _ = final(q)
+        out[q] = float(np.abs(st - ref).max() / q0m)
+    return out
 
 
 if __name__ == "__main__":
     main()
+
