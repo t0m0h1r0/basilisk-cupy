@@ -35,18 +35,43 @@ from .vof import VOFInterface, VOFTracer, vof_advection
 
 class _MomentumField(CellField):
     """A phase's momentum component ``q = clamp(f) rho u`` (or ``(1 - clamp(f)) rho u``) whose ghost cells follow
-    that definition from the ghosts of ``f`` and ``u`` (Basilisk ``boundary_q1_x`` / ``boundary_q2_x``)."""
+    that definition from the ghosts of ``f`` and ``u`` (Basilisk ``boundary_q1_x`` / ``boundary_q2_x``).
+
+    ``current`` (docs/notes/112, audit #149): the velocity whose boundary conditions make the ghosts is the one this
+    phase's momentum holds now, ``q / (c rho)`` (the mixture's ``(q1 + q2) / rho(f)`` where the phase is absent), not
+    the step-start ``u``. Between the two sweeps of the split VOF advection the momentum has changed while ``u`` has
+    not: with the step-start ``u`` (conserving.h's definition; what Basilisk's multigrid / cartesian grids do, and
+    any grid at a non-periodic boundary) the second sweep sees stale ghosts at every boundary, periodic or not,
+    which makes the transport first order in time. At a periodic boundary the ghosts are then the periodic images
+    of ``q`` itself (the two phases of an interfacial cell do not share one velocity after the first sweep)."""
+
+    _current = None
 
     def bind(self, f, u, rho: float, inverse: bool):
         self._f, self._u, self._rho, self._inverse = f, u, rho, inverse
         return self
 
+    def current(self, q1, q2, density, scratch):
+        """Take the ghosts from this phase's current velocity (``scratch``: a cell field with u's boundary
+        conditions that receives it; ``q1``, ``q2``, ``density``: for the mixture's velocity where c = 0)."""
+        self._current = (q1, q2, density, scratch)
+        return self
+
     def fill_ghosts(self):
         xp = self.grid.xp
         self._f.fill_ghosts()
-        self._u.fill_ghosts()
+        u = self._u
+        if self._current is not None:
+            q1, q2, density, u = self._current
+            f = self._f.interior
+            c = xp.minimum(xp.maximum(f, 0.0), 1.0)
+            c = (1.0 - c) if self._inverse else c
+            there = c > 1e-10                                    # vof.h's threshold for a concentration
+            u.interior = xp.where(there, self.interior / (xp.where(there, c, 1.0) * self._rho),
+                                  (q1.interior + q2.interior) / density(f))
+        u.fill_ghosts()
         fc = xp.minimum(xp.maximum(self._f.data, 0.0), 1.0)
-        full = ((1.0 - fc) if self._inverse else fc) * self._rho * self._u.data
+        full = ((1.0 - fc) if self._inverse else fc) * self._rho * u.data
         inner = self.interior.copy()
         self.data[...] = full
         self.interior = inner
@@ -59,7 +84,7 @@ class TwoPhase:
                  conserving_gradient=None, conserving_ccd_cmin: float | None = None,
                  conserving_geometric: bool = False, conserving_predict: bool = False,
                  conserving_source: bool = False, conserving_transverse: bool = False,
-                 conserving_fresh_dilation: bool = False) -> None:
+                 conserving_fresh_dilation: bool = False, conserving_stale_ghosts: bool = False) -> None:
         """``conserving_gradient``: the gradient of the advected momentum concentrations (Basilisk: the velocity's,
         centred by default); ``"ccd"``: CCD along each phase's runs of cells (docs/notes/72); ``"ccd2"``: with the
         swept mean of the mean-preserving parabola from the same CCD solve (docs/notes/75). ``conserving_ccd_cmin``: the
@@ -73,7 +98,10 @@ class TwoPhase:
         step, as BCG's prediction of the plain solver; vof.h's face value has no source, docs/notes/77).
         ``conserving_transverse``: and BCG's transverse term (``VOFTracer(transverse=True)``, docs/notes/77).
         ``conserving_fresh_dilation``: the second sweep's dilation term with the momentum concentration after the
-        first sweep (``VOFTracer(fresh_dilation=True)``, docs/notes/77)."""
+        first sweep (``VOFTracer(fresh_dilation=True)``, docs/notes/77). ``conserving_stale_ghosts``: the momentum's
+        ghost cells from the step-start velocity in both sweeps, as conserving.h's ``boundary_q1_x`` (first order in
+        time at every boundary, docs/notes/112; kept to compare with the C build). The default takes them from the
+        momentum's current velocity."""
         if f.grid.ndim != 2:
             raise NotImplementedError("two-phase flows are implemented in 2-D")
         self.ns, self.f = ns, f
@@ -90,6 +118,7 @@ class TwoPhase:
         self.conserving_source = conserving_source
         self.conserving_transverse = conserving_transverse
         self.conserving_fresh_dilation = conserving_fresh_dilation
+        self.conserving_stale_ghosts = conserving_stale_ghosts
         if conserving:
             if vof_first:
                 raise NotImplementedError("conserving.h advects the momentum in the vof event")
@@ -148,6 +177,10 @@ class TwoPhase:
             q2 = _MomentumField(self.f.grid, bc=u.bc, name="q2").bind(self.f, u, self.rho2, True)
             q1.interior = fc * self.rho1 * u.interior
             q2.interior = (1.0 - fc) * self.rho2 * u.interior
+            if not self.conserving_stale_ghosts:
+                scratch = CellField(self.f.grid, bc=u.bc, name="uq")
+                q1.current(q1, q2, self.rho, scratch)
+                q2.current(q1, q2, self.rho, scratch)
             g = self.conserving_gradient  # u's gradient: centred (Basilisk's default), or "ccd"
             kw = {} if self.conserving_ccd_cmin is None else {"ccd_cmin": float(self.conserving_ccd_cmin)}
             if self.conserving_geometric:
