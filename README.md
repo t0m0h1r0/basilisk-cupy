@@ -1421,3 +1421,13 @@ user derived (matched within 0.1-4%), and cancel under the alternating sweep ord
 applied from the test side; the library is unchanged) the conserving form reaches the accuracy of the non-conserving
 one on the single-phase Taylor-Green flow (8.3e-3 / 1.22e-3 / 1.76e-4 at N = 32 / 64 / 128). The explicit feedback
 instability of the source at high density ratios (note 77) is still open.
+
+Correction (audit #149) and library fix (issue #146): cause (2) is not specific to this port or to periodic
+boundaries. conserving.h builds the ghosts of the phase momenta from the step-start velocity (`boundary_q1_x`) at
+every boundary; the second sweep's ghosts are stale at walls as well (the same first order: 1.09e-2 / 4.36e-3 /
+1.85e-3 at N = 32 / 64 / 128 for periodic, walls and mixed boundaries alike, against 6.97e-3 / 1.81e-3 / 4.60e-4),
+and the C build does the same on its multigrid grid (the audit's run). `TwoPhase(conserving=True)` now takes the
+ghosts from each phase's current velocity q_k / (c_k rho_k) with u's boundary conditions (at a periodic boundary: the
+periodic image of q itself), which makes a periodic two-phase transport step independent of where the boundary cuts
+the flow to round-off; `conserving_stale_ghosts=True` keeps conserving.h's definition for comparisons with the C
+build (`tests/test_momentum_ghosts.py`). The pressure source in the face value stays off by default.

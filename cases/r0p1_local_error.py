@@ -223,12 +223,15 @@ if __name__ == "__main__":
 
 
 # --------------------------------------------------------------------------------------------- P0-5: the coupled solver
-def coupled(n, cfl, variant="conserving-src", exact_uf=False, exact_source=False, exact_g_final=False, t_end=0.5):
+def coupled(n, cfl, variant="conserving-src", exact_uf=False, exact_source=False, exact_g_final=False, t_end=0.5,
+            stale_ghosts=False):
     """The library's solver (CenteredNS + TwoPhase with f = 0, inviscid Taylor-Green, docs/notes/77), with oracle
     replacements made from hooks (the library is not changed):
       exact_uf       the face velocity that carries the momentum is the exact steady one (not the projected uf^n);
       exact_source   the half-step source in the face value uses the exact pressure acceleration (not g^n);
       exact_g_final  after the step, u is reset to (transported u) + dt * exact g (the projection's result replaced).
+    ``stale_ghosts``: conserving.h's momentum ghost cells (``TwoPhase(conserving_stale_ghosts=True)``: the library as
+    it was when docs/notes/112 was written; the default has been the fixed one since audit #149 / issue #146).
     Returns max |u - u0| at t_end."""
     import warnings
 
@@ -247,7 +250,8 @@ def coupled(n, cfl, variant="conserving-src", exact_uf=False, exact_source=False
     for ax in range(2):
         for side in (0, 1):
             bc.set((ax, side), Periodic())
-    TwoPhase(ns, CellField.from_interior(grid, np.zeros((n, n)), bc), rho1=1.0, rho2=1.0, **conserving_options(variant))
+    TwoPhase(ns, CellField.from_interior(grid, np.zeros((n, n)), bc), rho1=1.0, rho2=1.0,
+             conserving_stale_ghosts=stale_ghosts, **conserving_options(variant))
     ns.cfl = cfl
     T = predicted_terms()
     u0 = cell_average(T["u"], n)
@@ -289,7 +293,9 @@ def coupled(n, cfl, variant="conserving-src", exact_uf=False, exact_source=False
 
 
 class periodic_momentum_ghosts:
-    """Context manager (the library is not changed): TwoPhase's momentum fields take their ghost cells from the
+    """(Since issue #146 / audit #149 the library's default does this, for every boundary: this patch only matters
+    with ``conserving_stale_ghosts=True``.)
+    Context manager (the library is not changed): TwoPhase's momentum fields take their ghost cells from the
     step-start velocity (``_MomentumField.fill_ghosts``, after Basilisk's boundary_q1_x). With periodic boundaries
     this leaves the ghosts stale in the second sweep. Here, on a fully periodic grid, the ghosts are the periodic
     images of the field itself."""
