@@ -134,6 +134,30 @@ def pieces(geom, x0, y0, x1, y1):
     return out
 
 
+_SHARED = {}
+
+
+def _call(args):
+    key, method, item = args
+    return getattr(_SHARED[key], method)(item)
+
+
+def _parallel(obj, method, items, workers):
+    """[obj.method(i) for i in items], over ``workers`` forked processes (obj is inherited, not pickled)."""
+    items = list(items)
+    if workers <= 1:
+        return [getattr(obj, method)(i) for i in items]
+    import multiprocessing as mp
+
+    key = id(obj)
+    _SHARED[key] = obj
+    try:
+        with mp.get_context("fork").Pool(workers) as pool:
+            return pool.map(_call, [(key, method, i) for i in items], chunksize=max(1, len(items) // (4 * workers)))
+    finally:
+        _SHARED.pop(key, None)
+
+
 def _smooth(t):
     t = min(max(t, 0.0), 1.0)
     return t * t * (3 - 2 * t)
@@ -141,7 +165,7 @@ def _smooth(t):
 
 class Reconstruction2D:
     def __init__(self, N, geom, alpha=0.75, D1=3.5, D2=4.5, m_pw=3, m_s=2, kink=True, window="cell", R=4.5,
-                 switch="fixed", delta=1.0, tau=None, diff=False):
+                 switch="fixed", delta=1.0, tau=None, diff=False, workers=1):
         """docs/notes/88 options: ``window`` "cell" (the (2 m_pw + 1)^2 cells around the cell, note 87) or "interface"
         (the cells within R cells of the cell's foot on the interface, weights (1 - (r/R)^2)^2: both sides of the
         interface always hold data); ``switch`` "fixed" (D1, D2) or "angle" (D1 = d_safe = (m_s + 1/2)(|nx| + |ny|)
@@ -156,32 +180,47 @@ class Reconstruction2D:
             D1 = (m_s + 0.5) * (abs(geom.n[0]) + abs(geom.n[1]))
             D2 = D1 + delta
         self.rank_log = []  # (distance in cells, numerical rank of the interface component, its size)
-        # every cell's quadrature (canonical position), rho-weights, mass
-        self.qx, self.qw, self.mass = [], [], np.zeros(N * N)
-        for iy in range(N):
-            for ix in range(N):
-                xs, ws = [], []
-                for x, w, hv in pieces(geom, ix * h, iy * h, (ix + 1) * h, (iy + 1) * h):
-                    xs.append(x)
-                    ws.append(w * (1.0 if hv else 1.0 / geom.ratio))
-                X, W = np.vstack(xs), np.concatenate(ws)
-                self.qx.append(X)
-                self.qw.append(W)
-                self.mass[iy * N + ix] = W.sum()
+        self._D, self._m = (D1, D2), (m_pw, m_s)
         self.sigma_min = np.inf
-        self.comps = []
-        for iy in range(N):
-            for ix in range(N):
-                c = np.array([(ix + 0.5) * h, (iy + 0.5) * h])
-                s, _ = geom.nearest(*c)
-                dist = abs(s) / h
-                lam = 1.0 - _smooth((dist - D1) / (D2 - D1))
-                comps = []
-                if lam > 0 and kink:
-                    comps.append((lam, self._fit(ix, iy, m_pw, True, c, s)))
-                if lam < 1 or not kink:
-                    comps.append((1.0 - lam if kink else 1.0, self._fit(ix, iy, m_s, False, c, s)))
-                self.comps.append(comps)
+        # every cell's quadrature (canonical position), rho-weights, mass; then every cell's fits: both per row of
+        # cells, over ``workers`` processes (docs/notes/89)
+        quad = _parallel(self, "_quad_row", range(N), workers)
+        self.qx = [x for row in quad for x, _ in row]
+        self.qw = [w for row in quad for _, w in row]
+        self.mass = np.array([w.sum() for w in self.qw])
+        out = _parallel(self, "_fit_row", range(N), workers)
+        self.comps = [c for row, _, _ in out for c in row]
+        self.sigma_min = min([self.sigma_min] + [sm for _, sm, _ in out])
+        self.rank_log = [r for _, _, rl in out for r in rl]
+
+    def _quad_row(self, iy):
+        N, h, geom = self.N, self.h, self.geom
+        row = []
+        for ix in range(N):
+            xs, ws = [], []
+            for x, w, hv in pieces(geom, ix * h, iy * h, (ix + 1) * h, (iy + 1) * h):
+                xs.append(x)
+                ws.append(w * (1.0 if hv else 1.0 / geom.ratio))
+            row.append((np.vstack(xs), np.concatenate(ws)))
+        return row
+
+    def _fit_row(self, iy):
+        N, h, geom = self.N, self.h, self.geom
+        (D1, D2), (m_pw, m_s) = self._D, self._m
+        self.sigma_min, self.rank_log = np.inf, []
+        row = []
+        for ix in range(N):
+            c = np.array([(ix + 0.5) * h, (iy + 0.5) * h])
+            s, _ = geom.nearest(*c)
+            dist = abs(s) / h
+            lam = 1.0 - _smooth((dist - D1) / (D2 - D1))
+            comps = []
+            if lam > 0 and self.kink:
+                comps.append((lam, self._fit(ix, iy, m_pw, True, c, s)))
+            if lam < 1 or not self.kink:
+                comps.append((1.0 - lam if self.kink else 1.0, self._fit(ix, iy, m_s, False, c, s)))
+            row.append(comps)
+        return row, self.sigma_min, self.rank_log
 
     # -- frames and monomials ----------------------------------------------------------------------------
     def _frame(self, c, s):
@@ -295,8 +334,79 @@ class Reconstruction2D:
         return idx, np.stack([vals[j] for j in idx], axis=1)
 
 
-def assemble(N, rec0, rec1, U, dt):
-    """G0, G1, C and the direct remap Cg on the common partition of new cell x moved old cell x phase."""
+class _Assembler:
+    def __init__(self, N, rec0, rec1, U, dt):
+        self.N, self.rec0, self.rec1, self.U, self.dt = N, rec0, rec1, U, dt
+
+    def row(self, iy):
+        """Triplets of G0, G1, C, Cg for the new cells of row iy."""
+        N, rec0, rec1 = self.N, self.rec0, self.rec1
+        h = 1.0 / N
+        D = np.array(self.U) * self.dt
+        geom = rec1.geom
+        trip = {k: ([], [], []) for k in ("G0", "G1", "C", "Cg")}
+
+        def add(k, r, c, v):
+            R, Cc = np.meshgrid(r, c, indexing="ij")
+            trip[k][0].append(R.ravel())
+            trip[k][1].append(Cc.ravel())
+            trip[k][2].append(np.asarray(v).ravel())
+
+        for ix in range(N):
+            i = iy * N + ix
+            for oy in (-1, 0, 1):
+                for ox in (-1, 0, 1):
+                    jx, jy = ix + ox, iy + oy
+                    x0, y0 = max(ix * h, jx * h + D[0]), max(iy * h, jy * h + D[1])
+                    x1, y1 = min((ix + 1) * h, (jx + 1) * h + D[0]), min((iy + 1) * h, (jy + 1) * h + D[1])
+                    if x1 - x0 < 1e-15 or y1 - y0 < 1e-15:
+                        continue
+                    j = (jy % N) * N + (jx % N)
+                    shift_j = np.array([(jx - jx % N) * h, (jy - jy % N) * h])
+                    for X, w, hv in pieces(geom, x0, y0, x1, y1):
+                        wr = w * (1.0 if hv else 1.0 / geom.ratio)
+                        i1, V1 = rec1.basis(i, X)
+                        i0, V0 = rec0.basis(j, X - D - shift_j)
+                        add("G1", i1, i1, (V1 * wr[:, None]).T @ V1)
+                        add("G0", i0, i0, (V0 * wr[:, None]).T @ V0)
+                        add("C", i1, i0, (V1 * wr[:, None]).T @ V0)
+                        add("Cg", [i], i0, (wr @ V0)[None, :])
+        n2 = N * N
+        return {k: (np.concatenate(v[0]) * n2 + np.concatenate(v[1]), np.concatenate(v[2])) for k, v in trip.items()}
+
+    def rows(self, iys):
+        """Several rows: duplicates summed (unique linear indices and values)."""
+        acc = {k: ([], []) for k in ("G0", "G1", "C", "Cg")}
+        for iy in iys:
+            for k, (ix_, v) in self.row(iy).items():
+                acc[k][0].append(ix_)
+                acc[k][1].append(v)
+        out = {}
+        for k, (ix_, v) in acc.items():
+            ix_, v = np.concatenate(ix_), np.concatenate(v)
+            u, inv = np.unique(ix_, return_inverse=True)
+            out[k] = (u, np.bincount(inv, weights=v, minlength=u.size))
+        return out
+
+
+def assemble(N, rec0, rec1, U, dt, workers=1):
+    """G0, G1, C and the direct remap Cg on the common partition of new cell x moved old cell x phase (rows of new
+    cells over ``workers`` processes)."""
+    n2 = N * N
+    chunks = [list(range(N))[k::max(workers, 1)] for k in range(max(workers, 1))]
+    out = _parallel(_Assembler(N, rec0, rec1, U, dt), "rows", [c for c in chunks if c], workers)
+    mats = []
+    for k in ("G0", "G1", "C", "Cg"):
+        M = np.zeros(n2 * n2)
+        for t in out:
+            idx, v = t[k]
+            M[idx] += v          # unique within each chunk
+        mats.append(M.reshape(n2, n2))
+    return tuple(mats)
+
+
+def _assemble_serial(N, rec0, rec1, U, dt):
+    """The original loop (kept for checking the parallel one)."""
     h = 1.0 / N
     D = np.array(U) * dt
     n2 = N * N
@@ -356,7 +466,7 @@ def field(geom0, kind="phases"):
 
 
 def run(N, transport="galerkin", ratio=1e3, a=1, b=1, U=(1.0, 0.5), t_end=0.1, cfl=0.37, kind="phases",
-        alpha=0.75, samples=(), rk=None):
+        alpha=0.75, samples=(), rk=None, workers=1):
     h = 1.0 / N
     umax = max(abs(U[0]), abs(U[1]))
     steps = int(math.ceil(t_end / (cfl * h / umax)))
@@ -364,7 +474,7 @@ def run(N, transport="galerkin", ratio=1e3, a=1, b=1, U=(1.0, 0.5), t_end=0.1, c
     g0 = Geometry(a, b, ratio=ratio)
     q0 = field(g0, kind)
     exact = lambda t: averages(N, g0.moved(U, t), lambda x, y: q0(x - U[0] * t, y - U[1] * t))  # noqa: E731
-    rk = rk or {}
+    rk = {**(rk or {}), "workers": workers}
     rec0 = Reconstruction2D(N, g0, alpha, **rk)
     u = exact(0.0)
     cond_max, umax = 0.0, 0.0
@@ -375,7 +485,7 @@ def run(N, transport="galerkin", ratio=1e3, a=1, b=1, U=(1.0, 0.5), t_end=0.1, c
     for k in range(steps):
         rec1 = Reconstruction2D(N, g0.moved(U, (k + 1) * dt), alpha, **rk)
         smin = min(smin, rec1.sigma_min)
-        G0, G1, C, Cg = assemble(N, rec0, rec1, U, dt)
+        G0, G1, C, Cg = assemble(N, rec0, rec1, U, dt, workers)
         if E0 is None:
             E0 = float(u @ G0 @ u)
         if transport == "geo":
