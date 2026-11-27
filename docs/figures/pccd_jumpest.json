@@ -4,7 +4,8 @@
   "args": {
    "N": 64,
    "ratio": 1000.0,
-   "zeta": 0.001
+   "zeta": 0.001,
+   "method": "onesided"
   },
   "result": 16.588264209887083
  },
@@ -13,7 +14,8 @@
   "args": {
    "N": 64,
    "ratio": 1000.0,
-   "zeta": 0.1
+   "zeta": 0.1,
+   "method": "onesided"
   },
   "result": 15.616019489671283
  },
@@ -22,7 +24,8 @@
   "args": {
    "N": 64,
    "ratio": 1000.0,
-   "zeta": 1
+   "zeta": 1,
+   "method": "onesided"
   },
   "result": 16.771895989370336
  },
@@ -31,7 +34,8 @@
   "args": {
    "N": 64,
    "ratio": 1000.0,
-   "zeta": 10
+   "zeta": 10,
+   "method": "onesided"
   },
   "result": 29.40278808628396
  },
@@ -40,7 +44,8 @@
   "args": {
    "N": 64,
    "ratio": 1000.0,
-   "zeta": 100
+   "zeta": 100,
+   "method": "onesided"
   },
   "result": 26.49774784288919
  },
@@ -49,7 +54,8 @@
   "args": {
    "N": 64,
    "ratio": 1000.0,
-   "zeta": 1000.0
+   "zeta": 1000.0,
+   "method": "onesided"
   },
   "result": 9.043817686139533
  },
@@ -58,7 +64,8 @@
   "args": {
    "N": 64,
    "ratio": 1000.0,
-   "zeta": 10000.0
+   "zeta": 10000.0,
+   "method": "onesided"
   },
   "result": 15.928519922298207
  },
@@ -67,7 +74,8 @@
   "args": {
    "N": 64,
    "ratio": 1000000.0,
-   "zeta": 0.001
+   "zeta": 0.001,
+   "method": "onesided"
   },
   "result": 16.58831384633215
  },
@@ -76,7 +84,8 @@
   "args": {
    "N": 64,
    "ratio": 1000000.0,
-   "zeta": 0.1
+   "zeta": 0.1,
+   "method": "onesided"
   },
   "result": 15.62080624013803
  },
@@ -85,7 +94,8 @@
   "args": {
    "N": 64,
    "ratio": 1000000.0,
-   "zeta": 1
+   "zeta": 1,
+   "method": "onesided"
   },
   "result": 16.797045862530272
  },
@@ -94,7 +104,8 @@
   "args": {
    "N": 64,
    "ratio": 1000000.0,
-   "zeta": 10
+   "zeta": 10,
+   "method": "onesided"
   },
   "result": 30.06443805172069
  },
@@ -103,7 +114,8 @@
   "args": {
    "N": 64,
    "ratio": 1000000.0,
-   "zeta": 100
+   "zeta": 100,
+   "method": "onesided"
   },
   "result": 33.33596047237514
  },
@@ -112,7 +124,8 @@
   "args": {
    "N": 64,
    "ratio": 1000000.0,
-   "zeta": 1000.0
+   "zeta": 1000.0,
+   "method": "onesided"
   },
   "result": 33.64035086204601
  },
@@ -121,7 +134,8 @@
   "args": {
    "N": 64,
    "ratio": 1000000.0,
-   "zeta": 10000.0
+   "zeta": 10000.0,
+   "method": "onesided"
   },
   "result": 32.967887182169164
  },
@@ -130,7 +144,8 @@
   "args": {
    "N": 64,
    "ratio": 1.0,
-   "spacing": 0.02
+   "spacing": 0.02,
+   "method": "onesided"
   },
   "result": {
    "max_change": 16.28811917298041,
@@ -142,7 +157,8 @@
   "args": {
    "N": 64,
    "ratio": 1.0,
-   "spacing": 0.01
+   "spacing": 0.01,
+   "method": "onesided"
   },
   "result": {
    "max_change": 16.624143695474633,
@@ -154,7 +170,8 @@
   "args": {
    "N": 64,
    "ratio": 1.0,
-   "spacing": 0.005
+   "spacing": 0.005,
+   "method": "onesided"
   },
   "result": {
    "max_change": 16.79481123046044,
@@ -166,7 +183,8 @@
   "args": {
    "N": 64,
    "ratio": 1000.0,
-   "spacing": 0.02
+   "spacing": 0.02,
+   "method": "onesided"
   },
   "result": {
    "max_change": 18.09555811573648,
@@ -178,7 +196,8 @@
   "args": {
    "N": 64,
    "ratio": 1000.0,
-   "spacing": 0.01
+   "spacing": 0.01,
+   "method": "onesided"
   },
   "result": {
    "max_change": 17.588131041989318,
@@ -190,10 +209,307 @@
   "args": {
    "N": 64,
    "ratio": 1000.0,
-   "spacing": 0.005
+   "spacing": 0.005,
+   "method": "onesided"
   },
   "result": {
    "max_change": 16.285540686576258,
+   "at": 8.326672684688674e-17
+  }
+ },
+ {
+  "test": "cont",
+  "args": {
+   "N": 64,
+   "ratio": 1000000.0,
+   "spacing": 0.02,
+   "method": "onesided"
+  },
+  "result": {
+   "max_change": 19.05029381679865,
+   "at": 1.3877787807814457e-17
+  }
+ },
+ {
+  "test": "cont",
+  "args": {
+   "N": 64,
+   "ratio": 1000000.0,
+   "spacing": 0.01,
+   "method": "onesided"
+  },
+  "result": {
+   "max_change": 19.46336409120363,
+   "at": -5.551115123125783e-17
+  }
+ },
+ {
+  "test": "cont",
+  "args": {
+   "N": 64,
+   "ratio": 1000000.0,
+   "spacing": 0.005,
+   "method": "onesided"
+  },
+  "result": {
+   "max_change": 19.669263261431524,
+   "at": 8.326672684688674e-17
+  }
+ },
+ {
+  "test": "amp",
+  "args": {
+   "N": 64,
+   "ratio": 1000.0,
+   "zeta": 0.001,
+   "method": "joint"
+  },
+  "result": 8.740063898314398
+ },
+ {
+  "test": "amp",
+  "args": {
+   "N": 64,
+   "ratio": 1000.0,
+   "zeta": 0.1,
+   "method": "joint"
+  },
+  "result": 7.912697163158424
+ },
+ {
+  "test": "amp",
+  "args": {
+   "N": 64,
+   "ratio": 1000.0,
+   "zeta": 1,
+   "method": "joint"
+  },
+  "result": 5.465282754750263
+ },
+ {
+  "test": "amp",
+  "args": {
+   "N": 64,
+   "ratio": 1000.0,
+   "zeta": 10,
+   "method": "joint"
+  },
+  "result": 6.336718359749375
+ },
+ {
+  "test": "amp",
+  "args": {
+   "N": 64,
+   "ratio": 1000.0,
+   "zeta": 100,
+   "method": "joint"
+  },
+  "result": 5.181746446930486
+ },
+ {
+  "test": "amp",
+  "args": {
+   "N": 64,
+   "ratio": 1000.0,
+   "zeta": 1000.0,
+   "method": "joint"
+  },
+  "result": 3.688231531013109
+ },
+ {
+  "test": "amp",
+  "args": {
+   "N": 64,
+   "ratio": 1000.0,
+   "zeta": 10000.0,
+   "method": "joint"
+  },
+  "result": 7.593180502881156
+ },
+ {
+  "test": "amp",
+  "args": {
+   "N": 64,
+   "ratio": 1000000.0,
+   "zeta": 0.001,
+   "method": "joint"
+  },
+  "result": 8.740081736201526
+ },
+ {
+  "test": "amp",
+  "args": {
+   "N": 64,
+   "ratio": 1000000.0,
+   "zeta": 0.1,
+   "method": "joint"
+  },
+  "result": 7.914543663905212
+ },
+ {
+  "test": "amp",
+  "args": {
+   "N": 64,
+   "ratio": 1000000.0,
+   "zeta": 1,
+   "method": "joint"
+  },
+  "result": 5.473699954352374
+ },
+ {
+  "test": "amp",
+  "args": {
+   "N": 64,
+   "ratio": 1000000.0,
+   "zeta": 10,
+   "method": "joint"
+  },
+  "result": 6.449406024754763
+ },
+ {
+  "test": "amp",
+  "args": {
+   "N": 64,
+   "ratio": 1000000.0,
+   "zeta": 100,
+   "method": "joint"
+  },
+  "result": 6.667852097740425
+ },
+ {
+  "test": "amp",
+  "args": {
+   "N": 64,
+   "ratio": 1000000.0,
+   "zeta": 1000.0,
+   "method": "joint"
+  },
+  "result": 6.683613277223887
+ },
+ {
+  "test": "amp",
+  "args": {
+   "N": 64,
+   "ratio": 1000000.0,
+   "zeta": 10000.0,
+   "method": "joint"
+  },
+  "result": 6.5802666701308565
+ },
+ {
+  "test": "cont",
+  "args": {
+   "N": 64,
+   "ratio": 1.0,
+   "spacing": 0.02,
+   "method": "joint"
+  },
+  "result": {
+   "max_change": 0.1509009379538231,
+   "at": -0.06
+  }
+ },
+ {
+  "test": "cont",
+  "args": {
+   "N": 64,
+   "ratio": 1.0,
+   "spacing": 0.01,
+   "method": "joint"
+  },
+  "result": {
+   "max_change": 0.07657417288353852,
+   "at": -0.060000000000000026
+  }
+ },
+ {
+  "test": "cont",
+  "args": {
+   "N": 64,
+   "ratio": 1.0,
+   "spacing": 0.005,
+   "method": "joint"
+  },
+  "result": {
+   "max_change": 0.038408257824877445,
+   "at": -0.05999999999999997
+  }
+ },
+ {
+  "test": "cont",
+  "args": {
+   "N": 64,
+   "ratio": 1000.0,
+   "spacing": 0.02,
+   "method": "joint"
+  },
+  "result": {
+   "max_change": 0.5963462608298769,
+   "at": 1.3877787807814457e-17
+  }
+ },
+ {
+  "test": "cont",
+  "args": {
+   "N": 64,
+   "ratio": 1000.0,
+   "spacing": 0.01,
+   "method": "joint"
+  },
+  "result": {
+   "max_change": 0.6110003120001992,
+   "at": -5.551115123125783e-17
+  }
+ },
+ {
+  "test": "cont",
+  "args": {
+   "N": 64,
+   "ratio": 1000.0,
+   "spacing": 0.005,
+   "method": "joint"
+  },
+  "result": {
+   "max_change": 0.5861867712266638,
+   "at": 8.326672684688674e-17
+  }
+ },
+ {
+  "test": "cont",
+  "args": {
+   "N": 64,
+   "ratio": 1000000.0,
+   "spacing": 0.02,
+   "method": "joint"
+  },
+  "result": {
+   "max_change": 0.612184005460493,
+   "at": 1.3877787807814457e-17
+  }
+ },
+ {
+  "test": "cont",
+  "args": {
+   "N": 64,
+   "ratio": 1000000.0,
+   "spacing": 0.01,
+   "method": "joint"
+  },
+  "result": {
+   "max_change": 0.6444251086035093,
+   "at": -5.551115123125783e-17
+  }
+ },
+ {
+  "test": "cont",
+  "args": {
+   "N": 64,
+   "ratio": 1000000.0,
+   "spacing": 0.005,
+   "method": "joint"
+  },
+  "result": {
+   "max_change": 0.6538811430636762,
    "at": 8.326672684688674e-17
   }
  }

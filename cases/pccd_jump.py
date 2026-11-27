@@ -90,7 +90,42 @@ def estimate_terms(ubar, N, a, b, mixed, width=5):
     return terms
 
 
-def reconstruct(N, ratio, separate=True, a=A_, b=B_, order=4, estimate=False, data=None, width=5, ubar_in=None):
+def estimate_terms_joint(ubar, N, a, b, P, ratio, R=5.5):
+    """docs/notes/94 E: both sides' quartics at once, sharing the value at x_Gamma (9 unknowns), from every cell within
+    R cells of x_Gamma with its exact equation  ubar_j = (1/m_j) sum_pieces rho int P_side  (pure cells: the plain
+    average; the mixed cell: the mass-weighted one), weights (1 - (r/R)^2)^2 continuous in the geometry."""
+    h = 1.0 / N
+    terms = []
+    for xg in (a, b):
+        rows, rhs, wts = [], [], []
+        m = int(math.floor(xg / h))
+        r0 = int(math.ceil(R)) + 1
+        for c in range(m - r0, m + r0 + 1):
+            r = abs((c + 0.5) * h - xg) / h
+            if r >= R:
+                continue
+            row = np.zeros(9)
+            den = 0.0
+            for s0, s1, hv in P[c % N]:
+                rho = 1.0 if hv else 1.0 / ratio
+                lo, hi = (c + s0) * h, (c + s1) * h
+                side = 1 if 0.5 * (lo + hi) > xg else -1
+                mom = np.array([(((hi - xg) / h) ** (p + 1) - ((lo - xg) / h) ** (p + 1)) / (p + 1) for p in range(5)])
+                row[0] += rho * mom[0]
+                row[1:5] += rho * mom[1:] * (side < 0)
+                row[5:9] += rho * mom[1:] * (side > 0)
+                den += rho * (s1 - s0)
+            rows.append(row / den)
+            rhs.append(ubar[c % N])
+            wts.append(max(1 - (r / R) ** 2, 0.0) ** 2)
+        sw = np.sqrt(np.array(wts))
+        coef = np.linalg.lstsq(sw[:, None] * np.array(rows), sw * np.array(rhs), rcond=None)[0]
+        terms.append((xg, [0.0] + [(coef[4 + k] - coef[k]) / h ** k for k in range(1, 5)]))
+    return terms
+
+
+def reconstruct(N, ratio, separate=True, a=A_, b=B_, order=4, estimate=False, data=None, width=5, ubar_in=None,
+                method="onesided"):
     """``estimate``: the jumps from the data (estimate_terms); ``data``: a function u(x) replacing ``exact`` (pure
     cells: plain averages; continuity tests use a random smooth field)."""
     h = 1.0 / N
@@ -103,9 +138,11 @@ def reconstruct(N, ratio, separate=True, a=A_, b=B_, order=4, estimate=False, da
     AR = np.zeros((N, N))
     mixed = []
     U = data or (lambda x: exact(x, a, b))
+    est = (lambda ub: estimate_terms(ub, N, a, b, None, width)) if method == "onesided" else \
+        (lambda ub: estimate_terms_joint(ub, N, a, b, P, ratio))
     if estimate and ubar_in is not None:
         ubar = np.asarray(ubar_in, dtype=float).copy()
-        terms = estimate_terms(ubar, N, a, b, None, width)
+        terms = est(ubar)
     elif estimate:
         for i, ps in enumerate(P):
             num = den = 0.0
@@ -116,8 +153,7 @@ def reconstruct(N, ratio, separate=True, a=A_, b=B_, order=4, estimate=False, da
                 num += r * (w @ U((i + s) * h))
                 den += r * w.sum()
             ubar[i] = num / den
-        mixed0 = [i for i, ps in enumerate(P) if len(ps) > 1]
-        terms = estimate_terms(ubar, N, a, b, mixed0, width)
+        terms = est(ubar)
     for i, ps in enumerate(P):
         num = den = 0.0
         row = np.zeros(5)
