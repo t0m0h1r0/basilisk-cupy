@@ -1383,5 +1383,7 @@ uniform Gram / Schur equivalence (slopes +-1 in the density ratio), in agreement
 impossibility theorem for reconstructions that share R_C. The density-adapted D0m (the phase with the larger mobility in a cut cell restores the volume average), however, has reference-free
 (Jacobi-scaled) condition numbers that do not depend on the density ratio, and in an exact layered Helmholtz
 projection it converges independently of the ratio, while the lumped MAC built from the reference inner products
-themselves has O(1) errors when the heavy fraction of the cut cell exceeds 1/2. Whether the references should be
-revised is left to the user.
+themselves has O(1) errors when the heavy fraction of the cut cell exceeds 1/2. A first high-order prototype of the same structure (per-phase PCCD on volume
+averages, the larger-mobility phase restoring the cut cell's average) gives 4.3-5.0th order max-norm projection
+errors at density ratio 1e6 with ratio-independent Jacobi-scaled condition numbers (349-1110). Whether the
+references should be revised is left to the user.
