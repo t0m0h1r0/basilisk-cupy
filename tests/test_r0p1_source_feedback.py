@@ -40,6 +40,8 @@ def test_growth_face_source_unstable_and_two_forms_stable():
     assert growth(1e3, "force", steps=40)["unstable"]            # the same impulse taken back with the old mass
     assert growth(1e3, "face+m", steps=40)["unstable"]           # (K) taken back: worse, not better
     assert not growth(100.0, "face", steps=80)["unstable"]
+    for mode in ("face-upwind", "face-massw"):                   # another average of g does not help (recorded)
+        assert growth(1e3, mode, steps=80)["unstable"]
     for mode in ("accel", "trapezoid"):
         assert growth(1e6, mode, steps=80)["max"] < 1e-6
 

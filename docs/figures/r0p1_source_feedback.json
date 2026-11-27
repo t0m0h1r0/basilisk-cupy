@@ -1169,6 +1169,42 @@
    "max_cell_emptied_share": 1.0
   },
   {
+   "ratio": 1000.0,
+   "mode": "face-massw",
+   "n": 32,
+   "cfl": 0.5,
+   "steps": 200,
+   "max": 12.91000258126933,
+   "last": 0.3115467571844681,
+   "rate": 1.8697048996203507,
+   "unstable": true,
+   "max_cell_emptied_share": 1.0
+  },
+  {
+   "ratio": 1000.0,
+   "mode": "face-massw",
+   "n": 64,
+   "cfl": 0.5,
+   "steps": 200,
+   "max": 19.011779231041054,
+   "last": 0.438573816879416,
+   "rate": 2.447588475204948,
+   "unstable": true,
+   "max_cell_emptied_share": 1.0
+  },
+  {
+   "ratio": 300.0,
+   "mode": "face-massw",
+   "n": 32,
+   "cfl": 0.5,
+   "steps": 200,
+   "max": 5.931474359912285,
+   "last": 0.44958483382518344,
+   "rate": 1.5037756828881594,
+   "unstable": true,
+   "max_cell_emptied_share": 0.8787878787878788
+  },
+  {
    "ratio": 300.0,
    "mode": "force",
    "n": 32,
@@ -1194,6 +1230,18 @@
   },
   {
    "ratio": 1000.0,
+   "mode": "face-upwind",
+   "n": 64,
+   "cfl": 0.5,
+   "steps": 200,
+   "max": 26.939237151299686,
+   "last": 1.1846694301750236,
+   "rate": 8.508425488645114,
+   "unstable": true,
+   "max_cell_emptied_share": 1.0
+  },
+  {
+   "ratio": 1000.0,
    "mode": "face+m",
    "n": 32,
    "cfl": 0.5,
@@ -1215,6 +1263,18 @@
    "rate": NaN,
    "unstable": false,
    "max_cell_emptied_share": NaN
+  },
+  {
+   "ratio": 300.0,
+   "mode": "face-upwind",
+   "n": 32,
+   "cfl": 0.5,
+   "steps": 200,
+   "max": 8.51165722296487,
+   "last": 1.3935212276914335,
+   "rate": 1.6904589063540294,
+   "unstable": true,
+   "max_cell_emptied_share": 1.0
   },
   {
    "ratio": 1000000.0,
@@ -1373,6 +1433,18 @@
    "max_cell_emptied_share": 1.0
   },
   {
+   "ratio": 10000.0,
+   "mode": "face-massw",
+   "n": 32,
+   "cfl": 0.5,
+   "steps": 40,
+   "max": 151.84618882338583,
+   "last": 151.84618882338583,
+   "rate": 6.407448625723798,
+   "unstable": true,
+   "max_cell_emptied_share": 0.8571428571428571
+  },
+  {
    "ratio": 1000000.0,
    "mode": "force",
    "n": 32,
@@ -1419,6 +1491,18 @@
    "rate": NaN,
    "unstable": false,
    "max_cell_emptied_share": NaN
+  },
+  {
+   "ratio": 1000.0,
+   "mode": "face-upwind",
+   "n": 32,
+   "cfl": 0.5,
+   "steps": 200,
+   "max": 47.260500652579466,
+   "last": 2.6485286418605,
+   "rate": 5.756982304605521,
+   "unstable": true,
+   "max_cell_emptied_share": 1.0
   },
   {
    "ratio": 1000.0,
@@ -1659,6 +1743,18 @@
    "rate": NaN,
    "unstable": false,
    "max_cell_emptied_share": NaN
+  },
+  {
+   "ratio": 10000.0,
+   "mode": "face-upwind",
+   "n": 32,
+   "cfl": 0.5,
+   "steps": 36,
+   "max": 533.0152585309862,
+   "last": 533.0152585309862,
+   "rate": 13.315520554574345,
+   "unstable": true,
+   "max_cell_emptied_share": 1.0
   },
   {
    "ratio": 1000.0,

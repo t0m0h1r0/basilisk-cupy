@@ -16,6 +16,7 @@ one. A cell the heavy phase has just left has m^n / m^{n+1} up to the density ra
   growth()       the growth per step of a round-off perturbation of a drop carried by a uniform flow, for four ways
                  of putting the same half-step acceleration into the transport (interventions, all from hooks):
                    "face"    the library's source in the face value;
+                   "face-upwind", "face-massw"  the same with the donor cell's g / the density-weighted mean;
                    "face+m"  the same, and (K) taken back from every cell after the transport;
                    "force"   M += dt/2 rho^n g before the transport, M -= dt/2 rho^n g after (the old mass);
                    "accel"   u += dt/2 g before the transport, u -= dt/2 g after (the new mass);
@@ -59,6 +60,43 @@ def _drop(grid, r=0.15, c=(0.5, 0.5)):
     return to_numpy(fraction(grid, lambda x, y: r * r - (x - c[0]) ** 2 - (y - c[1]) ** 2, refine=8))
 
 
+class face_average:
+    """Context manager (the library is not changed): the face value's source as another average of the two cells'
+    g than the library's arithmetic mean, by rewriting that one line of ``vof._sweep``.
+      "upwind"  the donor cell's g;   "massw"  the density-weighted mean (rho_L g_L + rho_R g_R) / (rho_L + rho_R)."""
+
+    LINE = "ff = ff + 0.25 * dt * (_faces(sp, axis, 0) + _faces(sp, axis, 1))"
+    NEW = {"upwind": "ff = ff + 0.5 * dt * upwind(sp)",
+           "massw": ("rk_ = _RHO[1] if tr.inverse else _RHO[0]\n"
+                     "            cq_ = xp.minimum(xp.maximum(cp, 0.0), 1.0)\n"
+                     "            rc_ = _RHO[0] * cq_ + _RHO[1] * (1.0 - cq_)\n"
+                     "            fo_ = rc_ * sp / rk_\n"
+                     "            ff = ff + 0.5 * dt * rk_ * (_faces(fo_, axis, 0) + _faces(fo_, axis, 1))"
+                     " / (_faces(rc_, axis, 0) + _faces(rc_, axis, 1))")}
+
+    def __init__(self, kind, ratio):
+        self.kind, self.ratio = kind, ratio
+
+    def __enter__(self):
+        import inspect
+
+        import basilisk_cupy.interface.vof as vof
+
+        self.vof, self.saved = vof, vof._sweep
+        if self.kind in self.NEW:
+            src = inspect.getsource(vof._sweep)
+            assert src.count(self.LINE) == 1
+            vof._RHO = (1.0, 1.0 / self.ratio)
+            ns_ = {}
+            exec(src.replace(self.LINE, self.NEW[self.kind]), vof.__dict__, ns_)
+            vof._sweep = ns_["_sweep"]
+        return self
+
+    def __exit__(self, *exc):
+        self.vof._sweep = self.saved
+        return False
+
+
 def solver(n, ratio, mode, f0=None, tolerance=1e-10):
     """CenteredNS + TwoPhase(conserving=True) with the half-step acceleration put in as ``mode`` (hooks only)."""
     import warnings
@@ -71,7 +109,8 @@ def solver(n, ratio, mode, f0=None, tolerance=1e-10):
     grid = CartesianGrid((n, n))
     ns = CenteredNS(grid, periodic=(0, 1), tolerance=tolerance)
     f = CellField.from_interior(grid, np.zeros((n, n)) if f0 is None else f0(grid), _pbc())
-    tp = TwoPhase(ns, f, rho1=1.0, rho2=1.0 / ratio, conserving=True, conserving_source=mode in ("face", "face+m"))
+    tp = TwoPhase(ns, f, rho1=1.0, rho2=1.0 / ratio, conserving=True,
+                  conserving_source=mode in ("face", "face+m", "face-upwind", "face-massw"))
     st = {}
 
     def before(s):                                               # "vof", before TwoPhase's hook
@@ -196,6 +235,9 @@ def growth(ratio, mode, n=32, cfl=0.5, steps=200, U=U0):
     step, and the growth per step between 1e-9 and 1e-3 (nan if it never gets there)."""
     from basilisk_cupy.backend import to_numpy
 
+    if mode in ("face-upwind", "face-massw"):                    # the same source, averaged differently
+        with face_average(mode[5:], ratio):
+            return dict(growth(ratio, "face", n, cfl, steps, U), mode=mode)
     grid, ns, tp = solver(n, ratio, mode, f0=_drop)
     ns.cfl = cfl
     for ax in range(2):
@@ -374,6 +416,7 @@ def jobs():
     out += [("growth", (r, m)) for m in MODES for r in (10.0, 100.0, 300.0, 1e3, 3e3, 1e4, 1e6)]
     out += [("growth", (r, "face", 32, c)) for r in (1e3, 1e4) for c in (0.25, 0.125)]
     out += [("growth", (r, m, 64)) for m in ("face", "accel", "face+m") for r in (1e3, 1e6)]
+    out += [("growth", (r, m, n)) for m in ("face-upwind", "face-massw") for r, n in ((300.0, 32), (1e3, 32), (1e4, 32), (1e3, 64))]
     out += [("growth", (1e3, m, 32, 0.5, 200, U)) for m in ("face", "accel") for U in ((1.0, 0.0), (0.3, 1.0))]
     out += [("single", (n, m)) for m in MODES for n in (32, 64, 128)]
     out += [("vortex", (m, n)) for m in MODES for n in (32, 64)]
