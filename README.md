@@ -1273,3 +1273,13 @@ free stream and the total momentum exact; a mean-preserving reconstruction gives
 prototypes of the 2-D work (deformation flow, thin bands, height-function hinge) are frozen on the branch
 `hold-curved-poly-thin` (tag `archive/hold-curved-poly-thin-20261127`); their measurements used the wrong shift and are
 reference values only.
+
+Density-robust two-phase PCCD (`docs/notes/95_pccd_density_robust.md`): the Gram matrix's ill-conditioning comes from
+the light phase's data leaking into the heavy phase through the implicit CCD coupling (lambda_max >= r times the leak;
+the top eigenmode lives on the light cells). Correcting only the CCD rows that straddle an interface (no cut-off
+function) is the most accurate but still grows with the density ratio; PCCD solved separately in each phase, joined at
+the interface and made mean-preserving by the shift, keeps lambda_max below 57 at any density ratio (with end
+closures optimised under quartic exactness), stays fifth order, and grows by at most 3.6 over a Floquet period for both
+remap and Galerkin. The cut-off jump term makes the remap Floquet-unstable. The phase split jumps when an interface
+crosses a cell face; blending the mixed cell into the majority phase's run (when the minority phase is small in both
+volume and mass, with the minority part's integral replaced exactly) makes it continuous at no loss of order.

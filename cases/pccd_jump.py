@@ -20,7 +20,15 @@ import math
 
 import numpy as np
 
-from cases.pccd import WG, XG, _mono, reconstruction_operator
+from functools import lru_cache
+
+from cases.pccd import WG, XG, _mono
+from cases.pccd import reconstruction_operator as _reconstruction_operator
+
+
+@lru_cache(maxsize=8)
+def reconstruction_operator(N):
+    return _reconstruction_operator(N)
 from cases.pccd_density import pieces
 
 A_, B_ = 0.2613, 0.7137
@@ -62,10 +70,15 @@ def jump_terms(a=A_, b=B_, order=4):
 
 
 def J(x, terms):
+    """sum over the interfaces of the cut-off jump polynomial. A term (x_G, T) or (x_G, T, side): side +1 (default)
+    puts it on d > 0 as T, side -1 on d < 0 as -T (same jump; docs/notes/95: "light side only")."""
     out = np.zeros_like(x)
-    for xg, T in terms:
+    for term in terms:
+        xg, T = term[0], term[1]
+        side = term[2] if len(term) > 2 else 1
         d = (x - xg + 0.5) % 1.0 - 0.5
-        out += np.where(d > 0, _chi(d) * sum(c * d ** k for k, c in enumerate(T)), 0.0)
+        poly = _chi(d) * sum(c * d ** k for k, c in enumerate(T))
+        out += np.where(d > 0, poly, 0.0) if side > 0 else np.where(d < 0, -poly, 0.0)
     return out
 
 
@@ -124,8 +137,13 @@ def estimate_terms_joint(ubar, N, a, b, P, ratio, R=5.5):
     return terms
 
 
+def _light_sides(terms, a, b):
+    """docs/notes/95: each jump term on the light side (heavy on the arc a -> b: light is d < 0 at a, d > 0 at b)."""
+    return [(xg, T, -1 if abs(xg - a) < 1e-15 else 1) for xg, T, *_ in terms]
+
+
 def reconstruct(N, ratio, separate=True, a=A_, b=B_, order=4, estimate=False, data=None, width=5, ubar_in=None,
-                method="onesided"):
+                method="onesided", light=False):
     """``estimate``: the jumps from the data (estimate_terms); ``data``: a function u(x) replacing ``exact`` (pure
     cells: plain averages; continuity tests use a random smooth field)."""
     h = 1.0 / N
@@ -138,8 +156,11 @@ def reconstruct(N, ratio, separate=True, a=A_, b=B_, order=4, estimate=False, da
     AR = np.zeros((N, N))
     mixed = []
     U = data or (lambda x: exact(x, a, b))
-    est = (lambda ub: estimate_terms(ub, N, a, b, None, width)) if method == "onesided" else \
+    est0 = (lambda ub: estimate_terms(ub, N, a, b, None, width)) if method == "onesided" else \
         (lambda ub: estimate_terms_joint(ub, N, a, b, P, ratio))
+    est = (lambda ub: _light_sides(est0(ub), a, b)) if light else est0
+    if light and terms:
+        terms = _light_sides(terms, a, b)
     if estimate and ubar_in is not None:
         ubar = np.asarray(ubar_in, dtype=float).copy()
         terms = est(ubar)
@@ -191,7 +212,7 @@ def reconstruct(N, ratio, separate=True, a=A_, b=B_, order=4, estimate=False, da
         for o in range(-2, 3):
             near[(m + o) % N] = True
     return {"err": float(err.max()), "err_far": float(err[~near].max()), "cond": float(np.linalg.cond(S)),
-            "values": Uh, "terms": terms}
+            "values": Uh, "terms": terms, "coef": c}
 
 
 def main() -> None:
