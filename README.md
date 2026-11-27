@@ -1242,6 +1242,29 @@ with nearly equal errors; the tangent line drops to second-to-third order. At N 
 accurate than the direct remap. Fixes the window centre for curved hinges, and centres the single polynomial at the
 cell instead of the interface foot (about 20 cells away the quartic monomials cancelled to 1e-9 free-stream error).
 
+Correction (`docs/notes/90_shift_correction.md`): the "velocity-difference shift" of notes 88-89 subtracted the target
+cell's row, which is the least squares constrained to the cell mean that note 85 rejected (found by the user's
+review). Subtracting the weighted-mean row instead gives the unconstrained fit plus the constant (equal to the plain
+shift to 2.5e-10); at density ratio 1e6 and phase-mass ratio 100 the reconstruction's amplification drops from 397 to
+26 (corner-cut 45 degrees: 317 to 12).
+
+Research pivot (the user, `docs/notes/91_pccd.md`): CCD is the core again; the least-squares Galerkin of notes 80-90
+stays as a reference. P0 of the primitive-function CCD (PCCD): the 6th-order CCD applied to the primitive of the cell
+averages gives face values and gradients (a 2 x 2 block tridiagonal system, condition number 21); a cubic Hermite plus
+a mean-restoring bubble gives a C^1, mean-preserving, fifth-order reconstruction. On it the direct remap is fifth
+order and the Galerkin transport ninth order or better (its symbol is a Rayleigh quotient: the error squares). At four
+cells per wavelength and CFL 0.37 the dissipation is 8.1e-3 (remap) and 6.7e-5 (Galerkin), against 0.56 (BCG),
+0.073 (FUCCD4) and 0.036 (the cell-wise quartic of notes 80-81); |T| <= 1 at all wavenumbers and CFL numbers tested.
+
+PCCD with interfaces, P1 (`docs/notes/92_pccd_density.md` to `94_pccd_jump_estimate.md`): with a density jump and a
+smooth velocity, the plain averages of the mixed cells are recovered from the mass-weighted ones (a Schur system,
+condition number <= 1.40 up to density ratio 1e6) and the reconstruction stays fifth order. When the velocity's
+derivatives jump, PCCD applied directly is first order and, through the implicit CCD coupling, pollutes cells far
+from the interface; separating the jump (u = w + J, J the jump's Taylor polynomial under a smooth cut-off) restores
+fifth order, with known jumps and with jumps estimated from the data. The one-sided estimate (five pure cells per
+side) jumps when the interface crosses a face; fitting both sides at once, mixed cell included, with continuous
+weights is continuous and amplifies the data at most 8.7 times.
+
 Density-robust two-phase PCCD (`docs/notes/95_pccd_density_robust.md`): the Gram matrix's ill-conditioning comes from
 the light phase's data leaking into the heavy phase through the implicit CCD coupling (lambda_max >= r times the leak;
 the top eigenmode lives on the light cells). Correcting only the CCD rows that straddle an interface (no cut-off
