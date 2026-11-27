@@ -1265,6 +1265,15 @@ fifth order, with known jumps and with jumps estimated from the data. The one-si
 side) jumps when the interface crosses a face; fitting both sides at once, mixed cell included, with continuous
 weights is continuous and amplifies the data at most 8.7 times.
 
+Polynomial-approximated Galerkin, general theory (`docs/notes/96_polynomial_galerkin_theory.md`; implementation on
+hold): replacing G1^{-1} by a polynomial p of A = M^{-1/2} G1 M^{-1/2} keeps the energy from growing whenever the
+residual polynomial r = 1 - lambda p lies in [0, 2] on the spectrum (automatic for r = q^2); a root of q at 1 keeps the
+free stream and the total momentum exact; a mean-preserving reconstruction gives G1 >= M, so the spectrum lies in
+[1, b]. For the single-phase PCCD the spectrum is [1, 1.532] (Gershgorin bound 1.711). The least-squares Galerkin
+prototypes of the 2-D work (deformation flow, thin bands, height-function hinge) are frozen on the branch
+`hold-curved-poly-thin` (tag `archive/hold-curved-poly-thin-20261127`); their measurements used the wrong shift and are
+reference values only.
+
 Density-robust two-phase PCCD (`docs/notes/95_pccd_density_robust.md`): the Gram matrix's ill-conditioning comes from
 the light phase's data leaking into the heavy phase through the implicit CCD coupling (lambda_max >= r times the leak;
 the top eigenmode lives on the light cells). Correcting only the CCD rows that straddle an interface (no cut-off
