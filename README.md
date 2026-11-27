@@ -1421,3 +1421,18 @@ user derived (matched within 0.1-4%), and cancel under the alternating sweep ord
 applied from the test side; the library is unchanged) the conserving form reaches the accuracy of the non-conserving
 one on the single-phase Taylor-Green flow (8.3e-3 / 1.22e-3 / 1.76e-4 at N = 32 / 64 / 128). The explicit feedback
 instability of the source at high density ratios (note 77) is still open.
+
+R0-P1 continued, unsteady and viscous single-phase flows (`docs/notes/113_r0p1_unsteady_viscous.md`): with the two
+fixes of note 112 the conserving form is still first order in time once the flow is unsteady (a Taylor-Green flow
+with a Galilean boost, exact for any viscosity: slopes 0.90-0.98 over 13 grids at a fixed CFL number). Three more
+terms, each with its predicted local error: E1 the face velocity that carries the momentum is the one of time t^n;
+E2 the half-step source in the face value has no viscous acceleration; E3 the viscous step is backward Euler. The
+global coefficients of E2 and E3 match the predictions (-/+ lambda/2 for a shift of the pattern, lambda^2/2 for
+the amplitude) to three digits, their shifts cancel, and fixing one of them alone makes the error larger. Without
+the boost E1 and E2 are gradients and do not show at all. With the face velocity extrapolated to t^{n+1/2} (no
+projection), the viscous (or the lagged total) acceleration in the face value and Crank-Nicolson with the explicit
+half on u^n, the scheme is second order at a fixed CFL number (slopes 2.01-2.32, N >= 96, max and RMS, three times),
+as with the exact face velocity. The non-conserving BCG form is first order in time with viscosity too. On a fixed
+grid the error of every second-order variant grows when the time step is reduced (a space error h^2 f(CFL)), so the
+time order cannot be read there. All of this is done from hooks (`cases/r0p1_unsteady_viscous.py`); the library is
+unchanged and nothing is two-phase yet.
