@@ -1196,3 +1196,10 @@ cell-wise quartic loses energy at its face jumps, -dE/dt = 1/2 sum_f rho |U| [u_
 reconstruction (pentadiagonal, condition number 7.5) makes it vanish with Delta t (230 times smaller for a 4h wave at
 CFL 0.37). The worst modes of note 82 sit at the interface-fitted basis; the largest growth from any step is the
 largest one-step norm, reached only by grid-scale data next to the interface.
+
+Adjoint-corrected Galerkin transport (`docs/notes/84_adjoint_correction.md`, the user's proposal): T [I + beta (I - T^dagger T)]
+with T^dagger = G0^-1 C^T maps the energy-norm singular values sigma to (3 sigma - sigma^3)/2 (beta = 1/2), so free
+stream, total momentum and energy stability are kept exactly while a one-step loss e becomes 3e^2/4 + e^3/4: at
+density ratio 1 the small-CFL dissipation per unit time vanishes with Delta t, fourth order is kept. Losses saturated
+at O(1) in a light cell next to the interface are not recovered, and the max-norm amplification peaks (272 at density
+ratio 1e6) where a heavy sliver enters a light cell.

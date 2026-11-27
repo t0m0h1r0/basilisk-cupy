@@ -47,9 +47,38 @@ def spline_symbol(theta):
     return (66 + 52 * np.cos(theta) + 2 * np.cos(2 * theta)) / 120.0
 
 
+def c0_face(theta, how):
+    """docs/notes/84 (P0-10c): the face value v at x = 1/2 of the face-continuous correction of the cell-wise quartic
+    (constant density: the mass coordinate is s = xi + 1/2). "avg": the mean of the two one-sided values; "opt": the
+    minimiser of the correction's energy sum_cells [(2/15)(e_L^2 + e_R^2) - (1/15) e_L e_R] (Bloch: one cell)."""
+    c = poly_coefficients(theta)
+    PL, PR = np.polyval(c[::-1], -0.5), np.polyval(c[::-1], 0.5)
+    if how == "avg":
+        return 0.5 * (PR + np.exp(1j * theta) * PL)
+
+    def J(v):
+        eL, eR = np.exp(-1j * theta) * v - PL, v - PR
+        return (2 / 15) * (abs(eL) ** 2 + abs(eR) ** 2) - (1 / 15) * (eL * np.conj(eR)).real
+
+    c0 = J(0.0)
+    a = (J(2.0) - 2 * J(1.0) + c0) / 2.0
+    br = (a + c0 - J(1.0)) / 2.0
+    bi = (a + c0 - J(1j)) / 2.0
+    return (br + 1j * bi) / a
+
+
 def phi(kind, theta, x):
     """The reconstruction of u_j = e^{i j theta} at points x (cell j = [j - 1/2, j + 1/2])."""
     x = np.asarray(x, dtype=float)
+    if kind in ("c0avg", "c0opt"):
+        c = poly_coefficients(theta)
+        v = c0_face(theta, kind[2:])
+        PL, PR = np.polyval(c[::-1], -0.5), np.polyval(c[::-1], 0.5)
+        eL, eR = np.exp(-1j * theta) * v - PL, v - PR
+        m = np.floor(x + 0.5)
+        sc = x - m + 0.5
+        cell = np.polyval(c[::-1], sc - 0.5) + (1 - 4 * sc + 3 * sc * sc) * eL + (-2 * sc + 3 * sc * sc) * eR
+        return np.exp(1j * m * theta) * cell
     if kind == "poly":
         c = poly_coefficients(theta)
         m = np.floor(x + 0.5)
