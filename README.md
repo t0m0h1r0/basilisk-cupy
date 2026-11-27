@@ -1396,3 +1396,12 @@ ownership of the density-adapted reconstruction D0m (in a cut cell the minority-
 face and the pure cell on its own side) the transform of D0m stays in [0.67, 1.00] (0.77 on the divergence-free
 subspace) and its normal Gram is uniformly equivalent to the control-volume masses. Local momentum conservation
 itself (fluxes of the moving control volumes) is not tested.
+
+Transport with moving phase-aware control volumes (`docs/notes/110_mac_transport.md`): in 1-D with an exact
+translation of the layered interface, the transfers m_ij, p_ij built from the common transport measure balance to
+rounding even when the ownership switches and a control-volume mass changes by r^2 (9.1e11 at density ratio 1e6), and
+the free stream is kept. With the density-adapted D0m and its own control volumes the tangential component is an
+isometry, so Galerkin and the exact-momentum Remap coincide: local momentum conservation and energy non-increase hold
+together. For the normal component they do not: the Remap has a worst one-step energy amplification of 1.3 that did
+not compound over 259 steps (<= 1.13), Galerkin has a normalised local-momentum defect of 0.4. With the usual dual
+cells the Remap blows up (energy x 6052 for a smooth field).
