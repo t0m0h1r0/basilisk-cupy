@@ -411,8 +411,11 @@ class SplitBlend:
 
     As mu -> 0 the joined form becomes the pure configuration: the map is continuous across a face crossing."""
 
-    def __init__(self, N, ratio, a, b, ubar, closure=None, mu0=0.1, mixed_mode="extend"):
+    def __init__(self, N, ratio, a, b, ubar, closure=None, mu0=0.1, mixed_mode="extend", split_cls=None):
+        """``split_cls``: the Split class to blend (docs/notes/106: cases.short_runs.SplitShort for short runs)."""
         import itertools
+
+        Split_ = split_cls or Split
 
         self.N, self.h = N, 1.0 / N
         P = pieces(N, a, b)
@@ -440,10 +443,10 @@ class SplitBlend:
                 continue
             on = [m for m, o in zip(ms, pick) if o]
             if not on:
-                self.parts.append((weight, Split(N, ratio, a, b, ubar, closure, mixed_mode=mixed_mode)))
+                self.parts.append((weight, Split_(N, ratio, a, b, ubar, closure, mixed_mode=mixed_mode)))
                 continue
             def resid(x):
-                sp = Split(N, ratio, a, b, ubar, closure, {m: (cand[m][0], x[k]) for k, m in enumerate(on)},
+                sp = Split_(N, ratio, a, b, ubar, closure, {m: (cand[m][0], x[k]) for k, m in enumerate(on)},
                            mixed_mode=mixed_mode)
                 out = []
                 for k, m in enumerate(on):

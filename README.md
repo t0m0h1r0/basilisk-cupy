@@ -1365,3 +1365,13 @@ projection fails in two phases; MAC-PCCD holds in one phase), Gate 1-B static re
 interfaces and short runs comparing cell-average and face-average state variables, Gate 1-C general-flow advection
 and time-step dependence, Gate 1-D viscosity, then Gate 2 (design decision), Gate 3 (two-phase Navier-Stokes) and
 Gate 4 (GPU). Method D stays provisional (not 4th order) and C is the viscous Oracle.
+
+Gate 1-B part 1 and Gate 1-D part (`docs/notes/106_short_runs_2d_stiffness.md`): short phase runs, which the
+phase-split PCCD leaves undefined below 5 pure cells, get a conservative degenerate reconstruction (SplitShort: the
+degree n - 1 polynomial matching the n averages of a 1-4 cell run; for a film straddling a face with no pure cell,
+linear between the two interface values from the two mixed-cell means). With the SplitBlend joins it is defined for
+0-8 pure cells, keeps every cell mean, keeps the Gram lambda_max <= 22.5 and is continuous as an interface crosses a
+face; at density ratios >= 1e3 the heavy phase is unaffected. The 2-D full viscous stress with a two-phase y
+reconstruction (2N x 2N per x wavenumber) gives a method-D stiffness of 25-29 in ordinary cases and about 4.3 times
+the 1-D value for thin constant-viscosity slices (2045); the tangential B_y = int mu Y Y^T does not bring back the
+G_nu ill-conditioning.
