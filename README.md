@@ -1330,3 +1330,12 @@ minimum-energy reconstructions is fourth order, isotropic and correct in its mix
 Advection (PCCD-Galerkin) and viscosity (method D) on the same Gram matrix, Strang-split with the interface frozen
 during the viscous half steps, solve the Galilean-boosted two-layer Stokes flow with no energy growth, exact momentum
 and second- to fourth-order convergence; the splitting error is negligible.
+
+Gate 1-A, pressure projection (`docs/notes/104_projection_gate.md`): the projection
+Pi = I - G^{-1} B^T (B G^{-1} B^T)^+ B is G-orthogonal for any face interpolation, so the user's skew high-order
+correction v_f += alpha/32 delta^4 (q_f - q_{f-1}) keeps energy stability and removes the single-phase checkerboard
+(alpha = 1.2: minimum Schur ratio 0.472 in 1-D and 0.382 in 2-D, as the user computed; the projection drops from 6th to
+5th order). In two phases the phase-split PCCD face values do not depend on the mixed-cell average, so every mixed
+cell adds a spurious null mode; applying the correction across the interface removes it but the smallest eigenvalue
+then scales as 1/(density ratio). A cell-average projection built on these face values does not work for two phases
+as it stands.
