@@ -271,12 +271,13 @@ def main() -> None:
 
     res = {"steady": [], "stokes": [], "balances": balances()}
     with ProcessPoolExecutor(24) as ex:
-        fs = [((N, r, k, c), ex.submit(steady, N, r, k, c)) for c in ("couette", "volume", "accel")
-              for k in ("nu", "mu", "water-air") for r in (1.0, 1e3) for N in (32, 64, 128, 256)]
+        fs = [((N, r, k, c, cor), ex.submit(steady, N, r, k, c, corrected=cor)) for c in ("couette", "volume", "accel")
+              for k in ("nu", "mu", "water-air") for r in (1.0, 1e3) for N in (32, 64, 128, 256)
+              for cor in (False, True)]
         ft = [((N, r, k), ex.submit(wall_stokes, N, r, k)) for k in ("nu", "mu", "water-air") for r in (1.0, 1e3)
               for N in (32, 64, 128, 256)]
-        for (N, r, k, c), f in fs:
-            res["steady"].append({"N": N, "ratio": r, "kind": k, "case": c, **f.result()})
+        for (N, r, k, c, cor), f in fs:
+            res["steady"].append({"N": N, "ratio": r, "kind": k, "case": c, "corrected": cor, **f.result()})
         for (N, r, k), f in ft:
             res["stokes"].append({"N": N, "ratio": r, "kind": k, **f.result()})
     json.dump(res, open("docs/figures/viscous_walls.json", "w"), indent=1, default=float)
@@ -284,8 +285,11 @@ def main() -> None:
     for c in ("couette", "volume", "accel"):
         for k in ("nu", "mu", "water-air"):
             for r in (1.0, 1e3):
-                rows = sorted([x for x in res["steady"] if x["case"] == c and x["kind"] == k and x["ratio"] == r],
-                              key=lambda x: x["N"])
+                rows = sorted([x for x in res["steady"] if x["case"] == c and x["kind"] == k and x["ratio"] == r
+                               and not x["corrected"]], key=lambda x: x["N"])
+                rc = sorted([x for x in res["steady"] if x["case"] == c and x["kind"] == k and x["ratio"] == r
+                             and x["corrected"]], key=lambda x: x["N"])
+                print(c, k, r, "H corrected", " ".join(f"{x['H']:.2e}" for x in rc))
                 print(c, k, r, "H4", " ".join(f"{x['H4']:.2e}" for x in rows), "| H", " ".join(f"{x['H']:.2e}" for x in rows))
     for k in ("nu", "mu", "water-air"):
         for r in (1.0, 1e3):
