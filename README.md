@@ -1431,3 +1431,15 @@ ghosts from each phase's current velocity q_k / (c_k rho_k) with u's boundary co
 periodic image of q itself), which makes a periodic two-phase transport step independent of where the boundary cuts
 the flow to round-off; `conserving_stale_ghosts=True` keeps conserving.h's definition for comparisons with the C
 build (`tests/test_momentum_ghosts.py`). The pressure source in the face value stays off by default.
+
+R0-P1, the feedback instability of that source at high density ratios (`docs/notes/114_r0p1_source_feedback.md`):
+the fluxes carry the leaving mass with the velocity u + dt/2 g, so a cell loses the half impulse of the mass that
+left while its velocity is then formed with the new mass: u* - U = (dt/2) [m_in g_in - m_out g_out] / m' (exact to
+round-off for one sweep, also with a random g). In a cell the heavy phase has just left m_out / m' is of the order
+of the density ratio; the spectral radius of the one-step map g^n -> g^{n+1} is proportional to the largest mass
+ratio m^n / m^{n+1} of the step (0.105-0.107 times it for one geometry, density ratios 100 ... 1e4), which gives
+the threshold between the ratios 100 and 300 and the dependence on the grid and on the CFL number. Averaging the
+source differently does not help. Adding dt/2 g to the cells before the transport and subtracting it after is stable
+up to the ratio 1e6 but changes the total momentum (1.5e-3 for a drop in a vortex); adding it and taking nothing
+back (the projection supplies the other half: a trapezoidal pressure) is stable and conserving, but the pressure
+then oscillates at 2 dt. Hooks only (`cases/r0p1_source_feedback.py`); no choice has been made.
