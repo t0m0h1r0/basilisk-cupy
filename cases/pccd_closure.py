@@ -160,7 +160,7 @@ if __name__ == "__main__":
     main()
 
 
-def evaluate_blend(cl, N=32, ratio=1e6, zetas=(1e-4, 1e-2, 1.0, 1e2, 1e4), pts=21, mu0=0.1):
+def evaluate_blend(cl, N=32, ratio=1e6, zetas=(1e-4, 1e-2, 1.0, 1e2, 1e4), pts=21, mu0=0.1, mixed_mode="extend"):
     """evaluate() for the continuous phase split (cases.pccd_local.SplitBlend)."""
     from cases.pccd_local import SplitBlend
 
@@ -174,7 +174,7 @@ def evaluate_blend(cl, N=32, ratio=1e6, zetas=(1e-4, 1e-2, 1.0, 1e2, 1e4), pts=2
         for j in range(N):
             e = np.zeros(N)
             e[j] = 1.0
-            fs.append(SplitBlend(N, ratio, a, B_, e, closure=cl, mu0=mu0))
+            fs.append(SplitBlend(N, ratio, a, B_, e, closure=cl, mu0=mu0, mixed_mode=mixed_mode))
         X = ((np.arange(N)[:, None] + s1[None, :]) * h).ravel()
         V = np.stack([f(X) for f in fs], axis=1)
         Xq, W, _, cell = quadrature(N, ratio, a, B_)

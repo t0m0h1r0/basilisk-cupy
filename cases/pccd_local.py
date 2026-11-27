@@ -149,7 +149,7 @@ def explicit_closure():
 
 
 class Split:
-    def __init__(self, N, ratio, a, b, ubar, closure=None, join=None):
+    def __init__(self, N, ratio, a, b, ubar, closure=None, join=None, mixed_mode="extend"):
         """``join``: {mixed cell: (heavy?, datum)} -- the cell is solved as a pure cell of that phase with that
         datum (docs/notes/95, the continuous variant); its minority part takes the minority neighbour's polynomial,
         shifted to the joined polynomial's interface value."""
@@ -196,6 +196,31 @@ class Split:
             uH = _mono(np.array([xg_s - hv_off]))[0] @ self.coef[hv_nb]
             uL = _mono(np.array([xg_s - lt_off]))[0] @ self.coef[lt_nb]
             self.mix[m] = (ext, xg_s, uH - uL)
+        # docs/notes/97 (P1): the partial-cell form. Each phase's part = its neighbour's polynomial extended, plus
+        # (u_G - P_ext(x_G)) b(s), b the cubic Hermite basis with value and slope 0 at the cell face, value 1 and
+        # slope 0 at the interface; u_G from the mixed cell's mass-weighted mean (alpha = sum rho int b > 0, never
+        # degenerate). Exact for piecewise polynomials, C^1 at the faces, no shift.
+        self.partial = {}
+        if mixed_mode == "partial":
+            for m in self.mixed:
+                ext, xg_s, _ = self.mix[m]
+                alpha = rhs = 0.0
+                ms = 0.0
+                for s0, s1, hv in P[m]:
+                    rho = 1.0 if hv else 1.0 / ratio
+                    nb, off = ext[hv]
+                    face = 0.0 if off < 0 else 1.0
+                    sq = s0 + (s1 - s0) * XG
+                    w = (s1 - s0) * WG
+                    pe = _mono(sq - off) @ self.coef[nb]
+                    pg = _mono(np.array([xg_s - off]))[0] @ self.coef[nb]
+                    t = np.abs(sq - face) / abs(xg_s - face)
+                    bb = 3 * t * t - 2 * t ** 3
+                    alpha += rho * (w @ bb)
+                    rhs -= rho * (w @ (pe - pg * bb))
+                    ms += rho * (s1 - s0)
+                uG = (ms * ubar[m] + rhs) / alpha
+                self.partial[m] = (ext, xg_s, uG)
         # the shift: every cell's mass-weighted mean -> ubar (pure cells already hold it)
         self.shift = np.zeros(N)
         for i in range(N):
@@ -225,14 +250,19 @@ class Split:
     def _solve_run(self, run, ubar):
         N = self.N
         n = len(run)
-        if n < 5:
-            raise ValueError("a phase run shorter than 5 cells")
+        cv_, cg_ = self.closure[1], self.closure[3]
+        nz = [i for i in range(cv_.size) if abs(cv_[i]) > 0 or abs(cg_[i]) > 0]
+        need = max(5, nz[-1] + 1)                  # the closure's actual stencil (6 cells for the optimised ones)
+        if n < need:
+            raise ValueError(f"a phase run of {n} cells: the end closure needs {need} (docs/notes/97: no fallback "
+                             "yet; a switch to a shorter closure would reintroduce the stencil-switch jump)")
         q = ubar[np.array(run) % N]
         nf = n + 1
         A = np.zeros((2 * nf, 2 * nf))
         rhs = np.zeros(2 * nf)
         rv, cv, rg, cg = self.closure
-        k = cv.size
+        k = need
+        cv, cg = cv[:k], cg[:k]
         # left end face 0 (cells 0..k-1): rows over (v0, g0, v1, g1); right end face n mirrored: v even, g odd
         A[0, 0:4], rhs[0] = rv, cv @ q[:k]
         A[1, 0:4], rhs[1] = rg, cg @ q[:k]
@@ -270,6 +300,18 @@ class Split:
             return out
         if i not in self.mix:
             return _mono(s) @ self.coef[i]
+        if i in self.partial:
+            ext, xg_s, uG = self.partial[i]
+            out = np.empty_like(s)
+            heavy_left = ext[True][1] < 0
+            for hv in (True, False):
+                nb, off = ext[hv]
+                face = 0.0 if off < 0 else 1.0
+                k = (s < xg_s) if (hv == heavy_left) else (s >= xg_s)
+                t = np.abs(s[k] - face) / abs(xg_s - face)
+                pg = _mono(np.array([xg_s - off]))[0] @ self.coef[nb]
+                out[k] = _mono(s[k] - off) @ self.coef[nb] + (uG - pg) * (3 * t * t - 2 * t ** 3)
+            return out
         ext, xg_s, jump = self.mix[i]
         out = np.empty_like(s)
         heavy_side_left = ext[True][1] < 0
@@ -307,7 +349,10 @@ def _smooth(t):
 
 
 class SplitBlend:
-    """docs/notes/95 (continuous phase split): in a mixed cell whose minority phase (by volume) has volume share v and
+    """RESEARCH IMPLEMENTATION: it builds up to 2^k reconstructions for k candidate cells (itertools.product); not for
+    the multi-dimensional or many-droplet solver, where the end closure itself must vary continuously (docs/notes/97).
+
+    docs/notes/95 (continuous phase split): in a mixed cell whose minority phase (by volume) has volume share v and
     mass share mu both small, blend the mixed-cell form (weight 1 - w) with the form where the cell joins the majority
     phase's run (weight w = 1 - smooth(max(v, mu) / mu0)). The joined cell's datum is the majority polynomial's plain mean, from the mass-weighted
     average with the minority part's integral replaced by the minority polynomial (exact for piecewise polynomials):
@@ -316,7 +361,7 @@ class SplitBlend:
 
     As mu -> 0 the joined form becomes the pure configuration: the map is continuous across a face crossing."""
 
-    def __init__(self, N, ratio, a, b, ubar, closure=None, mu0=0.1):
+    def __init__(self, N, ratio, a, b, ubar, closure=None, mu0=0.1, mixed_mode="extend"):
         import itertools
 
         self.N, self.h = N, 1.0 / N
@@ -345,10 +390,11 @@ class SplitBlend:
                 continue
             on = [m for m, o in zip(ms, pick) if o]
             if not on:
-                self.parts.append((weight, Split(N, ratio, a, b, ubar, closure)))
+                self.parts.append((weight, Split(N, ratio, a, b, ubar, closure, mixed_mode=mixed_mode)))
                 continue
             def resid(x):
-                sp = Split(N, ratio, a, b, ubar, closure, {m: (cand[m][0], x[k]) for k, m in enumerate(on)})
+                sp = Split(N, ratio, a, b, ubar, closure, {m: (cand[m][0], x[k]) for k, m in enumerate(on)},
+                           mixed_mode=mixed_mode)
                 out = []
                 for k, m in enumerate(on):
                     hv_major, _, ms_ = cand[m]

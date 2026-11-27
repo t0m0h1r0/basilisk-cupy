@@ -28,6 +28,15 @@ from cases.pccd_twophase import _pieces
 
 
 def _basis(N, ratio, a, b, mode):
+    if mode in ("blend_partial", "split_partial"):
+        from cases.pccd_local import Split, SplitBlend
+        fs = []
+        for j in range(N):
+            e = np.zeros(N)
+            e[j] = 1.0
+            fs.append(SplitBlend(N, ratio, a, b, e, mixed_mode="partial") if mode == "blend_partial"
+                      else Split(N, ratio, a, b, e, mixed_mode="partial"))
+        return lambda j, x: fs[j](x)
     if mode in ("split_opt", "blend_opt"):
         from cases.pccd_closure import closure
         from cases.pccd_local import Split, SplitBlend
@@ -120,8 +129,6 @@ def main() -> None:
     json.dump(res, open("docs/figures/pccd_floquet.json", "w"), indent=1)
 
 
-if __name__ == "__main__":
-    main()
 
 
 def continuity(N, ratio, spacing, mode, span=0.2, seed=0):
@@ -141,3 +148,95 @@ def continuity(N, ratio, spacing, mode, span=0.2, seed=0):
                 worst, where = d, float(t)
         prev = v
     return {"max_change": worst, "at": where}
+
+
+def floquet_general(N, ratio, c, mode, transport, p=1, q=4, powers=40):
+    """CFL = p/q: after q steps the configuration has moved p cells. P_rel = S^{-p} T_{q-1}..T_0. Returns the spectral
+    radius, the largest |eigenvalue| other than the free stream's 1 (the dissipation of the rest), the largest mass-norm
+    singular value of P_rel (one period) and of P_rel^k for k <= ``powers`` (long-time transient growth), and for every
+    starting step the one-period growth (the transient from any start)."""
+    h = 1.0 / N
+    m = N // 4
+    a = (m + 1 - c) * h
+    D = p * h / q
+    Ts, masses = [], []
+    phi = None
+    for k in range(q):
+        T, phi, _, _, m1 = step(N, ratio, (a + k * D) % 1.0, (B_ + k * D) % 1.0, D, mode, transport, phi)
+        Ts.append(T)
+        masses.append(m1)
+    S = np.roll(np.eye(N), p, axis=0)
+    # the start geometry's masses: the end geometry shifted back by p cells
+    mstart = np.roll(masses[-1], -p)
+    sm = np.sqrt(mstart)
+    def per(start):
+        P = np.eye(N)
+        for k in range(q):
+            P = Ts[(start + k) % q] @ P
+        return P
+    P = S.T @ per(0)
+    ev = np.sort(np.abs(np.linalg.eigvals(P)))[::-1]
+    Pm = (sm[:, None] * P) / sm[None, :]
+    sv1 = float(np.linalg.norm(Pm, 2))
+    Pk, svk = np.eye(N), 0.0
+    for _ in range(powers):
+        Pk = Pm @ Pk
+        svk = max(svk, float(np.linalg.norm(Pk, 2)))
+    return {"spectral_radius": float(ev[0]), "second": float(ev[1]), "sv_one_period": sv1, "sv_max_powers": svk}
+
+
+CFLS = ((1, 16), (1, 8), (1, 4), (1, 3), (1, 2), (3, 4), (9, 10))
+
+
+def main_general() -> None:
+    """docs/notes/97 (P2): every CFL of CFLS, density ratios 1, 1e3, 1e6, heavy fractions c down to 1e-6 (zeta ~ 1 at
+    ratio 1e6), remap and Galerkin, for the partial-cell phase split (mode "blend_partial")."""
+    from concurrent.futures import ProcessPoolExecutor
+
+    jobs = [(32, r, c, "blend_partial", tr, p, q) for (p, q) in CFLS for r in (1.0, 1e3, 1e6)
+            for c in (0.5, 1e-2, 1e-4, 1e-6) for tr in ("remap", "galerkin")]
+    res = []
+    with ProcessPoolExecutor(30) as ex:
+        futs = [(j, ex.submit(floquet_general, *j)) for j in jobs]
+        for j, f in futs:
+            try:
+                r = f.result()
+            except Exception as e:  # noqa: BLE001
+                r = {"error": repr(e)}
+            res.append({"ratio": j[1], "c": j[2], "mode": j[3], "transport": j[4], "cfl": f"{j[5]}/{j[6]}", **r})
+            print(res[-1], flush=True)
+    json.dump(res, open("docs/figures/pccd_floquet_general.json", "w"), indent=1)
+
+
+def run_periodic(N, ratio, mode, transport, p=1, q=4, t_end=1.0, samples=(0.25, 0.5)):
+    """Translate note 93's two-phase profile at CFL p/q to t_end. The q step maps of one period are built once: in
+    period j the configuration is shifted by j p cells, T_{jq+k} = S^{jp} T_k S^{-jp}. Errors of the mass-weighted
+    averages against the exact ones at the sample times."""
+    from cases.pccd_jump import A_, exact
+    from cases.pccd_twophase import averages
+
+    h = 1.0 / N
+    D = p * h / q
+    Ts, phi = [], None
+    for k in range(q):
+        T, phi, _, _, _ = step(N, ratio, (A_ + k * D) % 1.0, (B_ + k * D) % 1.0, D, mode, transport, phi)
+        Ts.append(T)
+    u0 = lambda x: exact(x % 1.0)  # noqa: E731
+    u = averages(N, A_, B_, ratio, u0)
+    steps = int(round(t_end / D))
+    at = {int(round(t / D)): t for t in samples}
+    errs = {}
+    ex = lambda t: averages(N, (A_ + t) % 1.0, (B_ + t) % 1.0, ratio, lambda x: u0(x - t))  # noqa: E731
+    for n in range(steps):
+        j, k = divmod(n, q)
+        u = np.roll(Ts[k] @ np.roll(u, -j * p), j * p)
+        if n + 1 in at:
+            errs[at[n + 1]] = float(np.abs(u - ex((n + 1) * D)).max())
+    errs[t_end] = float(np.abs(u - ex(steps * D)).max())
+    return errs
+
+
+if __name__ == "__main__":
+    import sys
+
+    main_general() if "--general" in sys.argv else main()
