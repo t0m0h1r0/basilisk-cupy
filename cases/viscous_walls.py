@@ -25,7 +25,7 @@ import numpy as np
 
 from cases.pccd import WG, XG
 from cases.pccd_density import pieces
-from cases.viscous_stress import X3, W3, mus
+from cases.viscous_stress import X3, W3, count_guided_roots, dirichlet_count, mus
 
 
 class Wall:
@@ -189,7 +189,10 @@ def steady(N, ratio, kind, case, a=0.3613, corrected=False):
 
 
 def wall_rates(mu_H, mu_L, ratio, a, which=2):
-    """Exact decay rates with u = 0 at both walls: Phi_12(lambda) = 0, Phi = Phi_L(1 - a) Phi_H(a)."""
+    """Exact decay rates with u = 0 at both walls: Phi_12(lambda) = 0, Phi = Phi_L(1 - a) Phi_H(a). Audit #126: the
+    sign-change scan would silently drop two rates inside one step; the number found is checked against Sturm's
+    count (``dirichlet_count``: the zeros of the solution started at the left wall), on a mismatch the rates are found again
+    with ``count_guided_roots``."""
     def phi(L, rho, mu, lam):
         k = math.sqrt(lam * rho / mu)
         return np.array([[math.cos(k * L), math.sin(k * L) / (mu * k)], [-mu * k * math.sin(k * L), math.cos(k * L)]])
@@ -213,7 +216,13 @@ def wall_rates(mu_H, mu_L, ratio, a, which=2):
                     hi = mid
             roots.append((0.5 * (lo + hi)) ** 2)
         sq, fp = s2, f2
-    return roots, phi
+    count = lambda z: dirichlet_count(mu_H, mu_L, ratio, a, 1 - a, z * z)  # noqa: E731
+    if count(sq) != len(roots):                                  # audit #126: two rates inside one scan step
+        roots = [z * z for z in count_guided_roots(f, count, 1e-3 * ds, sq)]
+        if count(sq) != len(roots):
+            raise RuntimeError("wall_rates: found %d rates up to lambda = %.6g, Sturm's count is %d"
+                               % (len(roots), sq * sq, count(sq)))
+    return roots[:which], phi
 
 
 def wall_stokes(N, ratio, kind, a=0.3613, t=0.01):

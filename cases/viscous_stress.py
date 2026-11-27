@@ -170,12 +170,60 @@ def steady_error(N, ratio, kind, a=0.2613, b=0.7137, H="H4"):
     return float(np.abs(sol[:-1] - ub).max() / np.abs(ub).max())        # relative to max |ubar|
 
 
+def dirichlet_count(mu_H, mu_L, ratio, LH, LL, lam):
+    """Sturm's count (audit #126): the number of zeros in the open interval (0, LH + LL) of the solution of
+    (mu u')' + lam rho u = 0 with u(0) = 0 (layer H of length LH first, then layer L of length LL; u and mu u'
+    continuous). It equals the number of eigenvalues below lam of the problem with u = 0 at both ends. The zeros
+    are counted from the phases in each layer (no scan)."""
+    kH, kL = math.sqrt(lam / mu_H), math.sqrt(lam / ratio / mu_L)
+    nH = math.floor(kH * LH / math.pi)                           # zeros of sin(kH x) in (0, LH]
+    A, B = math.sin(kH * LH) / (mu_H * kH), math.cos(kH * LH)    # u and mu u' at the interface
+    th = math.atan2(B / (mu_L * kL), A)                          # layer L: u = R cos(kL s - th), s in (0, LL)
+    lo, hi = (-th - math.pi / 2) / math.pi, (kL * LL - th - math.pi / 2) / math.pi
+    return nH + max(0, math.ceil(hi) - math.floor(lo) - 1)       # integers m with lo < m < hi
+
+
+def periodic_count(mu_H, mu_L, ratio, LH, LL, lam, discriminant):
+    """The number of positive periodic rates (with multiplicity) up to lam, from Sturm's count of the Dirichlet
+    problem on one period and the sign of ``discriminant`` = tr(Phi) - 2 at lam (audit #126). The n-th Dirichlet
+    eigenvalue lies in the n-th gap of Hill's problem; the even gaps are bounded by the periodic pairs
+    (lambda_{2m-1}, lambda_{2m}), where the discriminant is positive."""
+    nD = dirichlet_count(mu_H, mu_L, ratio, LH, LL, lam)
+    return 2 * math.ceil(nD / 2) - 1 if discriminant > 0 else 2 * (nD // 2)
+
+
+def count_guided_roots(f, count, lo, hi, depth=0):
+    """All the roots (in s = sqrt(lambda), with multiplicity) of f(s^2) in (lo, hi], guided by ``count(s)`` = the
+    number of roots up to s (Sturm): an interval is halved until it holds one root (a sign change: bisection) or is
+    of round-off width (a multiple root). Unlike a sign-change scan it cannot drop a close pair (audit #126)."""
+    n = count(hi) - count(lo)
+    if n <= 0:
+        return []
+    if n == 1:
+        flo = f(lo * lo)
+        if flo * f(hi * hi) < 0:
+            for _ in range(80):
+                mid = 0.5 * (lo + hi)
+                fm = f(mid * mid)
+                if fm * flo > 0:
+                    lo, flo = mid, fm
+                else:
+                    hi = mid
+            return [0.5 * (lo + hi)]
+    if hi - lo < 1e-13 * hi or depth > 70:
+        return [0.5 * (lo + hi)] * n
+    mid = 0.5 * (lo + hi)
+    return count_guided_roots(f, count, lo, mid, depth + 1) + count_guided_roots(f, count, mid, hi, depth + 1)
+
+
 def stokes_rate(mu_H, mu_L, ratio, a, b, nu_guess=None, which=1):
     """The exact decay rates lambda of the periodic two-layer Stokes problem rho u_t = (mu u_x)_x, in increasing order:
     tr(Phi_L Phi_H) = 2 with the transfer matrices [[cos kL, sin kL /(mu k)], [-mu k sin kL, cos kL]],
     k = sqrt(lambda rho / mu). docs/notes/100 correction (the user's review): the scan is uniform in sqrt(lambda) with
     a phase step of at most 0.02 rad in either layer (the earlier coarse scan skipped the lowest rates), sign changes
-    and touching zeros (double rates) are both refined; double rates are returned twice."""
+    and touching zeros (double rates) are both refined; double rates are returned twice. Audit #126: a sign-change
+    scan silently drops two rates that fall inside one step, so the number found is checked against Sturm's count
+    (``periodic_count``); on a mismatch the rates are found again with ``count_guided_roots``."""
     LH = (b - a) % 1.0
     LL = 1.0 - LH
     cH, cL = math.sqrt(1.0 / mu_H) * LH, math.sqrt(1.0 / ratio / mu_L) * LL     # phase = sqrt(lambda) * c
@@ -217,6 +265,12 @@ def stokes_rate(mu_H, mu_L, ratio, a, b, nu_guess=None, which=1):
                 if abs(f(r)) < 1e-9:
                     roots += [r, r]
         fprev2, fprev, sq = fprev, f2, sq2
+    count = lambda z: periodic_count(mu_H, mu_L, ratio, LH, LL, z * z, f(z * z))  # noqa: E731
+    if count(sq) != len(roots):                                  # audit #126: two rates inside one scan step
+        roots = [z * z for z in count_guided_roots(f, count, 1e-3 * ds, sq)]
+        if count(sq) != len(roots):
+            raise RuntimeError("stokes_rate: found %d rates up to lambda = %.6g, Sturm's count is %d"
+                               % (len(roots), sq * sq, count(sq)))
     return roots[:which]
 
 
