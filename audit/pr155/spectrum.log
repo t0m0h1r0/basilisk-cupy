@@ -1,0 +1,10 @@
+ratio 100    face   step 12 N 32: spectral radius 1.926  leading [(1.926+0j), (1.543+0j), (0.779+0j), (0.737+0j)]  linearity 8.1e-05  image of 0 2.0e-13
+ratio 300    face   step 12 N 32: spectral radius 5.792  leading [(5.792+0j), (4.693+0j), (2.34+0j), (2.214+0j)]  linearity 1.5e-05  image of 0 1.5e-12
+ratio 300    face   step 24 N 32: spectral radius 9.125  leading [(9.125+0j), (7.266+0j), (4.006+0j), (3.446+0j)]  linearity 6.1e-06  image of 0 5.8e-13
+ratio 1000   face   step 12 N 32: spectral radius 19.31  leading [(19.306+0j), (15.712+0j), (7.801+0j), (7.384+0j)]  linearity 1.1e-05  image of 0 4.3e-12
+ratio 100    face   step 24 N 32: spectral radius 3.026  leading [(3.026+0j), (2.39+0j), (1.336+0j), (1.142+0j)]  linearity 1.7e-05  image of 0 2.5e-13
+ratio 1000   face   step 24 N 32: spectral radius 30.45  leading [(30.451+0j), (24.323+0j), (13.345+0j), (11.51+0j)]  linearity 5.9e-07  image of 0 1.3e-11
+ratio 10000  face   step 12 N 32: spectral radius 193  leading [(193.046+0j), (157.379+0j), (78.011+0j), (73.854+0j)]  linearity 3.2e-07  image of 0 2.3e-10
+ratio 1000   accel  step 12 N 32: spectral radius 0.1951  leading [(0.083+0.177j), (0.083-0.177j), (0.086-0.175j), (0.086+0.175j)]  linearity 3.3e-04  image of 0 4.3e-12
+ratio 10000  face   step 24 N 32: spectral radius 304.6  leading [(304.625+0j), (243.626+0j), (133.405+0j), (115.182+0j)]  linearity 2.0e-07  image of 0 5.3e-10
+ratio 10000  accel  step 12 N 32: spectral radius 0.1951  leading [(0.083+0.177j), (0.083-0.177j), (0.086+0.175j), (0.086-0.175j)]  linearity 8.1e-04  image of 0 2.3e-10
