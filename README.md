@@ -1349,3 +1349,10 @@ correction v_f += alpha/32 delta^4 (q_f - q_{f-1}) keeps energy stability and re
 cell adds a spurious null mode; applying the correction across the interface removes it but the smallest eigenvalue
 then scales as 1/(density ratio). A cell-average projection built on these face values does not work for two phases
 as it stands.
+
+Roadmap revision (`docs/notes/98_roadmap.md`, 2026-11-27): after the audit the plan is organised as gates that decide
+the design risks before integration: Gate 0 records (done), Gate 1-A pressure projection (cell-centred split-PCCD
+projection fails in two phases; MAC-PCCD holds in one phase), Gate 1-B static reconstruction on oblique and curved
+interfaces and short runs comparing cell-average and face-average state variables, Gate 1-C general-flow advection
+and time-step dependence, Gate 1-D viscosity, then Gate 2 (design decision), Gate 3 (two-phase Navier-Stokes) and
+Gate 4 (GPU). Method D stays provisional (not 4th order) and C is the viscous Oracle.
