@@ -187,3 +187,138 @@ def test_transport_is_second_order_with_every_boundary_and_first_order_with_stal
     old = [_taylor_green_transport(n, periodic, stale=True) for n in (32, 64)]
     assert new[0] / new[1] > 3.5                                  # second order: periodic, walls and mixed
     assert old[0] / old[1] < 2.7 and old[1] > 2.0 * new[1]        # conserving.h's ghosts: first order, walls too
+
+
+# ------------------------------------------- B's requests on PR #154: no-slip walls, slivers, an interface on the wall
+def _noslip_setup(n, stale):
+    """Periodic in x, NO-SLIP walls in y (u.t = dirichlet(0) on both)."""
+    from basilisk_cupy.boundary import Dirichlet
+
+    grid = CartesianGrid((n, n))
+    ns = CenteredNS(grid, periodic=(0,), tangential={"bottom": Dirichlet(0.0), "top": Dirichlet(0.0)})
+    f = CellField.from_interior(grid, np.zeros((n, n)), _fbc((0,)))
+    tp = TwoPhase(ns, f, rho1=1.0, rho2=1.0, conserving=True, conserving_source=True, conserving_stale_ghosts=stale)
+    return grid, ns, tp
+
+
+def _noslip_transport(n, stale, cfl=0.4, t_end=0.25):
+    """A steady manufactured state between no-slip walls: psi = sin(2 pi x) sin^2(pi y) / (2 pi), so that
+    u = sin(2 pi x) sin(2 pi y) / 2 and v = -cos(2 pi x) sin^2(pi y) both vanish on the walls; the source is
+    g = (u . grad) u (in the face value and after the transport), with which u is a steady solution of
+    u_t + div(u u) = g. Exact face velocities; max |u - u0| at t_end."""
+    grid, ns, tp = _noslip_setup(n, stale)
+    xp = grid.xp
+    ufx, ufy = _stream_faces(n, lambda x, y: np.sin(TWO_PI * x) * np.sin(math.pi * y) ** 2 / TWO_PI)
+    U = lambda x, y: 0.5 * np.sin(TWO_PI * x) * np.sin(TWO_PI * y)  # noqa: E731
+    V = lambda x, y: -np.cos(TWO_PI * x) * np.sin(math.pi * y) ** 2  # noqa: E731
+    Ux = lambda x, y: math.pi * np.cos(TWO_PI * x) * np.sin(TWO_PI * y)  # noqa: E731
+    Uy = lambda x, y: math.pi * np.sin(TWO_PI * x) * np.cos(TWO_PI * y)  # noqa: E731
+    Vx = lambda x, y: TWO_PI * np.sin(TWO_PI * x) * np.sin(math.pi * y) ** 2  # noqa: E731
+    Vy = lambda x, y: -math.pi * np.cos(TWO_PI * x) * np.sin(TWO_PI * y)  # noqa: E731
+    u0 = [_cells(n, U), _cells(n, V)]
+    g = [_cells(n, lambda x, y: U(x, y) * Ux(x, y) + V(x, y) * Uy(x, y)),
+         _cells(n, lambda x, y: U(x, y) * Vx(x, y) + V(x, y) * Vy(x, y))]
+    for ax in range(2):
+        ns.u[ax].interior = xp.asarray(u0[ax])
+    ns.u.fill_ghosts()
+    steps = int(math.ceil(t_end / (cfl / n) - 1e-9))
+    dt = t_end / steps
+    for i in range(steps):
+        for ax in range(2):
+            ns.g[ax].interior = xp.asarray(g[ax])
+        ns.g.fill_ghosts()
+        _vof(ns, tp, dt, i, ufx, ufy)
+        for ax in range(2):
+            ns.u[ax].interior = ns.u[ax].interior + dt * xp.asarray(g[ax])
+        ns.u.fill_ghosts()
+    return max(float(np.abs(to_numpy(ns.u[ax].interior) - u0[ax]).max()) for ax in range(2))
+
+
+def test_no_slip_walls_second_order_and_first_order_with_stale_ghosts():
+    new = [_noslip_transport(n, stale=False) for n in (32, 64)]
+    old = [_noslip_transport(n, stale=True) for n in (32, 64)]
+    assert new[0] / new[1] > 3.5
+    assert old[0] / old[1] < 3.0 and old[1] > 2.0 * new[1]     # 4.24e-3 / 1.56e-3 against 2.69e-3 / 6.56e-4
+
+
+def _stripe(n, eps, k):
+    """Phase 1 fills a band of columns that ends with the volume fraction eps (a sliver) in column k; k = n - 1 is
+    the last column before the periodic boundary, a smaller k is the same state shifted into the interior."""
+    f = np.zeros((n, n))
+    f[n // 4: n - 1, :] = 1.0
+    f[n - 1, :] = eps
+    return np.roll(f, k - (n - 1), axis=0)
+
+
+@pytest.mark.parametrize("eps", [1e-12, 1e-10, 2e-10, 1e-8, 1e-4])
+def test_slivers_at_the_boundary_free_stream_conservation_and_shift(eps):
+    """A cell with a tiny volume of the heavy phase (below, at and above the threshold c > 1e-10 of the phase's own
+    velocity) in the last column before the periodic boundary, density ratio 1000."""
+    n = 32
+    psi = lambda x, y: y * 0.3 + x * 0.0 + np.sin(TWO_PI * x) * np.sin(TWO_PI * y) / TWO_PI  # noqa: E731
+    res = {}
+    for k in (n - 1, n - 9):                                     # the sliver at the boundary, and 8 cells inside
+        sx = (n - 1 - k) / n
+        # free stream: six steps of the uniform flow (1, 0.37)
+        grid, ns, tp = _setup(n, (0, 1), f0=_stripe(n, eps, k), ratio=1000.0)
+        for ax, U in enumerate((1.0, 0.37)):
+            ns.u[ax].interior = U + 0.0 * ns.u[ax].interior
+        ns.u.fill_ghosts()
+        for i in range(6):
+            _vof(ns, tp, 0.3 / n, i, np.full((n + 1, n), 1.0), np.full((n, n + 1), 0.37))
+        assert max(float(np.abs(to_numpy(ns.u[ax].interior) - U).max()) for ax, U in enumerate((1.0, 0.37))) < 1e-11
+        # a non-uniform flow: the momentum is conserved, and the result does not depend on where the boundary is
+        grid, ns, tp = _setup(n, (0, 1), f0=_stripe(n, eps, k), ratio=1000.0)
+        ufx, ufy = _stream_faces(n, lambda x, y: psi(x + sx, y))
+        ns.u[0].interior = grid.xp.asarray(_cells(n, lambda x, y: 0.3 + np.sin(TWO_PI * (x + sx)) * np.cos(TWO_PI * y)))
+        ns.u[1].interior = grid.xp.asarray(_cells(n, lambda x, y: -np.cos(TWO_PI * (x + sx)) * np.sin(TWO_PI * y)))
+        ns.u.fill_ghosts()
+        m0 = [float((to_numpy(tp.rho(tp.f.interior)) * to_numpy(c.interior)).sum()) for c in ns.u.components]
+        for i in range(2):
+            _vof(ns, tp, 0.25 / n, i, ufx, ufy)
+        m1 = [float((to_numpy(tp.rho(tp.f.interior)) * to_numpy(c.interior)).sum()) for c in ns.u.components]
+        assert max(abs(a - b) for a, b in zip(m0, m1)) < 1e-11 * n ** 2
+        res[k] = [np.roll(to_numpy(c.interior), n - 1 - k, axis=0) for c in ns.u.components]
+    assert max(np.abs(a - b).max() for a, b in zip(res[n - 1], res[n - 9])) < 1e-11
+
+
+@pytest.mark.parametrize("walls", ["slip", "no-slip"])
+def test_interface_on_a_wall_free_stream_and_momentum_through_both_sweeps(walls):
+    """A drop cut by the bottom wall (periodic in x), density ratio 1000: the uniform flow along the wall stays
+    uniform with slip walls, and the x-momentum of a non-uniform flow tangent to the walls is conserved by the
+    transport (no flux through the walls), over six steps with both sweep orders."""
+    from basilisk_cupy.boundary import Dirichlet
+
+    n = 32
+    grid0 = CartesianGrid((n, n))
+    f0 = to_numpy(fraction(grid0, lambda x, y: 0.2 ** 2 - (x - 0.5) ** 2 - y ** 2, refine=8))
+
+    def make():
+        grid = CartesianGrid((n, n))
+        kw = {} if walls == "slip" else {"tangential": {"bottom": Dirichlet(0.0), "top": Dirichlet(0.0)}}
+        ns = CenteredNS(grid, periodic=(0,), **kw)
+        tp = TwoPhase(ns, CellField.from_interior(grid, f0, _fbc((0,))), rho1=1.0, rho2=1e-3, conserving=True)
+        return grid, ns, tp
+
+    if walls == "slip":
+        grid, ns, tp = make()
+        ns.u[0].interior = 1.0 + 0.0 * ns.u[0].interior
+        ns.u.fill_ghosts()
+        for i in range(6):
+            _vof(ns, tp, 0.3 / n, i, np.full((n + 1, n), 1.0), np.zeros((n, n + 1)))
+        assert float(np.abs(to_numpy(ns.u[0].interior) - 1.0).max()) < 1e-12
+        assert float(np.abs(to_numpy(ns.u[1].interior)).max()) < 1e-12
+    grid, ns, tp = make()
+    amp = 1.0 if walls == "slip" else 0.0                        # no-slip: the flow itself vanishes on the walls
+    psi = lambda x, y: amp * y + 0.2 * np.sin(TWO_PI * x) * (np.sin(math.pi * y) / math.pi if walls == "slip"  # noqa: E731
+                                                              else np.sin(math.pi * y) ** 2 / TWO_PI)
+    ufx, ufy = _stream_faces(n, psi)
+    ns.u[0].interior = grid.xp.asarray(0.5 * (ufx[1:, :] + ufx[:-1, :]))
+    ns.u[1].interior = grid.xp.asarray(0.5 * (ufy[:, 1:] + ufy[:, :-1]))
+    ns.u.fill_ghosts()
+    m0 = float((to_numpy(tp.rho(tp.f.interior)) * to_numpy(ns.u[0].interior)).sum())
+    for i in range(6):
+        _vof(ns, tp, 0.3 / n, i, ufx, ufy)
+    m1 = float((to_numpy(tp.rho(tp.f.interior)) * to_numpy(ns.u[0].interior)).sum())
+    assert abs(m1 - m0) < 1e-11 * n ** 2
+    assert np.isfinite(to_numpy(ns.u[0].interior)).all() and float(np.abs(to_numpy(ns.u[0].interior)).max()) < 3.0
