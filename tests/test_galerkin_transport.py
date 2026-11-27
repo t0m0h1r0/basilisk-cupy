@@ -60,3 +60,61 @@ def test_piecewise_switching_jump():
     assert switching(32, 4, 1e-8, across=True, piecewise=True)[0] > 0.5
     assert switching(32, 4, 1e-8, across=False, piecewise=True)[0] < 1e-5
     assert switching(32, 4, 1e-8, across=True, piecewise=False)[0] < 1e-5
+
+
+# docs/notes/82: the constrained weighted least-squares reconstruction (piecewise="ls", alpha 0.75, window +1)
+
+
+def _ls_cond(s, alpha, extra, piecewise="ls", ratio=1e6, n=48):
+    import numpy as np
+
+    from cases.galerkin_transport import matrices
+
+    G, _, _, new = matrices(n, 4, s - 1e-9, 1e-9, piecewise, ratio=ratio, alpha=alpha, extra=extra)
+    Mh = np.diag(1 / np.sqrt(new.mass))
+    ev = np.linalg.eigvalsh(Mh @ G @ Mh)
+    return ev.max() / ev.min()
+
+
+def test_ls_continuous_across_cell_boundary():
+    """The update is continuous when the interface crosses a cell boundary (the piecewise basis jumps by O(1))."""
+    import numpy as np
+
+    from cases.galerkin_transport import A0, matrices
+
+    n, h = 48, 1.0 / 48
+    k = int(round(A0 / h)) + 1
+    eps = 1e-8
+    jump = {}
+    for mode in ("ls", True):
+        G, C, _, _ = matrices(n, 4, k * h - eps * h - A0, 2 * eps * h, mode, ratio=1e3, alpha=0.75, extra=1)
+        jump[mode] = np.linalg.norm(np.linalg.solve(G, C) - np.eye(n), 2)
+    assert jump["ls"] < 1e-3 and jump[True] > 0.5
+
+
+def test_ls_exactness_and_structure():
+    """Per-phase polynomials reproduced; free stream, momentum and energy-norm amplification <= 1."""
+    import numpy as np
+
+    from cases.galerkin_cls import step_stats
+    from cases.galerkin_transport import exactness
+
+    for s in (0.0, 0.3 / 32):
+        err, scale = exactness(32, 4, 1e6, piecewise="ls", alpha=0.75, s=s, extra=1)
+        assert err < 1e-10 * scale
+    st = step_stats(48, 4, 0.0107, 0.37 / 48, 0.75, 1e3)
+    assert np.abs(st["T"] @ np.ones(48) - 1).max() < 1e-12
+    assert st["amp"] <= 1.0 + 1e-9
+
+
+def test_ls_conditioning_near_cell_boundary():
+    """At the heavy-left interface next to a cell boundary the square fits (piecewise, or ls without the wider
+    window) are ill conditioned at density ratio 1e6; the over-determined mass-weighted fit is not."""
+    import math
+
+    from cases.galerkin_transport import B0
+
+    h = 1.0 / 48
+    s = (int(math.floor(B0 / h)) + 1 + 1e-4) * h - B0
+    assert _ls_cond(s, 0.75, 1) < 10.0
+    assert _ls_cond(s, 0.75, 0) > 1e3
