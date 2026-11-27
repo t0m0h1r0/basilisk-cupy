@@ -115,6 +115,8 @@ def _quad(poly):
 
 def pieces(geom, x0, y0, x1, y1):
     """The rectangle cut by the interface lines: [(points, weights, heavy)]."""
+    if hasattr(geom, "pieces"):
+        return geom.pieces(x0, y0, x1, y1)
     rect = [(x0, y0), (x1, y0), (x1, y1), (x0, y1)]
     Ls = [geom.L(x, y) for x, y in rect]
     cuts = [min(Ls)] + geom.breaks(min(Ls), max(Ls)) + [max(Ls)]
@@ -165,7 +167,7 @@ def _smooth(t):
 
 class Reconstruction2D:
     def __init__(self, N, geom, alpha=0.75, D1=3.5, D2=4.5, m_pw=3, m_s=2, kink=True, window="cell", R=4.5,
-                 switch="fixed", delta=1.0, tau=None, diff=False, workers=1):
+                 switch="fixed", delta=1.0, tau=None, diff=False, workers=1, hinge="exact"):
         """docs/notes/88 options: ``window`` "cell" (the (2 m_pw + 1)^2 cells around the cell, note 87) or "interface"
         (the cells within R cells of the cell's foot on the interface, weights (1 - (r/R)^2)^2: both sides of the
         interface always hold data); ``switch`` "fixed" (D1, D2) or "angle" (D1 = d_safe = (m_s + 1/2)(|nx| + |ny|)
@@ -176,7 +178,9 @@ class Reconstruction2D:
         self.h = h = 1.0 / N
         self.kink = kink
         self.window, self.R, self.tau, self.diff = window, R, tau, diff
-        if switch == "angle":
+        self.hinge = hinge  # curved interfaces (docs/notes/89): "exact" signed distance or "tangent" line
+        self._switch, self._delta = switch, delta
+        if switch == "angle" and not hasattr(geom, "frame"):
             D1 = (m_s + 0.5) * (abs(geom.n[0]) + abs(geom.n[1]))
             D2 = D1 + delta
         self.rank_log = []  # (distance in cells, numerical rank of the interface component, its size)
@@ -213,6 +217,10 @@ class Reconstruction2D:
             c = np.array([(ix + 0.5) * h, (iy + 0.5) * h])
             s, _ = geom.nearest(*c)
             dist = abs(s) / h
+            if self._switch == "angle" and hasattr(geom, "frame"):  # the local normal of a curved interface
+                nl = geom.frame(c, s, h, self.hinge)[1]
+                D1 = (m_s + 0.5) * (abs(nl[0]) + abs(nl[1]))
+                D2 = D1 + self._delta
             lam = 1.0 - _smooth((dist - D1) / (D2 - D1))
             comps = []
             if lam > 0 and self.kink:
@@ -224,6 +232,8 @@ class Reconstruction2D:
 
     # -- frames and monomials ----------------------------------------------------------------------------
     def _frame(self, c, s):
+        if hasattr(self.geom, "frame"):
+            return self.geom.frame(c, s, self.h, self.hinge)
         n = self.geom.n
         tau = np.array([-n[1], n[0]])
         xg = c - s * n                        # the foot on the nearest interface line
@@ -231,13 +241,14 @@ class Reconstruction2D:
         return xg, n * sgn, tau
 
     def _mono(self, X, frame, pw):
-        xg, n, tau = frame
+        xg, n, tau = frame[:3]
         d = X - xg
         xi = d @ n / self.h
         eta = d @ tau / self.h
         cols = [xi ** p * eta ** q for p, q in P0_EXP]
         if pw:
-            k = np.maximum(xi, 0.0)
+            # the hinge variable: xi (a line) or a geometry's own (e.g. the signed distance to a circle, in cells)
+            k = np.maximum(frame[3](X) if len(frame) > 3 and frame[3] is not None else xi, 0.0)
             cols += [k * xi ** p * eta ** q for p, q in P1_EXP]
         return np.stack(cols, axis=1)
 
@@ -253,7 +264,8 @@ class Reconstruction2D:
         rows, cells, mass, geo = [], [], [], []
         h = self.h
         if pw and self.window == "interface":
-            xw = c - s * self.geom.n            # the foot of the cell centre on the interface line
+            xw = np.asarray(frame[0])            # the foot of the cell centre on the interface (docs/notes/89: the
+                                                 # frame's own foot; curved hinges do not flip the normal)
             R = self.R
             r0 = int(math.ceil(R + abs(s) / h + 1))
             offs = []
