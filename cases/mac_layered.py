@@ -10,6 +10,8 @@ Candidates (docs/notes/107, 3.5-3.6):
       none), the light part takes the constant that restores the cell's volume average;
   D0m as D0, but the phase with the larger mobility (length / rho) in the cut cell restores the average and the other
       phase takes its pure neighbour's value (D0 lets a very thin light part carry a large amplitude);
+  D0b the blend of the two choices of D0m with a smooth weight of the heavy mobility share over [1/4, 3/4] (both are
+      linear, keep the volume average and reproduce constants, so the blend does; continuous in the interface position);
   D1  density-adapted, low order: R_C d = d_i (1/rho) / mean_i(1/rho) (the variation sits in the light part).
 All keep the volume average, so d/dy R_F = R_C D and the face values are reproduced (checked).
 
@@ -33,7 +35,7 @@ from cases.pccd import WG, XG, _mono
 from cases.pccd_density import pieces
 
 RATIOS = (1.0, 1e1, 1e2, 1e3, 1e4, 1e5, 1e6)
-KINDS = ("A", "B", "D0", "D0m", "D1")
+KINDS = ("A", "B", "D0", "D0m", "D0b", "D1")
 
 
 def _piece_values(N, P, ratio, kind):
@@ -56,26 +58,36 @@ def _piece_values(N, P, ratio, kind):
         # closes it; the other phase takes the value of its adjacent pure cell (0 if none).
         mob_h = sum(s1 - s0 for s0, s1, hv in ps if hv)
         mob_l = sum(s1 - s0 for s0, s1, hv in ps if not hv) * ratio
-        close_heavy = kind == "D0m" and mob_h > mob_l
-        rows, used, llen = [], np.zeros(N), 0.0
-        for s0, s1, hv in ps:
-            if hv == close_heavy:
-                llen += s1 - s0
-                rows.append(None)
-                continue
-            pure_same = pure_light if close_heavy else pure_heavy
-            k = None
-            if s0 == 0.0 and pure_same[(i - 1) % N]:
-                k = (i - 1) % N
-            elif s1 == 1.0 and pure_same[(i + 1) % N]:
-                k = (i + 1) % N
-            r = np.zeros(N)
-            if k is not None:
-                r[k] = 1.0
-            rows.append(r)
-            used += (s1 - s0) * r
-        light = (e - used) / llen
-        out.append([(s0, s1, hv, light if r is None else r) for (s0, s1, hv), r in zip(ps, rows)])
+
+        def closed_by(close_heavy):
+            rows, used, llen = [], np.zeros(N), 0.0
+            for s0, s1, hv in ps:
+                if hv == close_heavy:
+                    llen += s1 - s0
+                    rows.append(None)
+                    continue
+                pure_same = pure_light if close_heavy else pure_heavy
+                k = None
+                if s0 == 0.0 and pure_same[(i - 1) % N]:
+                    k = (i - 1) % N
+                elif s1 == 1.0 and pure_same[(i + 1) % N]:
+                    k = (i + 1) % N
+                r = np.zeros(N)
+                if k is not None:
+                    r[k] = 1.0
+                rows.append(r)
+                used += (s1 - s0) * r
+            closing = (e - used) / llen
+            return [closing if r is None else r for r in rows]
+        if kind == "D0b":
+            # the weight of "heavy closes": a smooth step of the heavy mobility share over [1/4, 3/4]
+            t = min(max((mob_h / (mob_h + mob_l) - 0.25) / 0.5, 0.0), 1.0)
+            wh = t * t * (3 - 2 * t)
+            rl, rh = closed_by(False), closed_by(True)
+            rows = [(1 - wh) * x + wh * y for x, y in zip(rl, rh)]
+        else:
+            rows = closed_by(kind == "D0m" and mob_h > mob_l)
+        out.append([(s0, s1, hv, r) for (s0, s1, hv), r in zip(ps, rows)])
     return out
 
 
@@ -209,14 +221,18 @@ def leak_table(N=32):
 
 
 # --------------------------------------------------------------------------------------------- projection accuracy
-def exact_projection(ratio, a, b, m=1):
+def exact_projection(ratio, a, b, m=1, source="normal"):
     """The density-weighted Helmholtz projection of w = (0, cos 2 pi y) e^{i k x}, k = 2 pi m, in the layered medium
     (heavy rho = 1 on [a, b), light 1 / ratio elsewhere, periodic): u = w - grad p / rho, div u = 0, i.e.
     (p' / rho)' - k^2 p / rho = w2'. Per layer p = rho A sin 2 pi y + alpha e^{k (y - y0)} + beta e^{-k (y - y1)},
     A = 2 pi / (4 pi^2 + k^2); p and p' / rho continuous at both interfaces (a 4 x 4 real system).
+    source "tangential": w = (cos 2 pi y, 0) e^{i k x}; then p = i q with (q' / rho)' - k^2 q / rho = k cos 2 pi y and
+    q = rho A2 cos 2 pi y + ..., A2 = -k / (4 pi^2 + k^2) (the returned p, dp are q, q').
     Returns p(y), dp(y), rho(y)."""
     k = 2 * math.pi * m
-    A = 2 * math.pi / (4 * math.pi ** 2 + k * k)
+    A = 2 * math.pi / (4 * math.pi ** 2 + k * k) if source == "normal" else -k / (4 * math.pi ** 2 + k * k)
+    trig = math.sin if source == "normal" else math.cos
+    dtrig = (lambda z: math.cos(z)) if source == "normal" else (lambda z: -math.sin(z))
     rH, rL = 1.0, 1.0 / ratio
     LH, LL = (b - a) % 1.0, 1.0 - (b - a) % 1.0
     # heavy: t in [0, LH] from a; light: t in [0, LL] from b. Exponentials scaled to stay bounded.
@@ -229,10 +245,10 @@ def exact_projection(ratio, a, b, m=1):
     eL1, dL1 = hom(LL, LL)
     eH0, dH0 = hom(0.0, LH)
     # at y = b: p_H = p_L, p_H'/rH = p_L'/rL
-    M[0, :2], M[0, 2:], rhs[0] = eH1, -eL0, (rL - rH) * A * math.sin(2 * math.pi * b)
+    M[0, :2], M[0, 2:], rhs[0] = eH1, -eL0, (rL - rH) * A * trig(2 * math.pi * b)
     M[1, :2], M[1, 2:] = dH1 / rH, -dL0 / rL
     # at y = a (the light layer's end): p_L = p_H, fluxes
-    M[2, 2:], M[2, :2], rhs[2] = eL1, -eH0, (rH - rL) * A * math.sin(2 * math.pi * a)
+    M[2, 2:], M[2, :2], rhs[2] = eL1, -eH0, (rH - rL) * A * trig(2 * math.pi * a)
     M[3, 2:], M[3, :2] = dL1 / rL, -dH0 / rH
     c = np.linalg.solve(M, rhs)
 
@@ -248,18 +264,18 @@ def exact_projection(ratio, a, b, m=1):
             else:
                 e, d = hom(t.flat[idx] - LH, LL)
                 co, r = c[2:], rL
-            p.flat[idx] = r * A * math.sin(2 * math.pi * y.flat[idx]) + co @ e
-            dp.flat[idx] = r * A * 2 * math.pi * math.cos(2 * math.pi * y.flat[idx]) + co @ d
+            p.flat[idx] = r * A * trig(2 * math.pi * y.flat[idx]) + co @ e
+            dp.flat[idx] = r * A * 2 * math.pi * dtrig(2 * math.pi * y.flat[idx]) + co @ d
         return p, dp, rho
     return fields, k
 
 
-def projection_test(N, ratio, a, b, kind, m=1):
+def projection_test(N, ratio, a, b, kind, m=1, source="normal"):
     """Discrete G-orthogonal projection of the exact face averages of w against the exact face averages of the
     projected field. kind "M": the lumped reference MAC (G_u = h M_t, G_v = h M_n). Max errors of the u faces and the
     v faces (the input has max |w| = 1)."""
     h = 1.0 / N
-    fields, k = exact_projection(ratio, a, b, m)
+    fields, k = exact_projection(ratio, a, b, m, source)
     th = k * h
     phi = (np.exp(1j * th) - 1.0) / (1j * th)
     D = np.roll(np.eye(N), -1, axis=0) - np.eye(N)
@@ -280,13 +296,17 @@ def projection_test(N, ratio, a, b, kind, m=1):
     G = np.block([[Gu, np.zeros((N, N))], [np.zeros((N, N)), Gv]])
     Bm = np.hstack([(np.exp(1j * th) - 1.0) / h * np.eye(N), D / h]).astype(complex)
     yf = np.arange(N) * h
-    x = np.concatenate([np.zeros(N), np.cos(2 * math.pi * yf) * phi])
+    if source == "normal":
+        x = np.concatenate([np.zeros(N), np.cos(2 * math.pi * yf) * phi])
+    else:                                                      # exact y-cell averages of cos 2 pi y
+        x = np.concatenate([(np.sin(2 * math.pi * (yf + h)) - np.sin(2 * math.pi * yf)) / (2 * math.pi * h), np.zeros(N)])
     GiBt = np.linalg.solve(G, Bm.conj().T)
     lam = np.linalg.solve(Bm @ GiBt, Bm @ x)
     xp = x - GiBt @ lam
     # exact: v faces (points in y), u faces (volume averages over the y-cells, Gauss per phase piece)
     p, dp, rho = fields(yf)
-    v_ex = (np.cos(2 * math.pi * yf) - dp / rho) * phi
+    # normal source: u = -i k p / rho, v = w2 - p' / rho. Tangential source (p = i q): u = w1 + k q / rho, v = -i q' / rho
+    v_ex = (np.cos(2 * math.pi * yf) - dp / rho) * phi if source == "normal" else (-1j * dp / rho) * phi
     u_ex = np.zeros(N, complex)
     for i, ps in enumerate(pieces(N, a, b)):
         for s0, s1, hv in ps:
@@ -294,7 +314,10 @@ def projection_test(N, ratio, a, b, kind, m=1):
                 lo, hi = s0 + (s1 - s0) * q / 4, s0 + (s1 - s0) * (q + 1) / 4
                 yq = (i + lo + (hi - lo) * XG) * h
                 pq, _, rq = fields(yq)
-                u_ex[i] += (hi - lo) * (WG @ (-1j * k * pq / rq))
+                if source == "normal":
+                    u_ex[i] += (hi - lo) * (WG @ (-1j * k * pq / rq))
+                else:
+                    u_ex[i] += (hi - lo) * (WG @ (np.cos(2 * math.pi * yq) + k * pq / rq))
     eu, ev = np.abs(xp[:N] - u_ex), np.abs(xp[N:] - v_ex)
     return {"N": N, "ratio": ratio, "kind": kind, "m": m, "u_err": float(eu.max()), "v_err": float(ev.max()),
             "u_rms": float(np.sqrt((eu ** 2).mean())), "v_rms": float(np.sqrt((ev ** 2).mean())),
@@ -308,8 +331,19 @@ def projection_scan():
     OFF = (0.0, 0.0071, 0.0193)
     jobs = [(N, r, 0.2613 + o, 0.7137 + o, k, m) for m in (1, 2) for k in ("M",) + KINDS
             for r in (1.0, 1e3, 1e6) for o in OFF for N in NS]
+    tjobs = [(N, 1e6, 0.2613 + o, 0.7137 + o, k, 2, "tangential") for k in ("M",) + KINDS for o in OFF for N in NS]
     with ProcessPoolExecutor(24) as ex:
         res = list(ex.map(_pt, jobs))
+        tres = list(ex.map(_pt, tjobs))
+    tan = []
+    for k in ("M",) + KINDS:
+        row = {"kind": k, "ratio": 1e6, "m": 2, "source": "tangential"}
+        for key in ("u_err", "v_err", "u_rms", "v_rms"):
+            worst = [max(o[key] for j, o in zip(tjobs, tres) if j[4] == k and j[0] == N) for N in NS]
+            ln, le = np.log(np.array(NS, float)), np.log(np.array(worst))
+            row[key] = worst
+            row[key + "_order"] = [float(-np.polyfit(ln, le, 1)[0]), float(-np.polyfit(ln[8:], le[8:], 1)[0])]
+        tan.append(row)
     out = []
     for m, k, r in [(m, k, r) for m in (1, 2) for k in ("M",) + KINDS for r in (1.0, 1e3, 1e6)]:
         if True:
@@ -321,7 +355,7 @@ def projection_scan():
                 row[key + "_order"] = [float(-np.polyfit(ln, le, 1)[0]), float(-np.polyfit(ln[8:], le[8:], 1)[0])]
             row["u_max"] = max(o["u_max"] for o in res if o["kind"] == k and o["ratio"] == r and o["m"] == m)
             out.append(row)
-    return {"NS": NS, "rows": out}
+    return {"NS": NS, "rows": out, "tangential": tan}
 
 
 def _pt(j):
@@ -385,6 +419,49 @@ def schur_2d_scan(N=32):
 
 def _s2(j):
     return schur_2d(*j)
+
+
+def projection_slivers(N=64):
+    """Worst projection errors over the interface positions of the Gram scan (fractions and both zeta scans),
+    both sources, m = 2."""
+    from concurrent.futures import ProcessPoolExecutor
+
+    cs = [None, 0.5, 0.25, 0.75, 0.1, 0.9, 1e-2, 1 - 1e-2, 1e-4, 1 - 1e-4]
+    zetas = (1e-4, 1e-2, 1.0, 1e2, 1e4)
+    jobs = []
+    for kind in ("M", "A", "D0m", "D0b", "D1"):
+        for r in (1e3, 1e6):
+            for tag, v in [("c", c) for c in cs] + [("zeta", z) for z in zetas] + [("zeta_light", z) for z in zetas]:
+                c = v if tag == "c" else (v / (r + v) if tag == "zeta" else r / (r + v))
+                for src in ("normal", "tangential"):
+                    jobs.append((N, r, *geometry(N, c, c), kind, 2, src))
+    with ProcessPoolExecutor(20) as ex:
+        res = list(ex.map(_pt, jobs))
+    out = []
+    for kind in ("M", "A", "D0m", "D0b", "D1"):
+        for r in (1e3, 1e6):
+            sel = [o for j, o in zip(jobs, res) if j[4] == kind and j[1] == r]
+            out.append({"kind": kind, "ratio": r, "u_err": max(o["u_err"] for o in sel), "v_err": max(o["v_err"] for o in sel),
+                        "u_rms": max(o["u_rms"] for o in sel), "v_rms": max(o["v_rms"] for o in sel)})
+    return out
+
+
+def switch_continuity(N=32, ratio=3.0, eps=1e-7):
+    """The piece values of R_C in the cut cell as the heavy fraction c crosses the equal-mobility point
+    (c = ratio (1 - c)): max |row(c + eps) - row(c)| / eps over c in [0.55, 0.95]. A jump gives ~ 1 / eps."""
+    out = {}
+    for kind in ("D0m", "D0b"):
+        worst = 0.0
+        for c in np.linspace(0.55, 0.95, 401):
+            rows = []
+            for cc in (c, c + eps):
+                a, b = geometry(N, 0.5, cc)                      # move the cut at b only
+                P = pieces(N, a, b)
+                i = (3 * N) // 4
+                rows.append(np.array([r for _, _, _, r in _piece_values(N, P, ratio, kind)[i]]))
+            worst = max(worst, float(np.abs(rows[1] - rows[0]).max() / eps))
+        out[kind] = worst
+    return out
 
 
 def slopes(vals):
@@ -463,6 +540,16 @@ def main() -> None:
               "max: u %.2e -> %.2e (%.2f / %.2f) v %.2e -> %.2e (%.2f / %.2f) | rms: u %.2e -> %.2e (%.2f / %.2f) v %.2e -> %.2e (%.2f / %.2f)"
               % (row["u_err"][0], row["u_err"][-1], *row["u_err_order"], row["v_err"][0], row["v_err"][-1], *row["v_err_order"],
                  row["u_rms"][0], row["u_rms"][-1], *row["u_rms_order"], row["v_rms"][0], row["v_rms"][-1], *row["v_rms_order"]))
+    for row in res["projection"]["tangential"]:
+        print("projection tangential source m=2 1e6", row["kind"], "max: u %.2e -> %.2e (%.2f / %.2f) v %.2e -> %.2e (%.2f / %.2f) | rms: u %.2e -> %.2e (%.2f / %.2f) v %.2e -> %.2e (%.2f / %.2f)"
+              % (row["u_err"][0], row["u_err"][-1], *row["u_err_order"], row["v_err"][0], row["v_err"][-1], *row["v_err_order"],
+                 row["u_rms"][0], row["u_rms"][-1], *row["u_rms_order"], row["v_rms"][0], row["v_rms"][-1], *row["v_rms_order"]))
+    res["projection_slivers"] = projection_slivers()
+    for row in res["projection_slivers"]:
+        print("projection, all positions and both sources", row["kind"], row["ratio"],
+              "max u %.2e v %.2e | rms u %.2e v %.2e" % (row["u_err"], row["v_err"], row["u_rms"], row["v_rms"]))
+    res["switch_continuity"] = switch_continuity()
+    print("switch continuity (max rate)", res["switch_continuity"])
     json.dump(res, open("docs/figures/mac_layered.json", "w"), indent=1, default=float)
 
 

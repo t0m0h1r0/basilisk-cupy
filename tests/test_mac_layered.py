@@ -43,3 +43,19 @@ def test_projection_accuracy_separates_the_candidates():
     assert lo["u_err"] < 0.01                                   # ... and is accurate for c < 1/2
     d3 = projection_test(64, 1e3, a, b, "D0m", 2)
     assert np.isclose(d3["u_err"], e["D0m"]["u_err"], rtol=0.02)  # independent of the density ratio
+
+
+def test_blended_d0b_is_continuous_bounded_and_as_accurate():
+    from cases.mac_layered import switch_continuity
+
+    sc = switch_continuity(32, 3.0)
+    assert sc["D0m"] > 1e5 and sc["D0b"] < 100                  # the switch of D0m jumps; the blend does not
+    for r in (1.0, 3.0, 1e3, 1e6):
+        for c in (0.25, 0.75, 1e-4, 1 - 1e-4, 1 - 1e-9):
+            o = measure(32, r, *geometry(32, c, c), "D0b")
+            assert o["jacobi_GF"] < 10 and o["jacobi_GC"] < 2.5 and o["const_C"] < 1e-9 and o["avg_err"] < 1e-12
+    a, b = geometry(64, 0.75, 0.75)
+    for src in ("normal", "tangential"):
+        e = projection_test(64, 1e6, a, b, "D0b", 2, src)
+        assert e["u_err"] < 0.05 and e["v_err"] < 0.01
+        assert projection_test(64, 1e6, a, b, "M", 2, src)["u_err"] > 1.0
