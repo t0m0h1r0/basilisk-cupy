@@ -26,9 +26,11 @@ def test_oracle_transport_is_second_order_only_with_the_source_and_alternating_s
 
 
 def test_coupled_solver_needs_the_source_and_fresh_periodic_ghosts():
-    lib = [coupled(n, 0.5, "conserving-src", t_end=0.25)["max"] for n in (32, 64)]
-    with periodic_momentum_ghosts():
-        fix = [coupled(n, 0.5, "conserving-src", t_end=0.25)["max"] for n in (32, 64)]
-        nosrc = [coupled(n, 0.5, "conserving", t_end=0.25)["max"] for n in (32, 64)]
-    assert fix[0] / fix[1] > 4.0 and fix[1] < 0.5 * lib[1]      # better than second order; the library as it is is not
+    old = [coupled(n, 0.5, "conserving-src", t_end=0.25, stale_ghosts=True)["max"] for n in (32, 64)]   # conserving.h
+    fix = [coupled(n, 0.5, "conserving-src", t_end=0.25)["max"] for n in (32, 64)]   # the library (issue #146)
+    nosrc = [coupled(n, 0.5, "conserving", t_end=0.25)["max"] for n in (32, 64)]
+    with periodic_momentum_ghosts():                            # the test-side patch of note 112: the same numbers
+        pat = [coupled(n, 0.5, "conserving-src", t_end=0.25, stale_ghosts=True)["max"] for n in (32, 64)]
+    assert max(abs(a - b) for a, b in zip(fix, pat)) < 1e-9 * fix[0]
+    assert fix[0] / fix[1] > 4.0 and fix[1] < 0.5 * old[1]      # better than second order; conserving.h's ghosts are not
     assert nosrc[0] / nosrc[1] < 2.4                            # the source is the dominant cause
