@@ -1181,3 +1181,11 @@ round-off, and its Schur denominator, condition number and amplification match t
 the density ratio; the structure (free stream, momentum, energy, G >= M) is kept and the Galerkin correction is not
 concentrated at the interface. Open issue: the update operator jumps by O(1) when the interface crosses a cell
 boundary (the stencil switches); a blend of stencils is continuous but less accurate.
+
+Constrained weighted least squares (`docs/notes/82_constrained_ls.md`, the user's design): each cell's own average is an
+exact constraint and the window of the piecewise fit slides with the interface (smooth end weights), so the
+reconstruction, and the update, are continuous in the interface position. A square fit makes the weights useless and
+is ill conditioned next to a cell boundary (condition number 5.8e3 at density ratio 1000); widening the window by one
+cell on each side and weighting the cells by (mass)^0.75 keeps the condition number below 4.3 and the one-step
+max-norm amplification below 7.7 for density ratios 1 to 1e6, with fourth order kept. Grid-scale data still lose a
+Delta-t-independent fraction of energy per unit time (about 3/h).

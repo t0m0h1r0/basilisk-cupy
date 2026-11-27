@@ -68,8 +68,12 @@ def _mono_integral(a, b, z, h, r):
 class Reconstruction:
     """The basis at displacement s: on cell i, u_h(x) = sum_k phi_{i,k}(x) u_{stencil_i[k]}."""
 
-    def __init__(self, n: int, p: int, s: float, piecewise: bool = False, ratio: float = RHO_IN / RHO_OUT):
+    def __init__(self, n: int, p: int, s: float, piecewise: bool = False, ratio: float = RHO_IN / RHO_OUT,
+                 alpha: float = 0.0, extra: int = 0):
         self.n, self.p, self.s = n, p, s
+        self.alpha = alpha
+        self.extra = extra  # "ls": the window reaches `extra` more cells on each side (over-determined everywhere)
+        self.sigma_min = np.inf  # "ls": min over the constrained fits of sigma_min(W^1/2 A Z)
         self.h = h = 1.0 / n
         self.ratio = ratio
         self.offsets = STENCILS[p]
@@ -91,6 +95,9 @@ class Reconstruction:
             return ("pw", np.arange(c - p, c + p + 1), (zz, pw[(zz, c)]))
 
         self.parts = []
+        if piecewise == "ls":
+            self._build_ls(gammas)
+            return
         for i in range(n):
             near = None
             if piecewise:
@@ -114,6 +121,97 @@ class Reconstruction:
                 else:
                     comps.append((w, ("c", i + np.array(self.offsets), self._centred(i))))
             self.parts.append(comps)
+
+    @staticmethod
+    def eta(t):
+        """The smooth step 3t^2 - 2t^3 on [0, 1]."""
+        t = min(max(t, 0.0), 1.0)
+        return t * t * (3.0 - 2.0 * t)
+
+    def _build_ls(self, gammas):
+        """"ls" (docs/notes/82): the window of the interface at zz (in cell cz, at theta in it) is cz - p .. cz + p + 1,
+        the end cells weighted 1 - eta(theta) (left) and eta(theta) (right), the others 1, all times
+        (m_j / max m)^alpha; the window at theta = 1 is the next cell's at theta = 0, so the weights are continuous in
+        zz. Cell i (in the window) gets its own constrained fit: the shared-interface-value piecewise polynomial whose
+        mass-weighted average over cell i is exactly u_i and whose weighted squared misfit over the window is least.
+        The cells that enter and leave the set of piecewise cells (the window's end cells) mix this fit with the
+        centred single polynomial by the same weight (both keep the cell's average and the constants), so the basis
+        is continuous in the interface position."""
+        p, n = self.p, self.n
+        lam = {}  # cell -> (weight of the piecewise fit, gamma)
+        for g in gammas:
+            zz, cz, theta = g
+            for c in range(cz - p, cz + p + 2):
+                w = 1.0 - self.eta(theta) if c == cz - p else self.eta(theta) if c == cz + p + 1 else 1.0
+                if w > 0.0 and (c not in lam or w > lam[c][0]):
+                    lam[c] = (w, g)
+        bycell = {}
+        for c, (w, g) in lam.items():
+            ci = c % n
+            if ci not in bycell or w > bycell[ci][0]:
+                bycell[ci] = (w, g, c)
+        for i in range(n):
+            comps = []
+            if i in bycell:
+                w, (zz, cz, theta), c = bycell[i]
+                W = self._ls_fit(zz, cz, theta, c)
+                e = self.extra
+                comps.append((w, ("pw", np.arange(cz - p - e, cz + p + 2 + e) + (i - c), (zz + (i - c) * self.h, W))))
+                if w < 1.0:
+                    comps.append((1.0 - w, ("c", i + np.array(self.offsets), self._centred(i))))
+            else:
+                comps.append((1.0, ("c", i + np.array(self.offsets), self._centred(i))))
+            self.parts.append(comps)
+
+    def _rows(self, zz, cells):
+        """Mass-weighted averages of the basis [1, xi^r left, xi^r right] over the (unwrapped) cells, and the
+        cells' masses."""
+        h, p = self.h, self.p
+        rl, rr = float(rho_at(np.array([zz - 1e-12]), self.s, self.ratio)[0]), \
+            float(rho_at(np.array([zz + 1e-12]), self.s, self.ratio)[0])
+        A = np.zeros((len(cells), 2 * p + 1))
+        mass = np.zeros(len(cells))
+        for row, c in enumerate(cells):
+            a, b = c * h, (c + 1) * h
+            la, lb = a, min(b, zz)
+            ra, rb = max(a, zz), b
+            wl = rl * max(lb - la, 0.0)
+            wr = rr * max(rb - ra, 0.0)
+            m = wl + wr
+            mass[row] = m
+            A[row, 0] = 1.0
+            if lb > la:
+                A[row, 1:p + 1] = [rl * _mono_integral(la, lb, zz, h, r) / m for r in range(1, p + 1)]
+            if rb > ra:
+                A[row, p + 1:] = [rr * _mono_integral(ra, rb, zz, h, r) / m for r in range(1, p + 1)]
+        return A, mass
+
+    def _ls_fit(self, zz, cz, theta, c):
+        """W (coefficients = W u_window) of cell c's constrained fit (see _build_ls)."""
+        p = self.p
+        e = self.extra
+        cells = np.arange(cz - p - e, cz + p + 2 + e)
+        A, mass = self._rows(zz, cells)
+        geo = np.ones(len(cells))
+        geo[0] = 1.0 - self.eta(theta)
+        geo[-1] = self.eta(theta)
+        wts = geo * (mass / mass.max()) ** self.alpha
+        k = int(np.where(cells == c)[0][0])
+        b = A[k]
+        # null space of b^T and a particular solution: a = b (u_c)/(b.b) + Z y
+        _, _, Vt = np.linalg.svd(b[None, :])
+        Z = Vt[1:].T
+        ap = b / (b @ b)  # times u_c
+        sw = np.sqrt(wts)
+        B = sw[:, None] * (A @ Z)
+        sv = np.linalg.svd(B, compute_uv=False)
+        self.sigma_min = min(self.sigma_min, float(sv[-1] / sv[0]))
+        # y = B^+ sw (u - A ap e_k^T u)
+        E = np.eye(len(cells))
+        Pk = np.outer(ap, E[k])  # a_p = Pk u
+        rhs = sw[:, None] * (E - A @ Pk)
+        y = np.linalg.lstsq(B, rhs, rcond=None)[0]
+        return Pk + Z @ y  # (2p + 1, window)
 
     def _centred(self, i):
         h, p, s = self.h, self.p, self.s
@@ -178,11 +276,11 @@ class Reconstruction:
 
 
 def matrices(n: int, p: int, s: float, ds: float, piecewise: bool = False, ratio: float = RHO_IN / RHO_OUT,
-             remap: bool = False):
+             remap: bool = False, alpha: float = 0.0, extra: int = 0):
     """G^{n+1} and C for the displacement s -> s + ds, and the reconstructions; ``remap``: also the direct geometric
     remap's matrix Cg_ij = int rho^n(x) 1_{K_i}(x + ds) phi_j^n(x) dx (u_g = M^{-1} Cg u^n)."""
-    old = Reconstruction(n, p, s, piecewise, ratio)
-    new = Reconstruction(n, p, s + ds, piecewise, ratio)
+    old = Reconstruction(n, p, s, piecewise, ratio, alpha, extra)
+    new = Reconstruction(n, p, s + ds, piecewise, ratio, alpha, extra)
     h = 1.0 / n
     order = 2 * p + 2
     xg, wg = np.polynomial.legendre.leggauss(order)
@@ -286,7 +384,8 @@ def locality(n: int, p: int, cfl: float = 0.37, piecewise: bool = False):
     return [float(np.abs(T[d == k]).max()) for k in range(n // 2 + 1)]
 
 
-def exactness(n: int, p: int, ratio: float = RHO_IN / RHO_OUT, seed: int = 0):
+def exactness(n: int, p: int, ratio: float = RHO_IN / RHO_OUT, seed: int = 0, piecewise=True, alpha: float = 0.0,
+              s: float = 0.0, extra: int = 0):
     """P0-2: a piecewise polynomial of degree p (different in the two phases, continuous at both interfaces) is
     reproduced by the piecewise reconstruction: max |u_h - q| at points of every cell."""
     rng = np.random.default_rng(seed)
@@ -303,17 +402,17 @@ def exactness(n: int, p: int, ratio: float = RHO_IN / RHO_OUT, seed: int = 0):
         zo = np.where(z <= A0, z + 1.0, z)
         return np.where((z > A0) & (z < B0), qin(z), qout(zo))
 
-    rec = Reconstruction(n, p, 0.0, True, ratio)
+    rec = Reconstruction(n, p, s, piecewise, ratio, alpha, extra)
     h = 1.0 / n
-    cuts = [z + m for z in interfaces(0.0) for m in (-1, 0, 1)]
-    u = np.array([_integrate(lambda x: rho_at(x, 0.0, ratio) * q(x), k * h, (k + 1) * h, cuts, 12)
+    cuts = [z + m for z in interfaces(s) for m in (-1, 0, 1)]
+    u = np.array([_integrate(lambda x: rho_at(x, s, ratio) * q(x - s), k * h, (k + 1) * h, cuts, 12)
                   for k in range(n)]) / rec.mass
     err = 0.0
     for i in range(n):
         for a, b in _pieces(i * h, (i + 1) * h, cuts):
             x = a + (b - a) * np.linspace(0.05, 0.95, 7)
             idx, v = rec.basis(x)
-            err = max(err, float(np.abs(v @ u[idx] - q(x)).max()))
+            err = max(err, float(np.abs(v @ u[idx] - q(x - s)).max()))
     return err, float(np.abs(q(np.linspace(0, 1, 101))).max())
 
 
