@@ -305,6 +305,84 @@ def d_stiffness(N, ratio, kind, c):
             "gram_A": float(np.linalg.eigvalsh(GA * Mh[:, None] * Mh[None, :])[-1])}
 
 
+# --------------------------------------------------------------------------------------------- docs/notes/101: P0
+def periodic_pccd_gram(N):
+    """G_A of the true single-phase periodic PCCD (no artificial interfaces): h sum_i R_i^T [1/(p+q+1)] R_i."""
+    from cases.pccd import reconstruction_operator
+
+    R = reconstruction_operator(N)                       # (N cells, 5 s-coefficients, N data)
+    Mq = np.array([[1.0 / (p + q + 1) for q in range(5)] for p in range(5)])
+    return (1.0 / N) * np.einsum("ipj,pq,iqk->jk", R, Mq, R)
+
+
+def single_phase_d(N, t=0.01, kind_basis="periodic"):
+    """D (G_A q' = -K_nu q) and C for one phase (rho = mu = 1), initial data the averages of sin 2 pi x: the relative
+    max error at time t. kind_basis: "periodic" (true single-phase PCCD) or "split" (the phase-split PCCD with its two
+    artificial interfaces, as in note 100)."""
+    a, b = 0.2613, 0.7137
+    S = Setup(N, 1.0, a, b, 1.0, 1.0)
+    ME = MinEnergy(S)
+    if kind_basis == "periodic":
+        GA = periodic_pccd_gram(N)
+    else:
+        from cases.pccd import WG, XG
+        ME8 = MinEnergy(S, nodes=(XG, WG))
+        X = np.concatenate([c[0] for c in ME8.cells])
+        W = np.concatenate([c[1] for c in ME8.cells])
+        BA = advection_basis(N, 1.0, a, b, X)
+        GA = BA.T @ (W[:, None] * BA)
+    lam = (2 * math.pi) ** 2
+    x = np.arange(N) / N
+    q0 = (np.cos(2 * math.pi * x) - np.cos(2 * math.pi * (x + 1.0 / N))) / (2 * math.pi / N)
+    qe = q0 * math.exp(-lam * t)
+    out = {}
+    for name, Gm in (("C", ME.G), ("D", GA)):
+        ev, V = _gen_eig(Gm, ME.K)
+        qt = V @ (np.exp(-ev * t) * (V.T @ (Gm @ q0)))
+        out[name] = float(np.abs(qt - qe).max() / np.abs(q0).max())
+    out["gram_A_max"] = float(np.linalg.eigvalsh(GA * N)[-1])
+    return out
+
+
+def residual_map(N, ratio, kind, a=0.2613, b=0.7137):
+    """r = (G_nu - G_A) q'_C for the slowest Stokes mode, per cell, grouped: mixed cells, cells within 3 of a mixed cell,
+    the rest (relative to max |r|); and the errors of C and D at t = 0.01 as max, mass-weighted L2 and the
+    eigenfunction (the discrete slowest mode normalised against the exact averages)."""
+    from cases.pccd import WG, XG
+
+    mu_H, mu_L = mus(ratio, kind)
+    S = Setup(N, ratio, a, b, mu_H, mu_L)
+    ME = MinEnergy(S, nodes=(XG, WG))
+    X = np.concatenate([c[0] for c in ME.cells])
+    W = np.concatenate([c[1] for c in ME.cells])
+    BA = advection_basis(N, ratio, a, b, X)
+    GA = BA.T @ (W[:, None] * BA)
+    ex = stokes_rate(mu_H, mu_L, ratio, a, b, which=1)[0]
+    q0 = S.averages(eigenfunction(mu_H, mu_L, ratio, a, b, ex))
+    qdotC = -np.linalg.solve(ME.G, ME.K @ q0)
+    r = (ME.G - GA) @ qdotC / S.m                          # per unit mass (an acceleration-like residual)
+    mixed = [i for i in range(N) if len(S.P[i]) > 1]
+    near = sorted({(m + o) % N for m in mixed for o in range(-3, 4)} - set(mixed))
+    far = sorted(set(range(N)) - set(mixed) - set(near))
+    R = np.abs(r).max()
+    res = {"r_mixed": float(np.abs(r[mixed]).max() / R), "r_near": float(np.abs(r[near]).max() / R),
+           "r_far": float(np.abs(r[far]).max() / R) if far else 0.0, "r_max_over_qdot": float(R / np.abs(qdotC).max())}
+    t = 0.01
+    qe = q0 * math.exp(-ex * t)
+    for name, Gm in (("C", ME.G), ("D", GA)):
+        ev, V = _gen_eig(Gm, ME.K)
+        qt = V @ (np.exp(-ev * t) * (V.T @ (Gm @ q0)))
+        e = qt - qe
+        k = int(np.argmin(np.where(ev > 1e-12 * ev.max(), ev, np.inf)))   # the slowest nonzero mode
+        v = V[:, k]
+        v = v * (v @ (S.m * q0)) / (v @ (S.m * v))
+        res[name] = {"max": float(np.abs(e).max() / np.abs(q0).max()),
+                     "L2m": float(math.sqrt((S.m * e * e).sum() / (S.m * q0 * q0).sum())),
+                     "eigfun": float(np.abs(v - q0).max() / np.abs(q0).max()),
+                     "zero_modes": int((ev < 1e-12 * ev.max()).sum())}
+    return res
+
+
 if __name__ == "__main__":
     import sys
 
