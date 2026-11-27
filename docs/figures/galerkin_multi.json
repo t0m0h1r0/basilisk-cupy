@@ -1,0 +1,432 @@
+[
+ {
+  "test": "exact",
+  "args": {
+   "w": 20,
+   "ratio": 1000.0
+  },
+  "result": 6.283862319378386e-14
+ },
+ {
+  "test": "step",
+  "args": {
+   "w": 20,
+   "ratio": 1000.0
+  },
+  "result": {
+   "err": 2.201728300899042e-06,
+   "inf": 7.911197851242697
+  }
+ },
+ {
+  "test": "continuity",
+  "args": {
+   "w": 20,
+   "ratio": 1000.0,
+   "spacing": 0.004
+  },
+  "result": {
+   "max_rel_change": 0.3311465512334652,
+   "at_cells": 0.78
+  }
+ },
+ {
+  "test": "continuity",
+  "args": {
+   "w": 20,
+   "ratio": 1000.0,
+   "spacing": 0.001
+  },
+  "result": {
+   "max_rel_change": 0.08202398073805445,
+   "at_cells": 1.778
+  }
+ },
+ {
+  "test": "exact",
+  "args": {
+   "w": 20,
+   "ratio": 1000000.0
+  },
+  "result": 1.1390888232654106e-13
+ },
+ {
+  "test": "step",
+  "args": {
+   "w": 20,
+   "ratio": 1000000.0
+  },
+  "result": {
+   "err": 2.1232745422983257e-06,
+   "inf": 11.198790941790229
+  }
+ },
+ {
+  "test": "continuity",
+  "args": {
+   "w": 20,
+   "ratio": 1000000.0,
+   "spacing": 0.004
+  },
+  "result": {
+   "max_rel_change": 0.4259481151244735,
+   "at_cells": 1.7799999999999998
+  }
+ },
+ {
+  "test": "continuity",
+  "args": {
+   "w": 20,
+   "ratio": 1000000.0,
+   "spacing": 0.001
+  },
+  "result": {
+   "max_rel_change": 0.15420222810174405,
+   "at_cells": 1.777
+  }
+ },
+ {
+  "test": "exact",
+  "args": {
+   "w": 10,
+   "ratio": 1000.0
+  },
+  "result": 6.283862319378386e-14
+ },
+ {
+  "test": "step",
+  "args": {
+   "w": 10,
+   "ratio": 1000.0
+  },
+  "result": {
+   "err": 5.61204814170102e-06,
+   "inf": 7.913049140150669
+  }
+ },
+ {
+  "test": "continuity",
+  "args": {
+   "w": 10,
+   "ratio": 1000.0,
+   "spacing": 0.004
+  },
+  "result": {
+   "max_rel_change": 0.331165381938483,
+   "at_cells": 1.7799999999999998
+  }
+ },
+ {
+  "test": "continuity",
+  "args": {
+   "w": 10,
+   "ratio": 1000.0,
+   "spacing": 0.001
+  },
+  "result": {
+   "max_rel_change": 0.0820282468736084,
+   "at_cells": 1.778
+  }
+ },
+ {
+  "test": "exact",
+  "args": {
+   "w": 10,
+   "ratio": 1000000.0
+  },
+  "result": 1.1479706074624119e-13
+ },
+ {
+  "test": "step",
+  "args": {
+   "w": 10,
+   "ratio": 1000000.0
+  },
+  "result": {
+   "err": 5.625703826450668e-06,
+   "inf": 11.097883460590815
+  }
+ },
+ {
+  "test": "continuity",
+  "args": {
+   "w": 10,
+   "ratio": 1000000.0,
+   "spacing": 0.004
+  },
+  "result": {
+   "max_rel_change": 0.42597265765006503,
+   "at_cells": 0.78
+  }
+ },
+ {
+  "test": "continuity",
+  "args": {
+   "w": 10,
+   "ratio": 1000000.0,
+   "spacing": 0.001
+  },
+  "result": {
+   "max_rel_change": 0.15420996948882343,
+   "at_cells": 0.777
+  }
+ },
+ {
+  "test": "exact",
+  "args": {
+   "w": 7,
+   "ratio": 1000.0
+  },
+  "result": 6.283862319378386e-14
+ },
+ {
+  "test": "step",
+  "args": {
+   "w": 7,
+   "ratio": 1000.0
+  },
+  "result": {
+   "err": 4.961347479515155e-06,
+   "inf": 7.908455835703385
+  }
+ },
+ {
+  "test": "continuity",
+  "args": {
+   "w": 7,
+   "ratio": 1000.0,
+   "spacing": 0.004
+  },
+  "result": {
+   "max_rel_change": 0.29772432942555355,
+   "at_cells": 1.7799999999999998
+  }
+ },
+ {
+  "test": "continuity",
+  "args": {
+   "w": 7,
+   "ratio": 1000.0,
+   "spacing": 0.001
+  },
+  "result": {
+   "max_rel_change": 0.07529030636656649,
+   "at_cells": 1.778
+  }
+ },
+ {
+  "test": "exact",
+  "args": {
+   "w": 7,
+   "ratio": 1000000.0
+  },
+  "result": 1.6442402994698568e-13
+ },
+ {
+  "test": "step",
+  "args": {
+   "w": 7,
+   "ratio": 1000000.0
+  },
+  "result": {
+   "err": 5.007777572951788e-06,
+   "inf": 11.176067702599967
+  }
+ },
+ {
+  "test": "continuity",
+  "args": {
+   "w": 7,
+   "ratio": 1000000.0,
+   "spacing": 0.004
+  },
+  "result": {
+   "max_rel_change": 0.3785101127475868,
+   "at_cells": 0.78
+  }
+ },
+ {
+  "test": "continuity",
+  "args": {
+   "w": 7,
+   "ratio": 1000000.0,
+   "spacing": 0.001
+  },
+  "result": {
+   "max_rel_change": 0.14192473256583216,
+   "at_cells": 0.777
+  }
+ },
+ {
+  "test": "exact",
+  "args": {
+   "w": 5,
+   "ratio": 1000.0
+  },
+  "result": 1.9190010956626757e-05
+ },
+ {
+  "test": "step",
+  "args": {
+   "w": 5,
+   "ratio": 1000.0
+  },
+  "result": {
+   "err": 0.005997443380157286,
+   "inf": 11.645076178820803
+  }
+ },
+ {
+  "test": "continuity",
+  "args": {
+   "w": 5,
+   "ratio": 1000.0,
+   "spacing": 0.004
+  },
+  "result": {
+   "max_rel_change": 0.7959952468514245,
+   "at_cells": 0.776
+  }
+ },
+ {
+  "test": "continuity",
+  "args": {
+   "w": 5,
+   "ratio": 1000.0,
+   "spacing": 0.001
+  },
+  "result": {
+   "max_rel_change": 0.8163111225109,
+   "at_cells": 0.776
+  }
+ },
+ {
+  "test": "exact",
+  "args": {
+   "w": 5,
+   "ratio": 1000000.0
+  },
+  "result": 1.250781394013245e-07
+ },
+ {
+  "test": "step",
+  "args": {
+   "w": 5,
+   "ratio": 1000000.0
+  },
+  "result": {
+   "err": 0.0008386880171362687,
+   "inf": 87.46450229181788
+  }
+ },
+ {
+  "test": "continuity",
+  "args": {
+   "w": 5,
+   "ratio": 1000000.0,
+   "spacing": 0.004
+  },
+  "result": {
+   "max_rel_change": 0.39474941092516574,
+   "at_cells": 1.7799999999999998
+  }
+ },
+ {
+  "test": "continuity",
+  "args": {
+   "w": 5,
+   "ratio": 1000000.0,
+   "spacing": 0.001
+  },
+  "result": {
+   "max_rel_change": 0.13856782030735176,
+   "at_cells": 1.777
+  }
+ },
+ {
+  "test": "exact",
+  "args": {
+   "w": 3,
+   "ratio": 1000.0
+  },
+  "result": 0.001047472834562413
+ },
+ {
+  "test": "step",
+  "args": {
+   "w": 3,
+   "ratio": 1000.0
+  },
+  "result": {
+   "err": 0.01350796202293969,
+   "inf": 16.410985212968427
+  }
+ },
+ {
+  "test": "continuity",
+  "args": {
+   "w": 3,
+   "ratio": 1000.0,
+   "spacing": 0.004
+  },
+  "result": {
+   "max_rel_change": 0.22413544620966602,
+   "at_cells": 1.776
+  }
+ },
+ {
+  "test": "continuity",
+  "args": {
+   "w": 3,
+   "ratio": 1000.0,
+   "spacing": 0.001
+  },
+  "result": {
+   "max_rel_change": 0.06879437781389901,
+   "at_cells": 1.7750000000000001
+  }
+ },
+ {
+  "test": "exact",
+  "args": {
+   "w": 3,
+   "ratio": 1000000.0
+  },
+  "result": 0.0016720751194284622
+ },
+ {
+  "test": "step",
+  "args": {
+   "w": 3,
+   "ratio": 1000000.0
+  },
+  "result": {
+   "err": 0.014684385042715853,
+   "inf": 18.574960918222473
+  }
+ },
+ {
+  "test": "continuity",
+  "args": {
+   "w": 3,
+   "ratio": 1000000.0,
+   "spacing": 0.004
+  },
+  "result": {
+   "max_rel_change": 0.6083471103493058,
+   "at_cells": 0.78
+  }
+ },
+ {
+  "test": "continuity",
+  "args": {
+   "w": 3,
+   "ratio": 1000000.0,
+   "spacing": 0.001
+  },
+  "result": {
+   "max_rel_change": 0.5691324775243135,
+   "at_cells": 0.777
+  }
+ }
+]
