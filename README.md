@@ -1189,3 +1189,10 @@ is ill conditioned next to a cell boundary (condition number 5.8e3 at density ra
 cell on each side and weighting the cells by (mass)^0.75 keeps the condition number below 4.3 and the one-step
 max-norm amplification below 7.7 for density ratios 1 to 1e6, with fourth order kept. Grid-scale data still lose a
 Delta-t-independent fraction of energy per unit time (about 3/h).
+
+Galerkin-transport dissipation (`docs/notes/83_galerkin_dissipation.md`, reproducing the user's Fourier analysis): the
+cell-wise quartic loses energy at its face jumps, -dE/dt = 1/2 sum_f rho |U| [u_h]_f^2, a tenth-order hyperviscosity
+(gamma = U h^9 k^10 / 900 at low wavenumber) that does not vanish as Delta t -> 0; a continuous quartic B-spline
+reconstruction (pentadiagonal, condition number 7.5) makes it vanish with Delta t (230 times smaller for a 4h wave at
+CFL 0.37). The worst modes of note 82 sit at the interface-fitted basis; the largest growth from any step is the
+largest one-step norm, reached only by grid-scale data next to the interface.

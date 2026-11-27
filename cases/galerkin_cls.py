@@ -202,3 +202,138 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
+
+
+# -- P0-8 (docs/notes/83) ---------------------------------------------------------------------------------------
+def localized_loss(alpha, ratio, cfl, n=48, p=4, samples=6, mode="ls", extra=1):
+    """P0-8b: the worst-case one-step energy loss (1 - smin^2) and its singular vector: the cell where it peaks,
+    its distance to the nearest interface (cells) and its sign-alternation fraction; gamma = -log(smin^2)/dt."""
+    h = 1.0 / n
+    best = None
+    for s0 in positions(n, samples):
+        st = step_stats(n, p, s0, cfl * h, alpha, ratio, mode, extra)
+        G1h, _ = _sqrtm(st["G"])
+        _, G0ih = _sqrtm(st["G0"])
+        _, S, Vt = np.linalg.svd(G1h @ st["T"] @ G0ih)
+        if best is None or S[-1] < best[0]:
+            v = G0ih @ Vt[-1]
+            peak = int(np.argmax(np.abs(v)))
+            xc = (peak + 0.5) * h
+            dist = min(min(abs(xc - z), 1 - abs(xc - z)) for z in interfaces(s0)) / h
+            alt = float(np.mean(np.sign(v[1:]) != np.sign(v[:-1])))
+            best = (float(S[-1]), peak, dist, alt)
+    smin, peak, dist, alt = best
+    return {"loss": 1 - smin ** 2, "per_time": (1 - smin ** 2) / (cfl * h),
+            "gamma": -math.log(max(smin ** 2, 1e-300)) / (cfl * h), "peak_cell": peak, "distance": dist,
+            "alternation": alt}
+
+
+def transient(alpha, ratio, n=64, p=4, t_end=0.5, cfl=0.37, extra=1):
+    """P0-8c: max over j < k of ||T_{k-1} .. T_j||_inf (errors injected at any step), the step and row of the
+    largest one-step ||T||_inf, and the character of the input sign(T_{i*, :}) that attains it."""
+    steps = int(math.ceil(t_end / (cfl / n)))
+    ds = t_end / steps
+    Ts = []
+    for k in range(steps):
+        G, C, _, _ = matrices(n, p, k * ds, ds, "ls", ratio=ratio, alpha=alpha, extra=extra)
+        Ts.append(np.linalg.solve(G, C))
+    one = [float(np.abs(T).sum(1).max()) for T in Ts]
+    worst_any, worst_from0, arg = 0.0, 0.0, None
+    for j in range(steps):
+        P = np.eye(n)
+        for k in range(j, steps):
+            P = Ts[k] @ P
+            v = float(np.abs(P).sum(1).max())
+            if v > worst_any:
+                worst_any, arg = v, (j, k + 1)
+            if j == 0:
+                worst_from0 = max(worst_from0, v)
+    k = int(np.argmax(one))
+    T = Ts[k]
+    i = int(np.argmax(np.abs(T).sum(1)))
+    u = np.sign(T[i])
+    h = 1.0 / n
+    xc = (i + 0.5) * h
+    dist = min(min(abs(xc - z), 1 - abs(xc - z)) for z in interfaces(k * ds)) / h
+    big = np.where(np.abs(T[i]) > 0.1 * np.abs(T[i]).max())[0]
+    thetas = [float(z / h - math.floor(z / h)) for z in interfaces(k * ds)]
+    return {"steps": steps, "max_one_step": max(one), "max_from_0": worst_from0, "max_any": worst_any,
+            "argmax_any": arg, "worst_step": k, "worst_row": i, "row_distance": dist,
+            "row_entries": {int(c): float(T[i, c]) for c in big}, "input_alternation":
+            float(np.mean(u[big][1:] != u[big][:-1])) if len(big) > 1 else 0.0, "interface_theta": thetas,
+            "output_of_sign_input": float((T @ u)[i])}
+
+
+# -- P0-10 (docs/notes/84): the adjoint-corrected Galerkin transport ---------------------------------------------
+def corrected(T, G0, C, beta):
+    """T_beta = T [I + beta (I - T^dagger T)], T^dagger = G0^-1 C^T (the adjoint in the energy inner products)."""
+    if beta == 0.0:
+        return T
+    Td = np.linalg.solve(G0, C.T)
+    return T + beta * (T - T @ (Td @ T))
+
+
+def step10(n, p, s, ds, alpha, ratio, beta, mode="ls", extra=1):
+    """One corrected step: T_beta and its structure (free stream, momentum, energy-norm singular values,
+    ||T||_inf) at the displacement s -> s + ds."""
+    G, C, old, new = matrices(n, p, s, ds, mode, ratio=ratio, alpha=alpha, extra=extra)
+    G0 = matrices(n, p, s - ds, ds, mode, ratio=ratio, alpha=alpha, extra=extra)[0]
+    T = corrected(np.linalg.solve(G, C), G0, C, beta)
+    G1h, _ = _sqrtm(G)
+    _, G0ih = _sqrtm(G0)
+    sv = np.linalg.svd(G1h @ T @ G0ih, compute_uv=False)
+    return {"T": T, "free_stream": float(np.abs(T @ np.ones(n) - 1).max()),
+            "momentum": float(np.abs(new.mass @ T - old.mass).max() / old.mass.max()),
+            "amp": float(sv[0]), "loss": float(1 - sv[-1] ** 2), "inf": float(np.abs(T).sum(1).max()),
+            "old": old, "new": new, "G": G, "G0": G0}
+
+
+def sweep10(alpha, ratio, beta, cfl=0.37, n=48, p=4, samples=12, extra=1):
+    """Max over interface positions of the structure of T_beta and the one-step error of the 'phases' q."""
+    h = 1.0 / n
+    res = {"free_stream": 0.0, "momentum": 0.0, "amp": 0.0, "loss": 0.0, "inf": 0.0, "err": 0.0}
+    for s0 in positions(n, samples):
+        st = step10(n, p, s0, cfl * h, alpha, ratio, beta, extra=extra)
+        u0 = exact_averages(n, s0, st["old"].mass, "phases", ratio)
+        ex = exact_averages(n, s0 + cfl * h, st["new"].mass, "phases", ratio)
+        for k in ("free_stream", "momentum", "amp", "loss", "inf"):
+            res[k] = max(res[k], st[k])
+        res["err"] = max(res["err"], float(np.abs(st["T"] @ u0 - ex).max()))
+    res["loss_per_time"] = res["loss"] / (cfl * h)
+    return res
+
+
+def run10(n, p, alpha, ratio, beta, kind="phases", t_end=0.137, cfl=0.37, samples=(0.05, 0.1), extra=1,
+          transient=False):
+    """Errors at the sample times and t_end, E(t_end)/E(0), max one-step ||T||_inf; with ``transient`` also
+    max_{j<k} ||T_{k-1} .. T_j||_inf."""
+    steps = int(math.ceil(t_end / (cfl / n)))
+    ds = t_end / steps
+    at = {int(round(t / ds)): t for t in samples}
+    errs, u, E0 = {}, None, None
+    Ts = []
+    inf1 = 0.0
+    for k in range(steps):
+        G, C, old, new = matrices(n, p, k * ds, ds, "ls", ratio=ratio, alpha=alpha, extra=extra)
+        G0 = matrices(n, p, (k - 1) * ds, ds, "ls", ratio=ratio, alpha=alpha, extra=extra)[0]
+        if u is None:
+            u = exact_averages(n, 0.0, old.mass, kind, ratio)
+            E0 = float(u @ G0 @ u)
+        T = corrected(np.linalg.solve(G, C), G0, C, beta)
+        if transient:
+            Ts.append(T)
+        u = T @ u
+        inf1 = max(inf1, float(np.abs(T).sum(1).max()))
+        if k + 1 in at:
+            errs[at[k + 1]] = float(np.abs(u - exact_averages(n, (k + 1) * ds, new.mass, kind, ratio)).max())
+    errs[t_end] = float(np.abs(u - exact_averages(n, t_end, new.mass, kind, ratio)).max())
+    out = {"errors": errs, "energy": float(u @ G @ u) / E0, "steps": steps, "inf_step": inf1}
+    if transient:
+        worst = 0.0
+        for j in range(steps):
+            P = np.eye(n)
+            for k in range(j, steps):
+                P = Ts[k] @ P
+                worst = max(worst, float(np.abs(P).sum(1).max()))
+        out["inf_any"] = worst
+    return out

@@ -322,6 +322,8 @@ def profile(z, kind: str = "smooth"):
         da, db = g(A0) - f(A0), g(B0) - f(B0)
         inner = f(z) + da + (db - da) * (z - A0) / (B0 - A0)
         q = np.where((z > A0) & (z < B0), inner, q)
+    elif kind == "grid":  # docs/notes/84: + a wave of 1/16 (four cells at N = 64), the dissipation's probe
+        q = q + 0.5 * np.sin(32 * np.pi * z)
     return q
 
 
