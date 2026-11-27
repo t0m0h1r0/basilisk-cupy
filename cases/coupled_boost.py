@@ -32,7 +32,7 @@ def _visc(G, K, dt):
     return V @ np.diag(np.exp(-ev * dt)) @ V.T @ G
 
 
-def run(N, ratio, kind, scale=0.01, U=1.0, p=1, q=4, t_end=0.5, samples=(0.25,), advect=True):
+def run(N, ratio, kind, scale=0.01, U=1.0, p=1, q=4, t_end=0.5, samples=(0.25,), advect=True, return_state=False):
     mu_H, mu_L = mus(ratio, kind)
     mu_H, mu_L = mu_H * scale, mu_L * scale
     lam = stokes_rate(mu_H, mu_L, ratio, A_, B_, which=1)[0]
@@ -60,6 +60,10 @@ def run(N, ratio, kind, scale=0.01, U=1.0, p=1, q=4, t_end=0.5, samples=(0.25,),
     errs, E, mom = {}, [], []
     at = {int(round(t / dt)): t for t in samples}
     pp = p if advect else 0
+    # the Gram matrix across the period boundary: geometry q (end of step q-1) equals geometry 0 shifted by p cells
+    if advect and q > 0:
+        S = np.roll(np.eye(N), pp, axis=0)
+        eps_G = max(eps_G, float(np.abs(maps[q - 1][4] - S @ maps[0][3] @ S.T).max() / np.abs(maps[0][3]).max()))
     for n in range(steps):
         j, k = divmod(n, q)
         sh = j * pp
@@ -71,6 +75,9 @@ def run(N, ratio, kind, scale=0.01, U=1.0, p=1, q=4, t_end=0.5, samples=(0.25,),
             mscale = float((G0 @ np.ones(N)) @ np.abs(x))      # sum m |q0| (the mode's total momentum is ~ 0)
         x = Vpost @ (T @ (Vpre @ x))
         u = np.roll(x, sh)
+        if n == steps - 1:                                      # docs/notes/103: the state after the last update
+            E.append(float(x @ G1 @ x))
+            mom.append(float(np.ones(N) @ G1 @ x))
         if n + 1 in at:
             t = (n + 1) * dt
             ex = averages(N, (A_ + U * t * advect) % 1.0, (B_ + U * t * advect) % 1.0, ratio,
@@ -81,7 +88,8 @@ def run(N, ratio, kind, scale=0.01, U=1.0, p=1, q=4, t_end=0.5, samples=(0.25,),
                   lambda y: w((y - U * t * advect) % 1.0) * math.exp(-lam * t))
     errs[t_end] = float(np.abs(u - ex).max() / np.abs(q0).max())
     dE = np.diff(E)
-    return {"lambda": lam, "errors": errs, "eps_G": eps_G, "energy_max_increase": float(max(dE.max(), 0.0) / E[0]),
+    extra = {"state": u, "q0max": float(np.abs(q0).max())} if return_state else {}
+    return {**extra, "lambda": lam, "errors": errs, "eps_G": eps_G, "energy_max_increase": float(max(dE.max(), 0.0) / E[0]),
             "momentum_drift": float(abs(mom[-1] - mom[0]) / mscale), "steps": steps}
 
 
@@ -111,3 +119,17 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
+
+
+def time_reference(N=64, ratio=1e3, kind="mu", t_end=0.25, qs=(2, 4, 8, 16), q_ref=64):
+    """docs/notes/103 (the user's review): the time error of the Strang split at a fixed grid, against a run with a
+    much smaller step (CFL 1/q_ref): max difference of the solution vectors, relative to max |q0|."""
+    out = {}
+    def final(q):
+        r = run(N, ratio, kind, q=q, t_end=t_end, samples=(), return_state=True)
+        return r["state"], r["q0max"]
+    ref, q0m = final(q_ref)
+    for q in qs:
+        st, _ = final(q)
+        out[q] = float(np.abs(st - ref).max() / q0m)
+    return out
