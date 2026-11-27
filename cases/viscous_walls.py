@@ -107,6 +107,33 @@ class Wall:
             out[i] = num / den
         return out
 
+    def force_correction(self, kind, value):
+        """docs/notes/102 (the user's proposal): the stress correction tau_b = -int_{x_i}^x f + s_i(x) F_i, zero at both
+        faces of every cell, and d_f = int psi_f tau_b / mu. With H tau = D_b q + b - d the discrete force becomes
+        F + D_b^T H^{-1} d, the Galerkin force R_nu^* f of the minimum-viscous-energy reconstruction. Zero for an
+        acceleration force (f = rho g) and for a volume force in a cell of one density."""
+        N, h = self.N, self.h
+        d = np.zeros(N + 1)
+        for i, ps in enumerate(self.P):
+            mi = self.m[i]
+            Fi = value * (h if kind == "volume" else mi)
+            R = 0.0          # cumulative mass
+            I = 0.0          # cumulative int f
+            for s0, s1, hv in ps:
+                rho = 1.0 if hv else 1.0 / self.ratio
+                mu = self.mu_H if hv else self.mu_L
+                L = (s1 - s0) * h
+                dd = L * X3
+                f = value if kind == "volume" else value * rho
+                s = (R + rho * dd) / mi
+                tb = -(I + f * dd) + s * Fi
+                w = L * W3
+                d[i + 1] += w @ (s * tb) / mu            # right face: rising psi
+                d[i] += w @ ((1 - s) * tb) / mu          # left face: falling psi
+                R += rho * L
+                I += f * L
+        return d
+
     def forcing(self, kind, value):
         """F_i = int_{K_i} f: "volume" (f per unit volume, a pressure gradient) or "accel" (f = rho g)."""
         return value * (self.h * np.ones(self.N) if kind == "volume" else self.m)
@@ -137,7 +164,7 @@ def exact_steady(mu_H, mu_L, ratio, a, uL, uR, force, value):
     return lambda x: uL + integ(lambda s: (tc - F(s)) / mu(s), np.asarray(x, dtype=float))
 
 
-def steady(N, ratio, kind, case, a=0.3613):
+def steady(N, ratio, kind, case, a=0.3613, corrected=False):
     """Couette (u_L = 0, u_R = 1, no force) or Poiseuille ("volume" / "accel" force, fixed walls): max error of the
     averages relative to max |q| for H_4 (A) and H (C, D share K_nu: the steady solution depends on K only)."""
     mu_H, mu_L = mus(ratio, kind)
@@ -151,11 +178,13 @@ def steady(N, ratio, kind, case, a=0.3613):
     F = W.forcing(force, val)
     qe = W.averages(exact_steady(mu_H, mu_L, ratio, a, uL, uR, force, val))
     out = {}
+    d = W.force_correction(force, val) if corrected else np.zeros(N + 1)
     for name, Hm in (("H4", W.H4), ("H", W.H)):
         Hi_D = np.linalg.solve(Hm, W.Db)
-        Hi_b = np.linalg.solve(Hm, b)
+        Hi_b = np.linalg.solve(Hm, b - d)
         q = np.linalg.solve(W.Db.T @ Hi_D, F - W.Db.T @ Hi_b)
         out[name] = float(np.abs(q - qe).max() / np.abs(qe).max())
+    out["d_norm"] = float(np.abs(d).max())
     return out
 
 
@@ -242,12 +271,13 @@ def main() -> None:
 
     res = {"steady": [], "stokes": [], "balances": balances()}
     with ProcessPoolExecutor(24) as ex:
-        fs = [((N, r, k, c), ex.submit(steady, N, r, k, c)) for c in ("couette", "volume", "accel")
-              for k in ("nu", "mu", "water-air") for r in (1.0, 1e3) for N in (32, 64, 128, 256)]
+        fs = [((N, r, k, c, cor), ex.submit(steady, N, r, k, c, corrected=cor)) for c in ("couette", "volume", "accel")
+              for k in ("nu", "mu", "water-air") for r in (1.0, 1e3) for N in (32, 64, 128, 256)
+              for cor in (False, True)]
         ft = [((N, r, k), ex.submit(wall_stokes, N, r, k)) for k in ("nu", "mu", "water-air") for r in (1.0, 1e3)
               for N in (32, 64, 128, 256)]
-        for (N, r, k, c), f in fs:
-            res["steady"].append({"N": N, "ratio": r, "kind": k, "case": c, **f.result()})
+        for (N, r, k, c, cor), f in fs:
+            res["steady"].append({"N": N, "ratio": r, "kind": k, "case": c, "corrected": cor, **f.result()})
         for (N, r, k), f in ft:
             res["stokes"].append({"N": N, "ratio": r, "kind": k, **f.result()})
     json.dump(res, open("docs/figures/viscous_walls.json", "w"), indent=1, default=float)
@@ -255,8 +285,11 @@ def main() -> None:
     for c in ("couette", "volume", "accel"):
         for k in ("nu", "mu", "water-air"):
             for r in (1.0, 1e3):
-                rows = sorted([x for x in res["steady"] if x["case"] == c and x["kind"] == k and x["ratio"] == r],
-                              key=lambda x: x["N"])
+                rows = sorted([x for x in res["steady"] if x["case"] == c and x["kind"] == k and x["ratio"] == r
+                               and not x["corrected"]], key=lambda x: x["N"])
+                rc = sorted([x for x in res["steady"] if x["case"] == c and x["kind"] == k and x["ratio"] == r
+                             and x["corrected"]], key=lambda x: x["N"])
+                print(c, k, r, "H corrected", " ".join(f"{x['H']:.2e}" for x in rc))
                 print(c, k, r, "H4", " ".join(f"{x['H4']:.2e}" for x in rows), "| H", " ".join(f"{x['H']:.2e}" for x in rows))
     for k in ("nu", "mu", "water-air"):
         for r in (1.0, 1e3):
