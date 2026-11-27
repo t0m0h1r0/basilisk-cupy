@@ -1226,3 +1226,18 @@ coefficients, over-determined window, shift), and G0, G1, C built on one common 
 phase), so that [[G0, C^T], [C, G1]] is positive semi-definite and the energy cannot grow. At density ratio 1000 the
 remap, Galerkin and corrected transports are all fourth order or better; at N = 64 Galerkin is 12 times more accurate
 than the remap, which can still gain energy in 2-D.
+
+Rank-safe 2-D reconstruction (`docs/notes/88_rank_safe_2d.md`): the 7 x 7 cell-centred window is rank deficient for
+interfaces parallel to the grid (only 7 independent normal averages for 9 normal-only coefficients), so the piecewise
+quartics are not reproduced and the transport does not converge at 0 degrees. An interface-centred window (radius
+5.5 cells, compact weights), an angle-dependent switch to the single polynomial and the shift written on velocity
+differences restore full rank at all angles, exactness to 1e-14, a continuous operator and fourth order; radius 4.5
+still jumps when the interface lies on a cell face, and a continuous SVD filter loses exactness. The switch between
+two nearby interfaces remains discontinuous.
+
+Circular interface (`docs/notes/89_circle_hinge.md`, P1-2): a heavy disc translated at density ratio 1000, comparing
+the hinge variable of the interface polynomial. The exact signed distance max(d/h, 0) (by Hadamard's lemma it keeps
+the planar approximation order) and the osculating parabola xi + (h / 2 R0) eta^2 both converge at about fifth order
+with nearly equal errors; the tangent line drops to second-to-third order. At N = 64 Galerkin is 4.5 times more
+accurate than the direct remap. Fixes the window centre for curved hinges; the free-stream rounding grows with the
+size of the fit maps.
