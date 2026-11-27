@@ -1350,6 +1350,15 @@ cell adds a spurious null mode; applying the correction across the interface rem
 then scales as 1/(density ratio). A cell-average projection built on these face values does not work for two phases
 as it stands.
 
+Gate 1-A2, divergence-consistent MAC-PCCD (`docs/notes/105_mac_pccd.md`, the user's proposal): the face-normal
+velocities are the only velocity state and are reconstructed by R_F f = f_i + int R_C (D f), with R_C the cell-average
+PCCD, so that d/dx R_F = R_C D and, with the tensor products R_F,x (x) R_C,y and R_C,x (x) R_F,y, a discretely
+divergence-free state reconstructs to a pointwise divergence-free field. Reproduced independently in a single phase,
+periodic: Gram g_F in [0.501, 1], minimum Schur ratio 0.656 (1-D) / 0.429 (2-D) against 0.405 for the classical MAC,
+only the constant pressure in the null space, a G-orthogonal projection that keeps divergence-free waves to rounding,
+and a superconvergent weak pressure gradient. Two phases, momentum conservation and cut faces are open; the choice of
+state variable waits for Gate 1-B.
+
 Roadmap revision (`docs/notes/98_roadmap.md`, 2026-11-27): after the audit the plan is organised as gates that decide
 the design risks before integration: Gate 0 records (done), Gate 1-A pressure projection (cell-centred split-PCCD
 projection fails in two phases; MAC-PCCD holds in one phase), Gate 1-B static reconstruction on oblique and curved
