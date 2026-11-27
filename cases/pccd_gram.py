@@ -29,7 +29,7 @@ from cases.pccd_twophase import evaluate
 
 def basis(N, ratio, a, b, mode):
     """A function phi(j, x) -> values of the j-th basis function at x, for the given mode."""
-    if mode in ("local", "split"):
+    if mode in ("local", "split", "blend"):
         from cases.pccd_local import basis_functions
         return basis_functions(N, ratio, a, b, mode)
     out = []

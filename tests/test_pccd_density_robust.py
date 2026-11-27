@@ -46,3 +46,15 @@ def test_floquet_galerkin_is_bounded_and_split_remap_is_stable():
     assert r["spectral_radius"] < 1 + 1e-9 and r["sv_mass"] < 6
     j = floquet(32, 1e3, 0.5, "joint", "remap")
     assert j["spectral_radius"] > 1.1                   # the cut-off jump estimate makes the remap unstable
+
+
+def test_blended_split_is_continuous_and_fifth_order():
+    from cases.pccd_floquet import continuity
+    from cases.pccd_local import SplitBlend
+
+    e = [_err(SplitBlend(N, 1e6, A_, B_, averages(N, A_, B_, 1e6, exact)), N) for N in (64, 128)]
+    assert math.log2(e[0] / e[1]) > 4.5
+    a = continuity(32, 1.0, 1e-5, "blend", span=2e-4)["max_change"]
+    b = continuity(32, 1.0, 1e-6, "blend", span=2e-5)["max_change"]
+    assert b < 0.2 * a                                  # shrinks with the spacing: continuous
+    assert continuity(32, 1.0, 1e-5, "split", span=2e-4)["max_change"] > 1   # the plain split jumps

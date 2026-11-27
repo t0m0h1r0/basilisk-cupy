@@ -28,15 +28,16 @@ from cases.pccd_twophase import _pieces
 
 
 def _basis(N, ratio, a, b, mode):
-    if mode == "split_opt":
+    if mode in ("split_opt", "blend_opt"):
         from cases.pccd_closure import closure
-        from cases.pccd_local import Split
+        from cases.pccd_local import Split, SplitBlend
         cl = closure(np.array(json.load(open("docs/figures/pccd_closure.json"))["best"]))
+        cls = Split if mode == "split_opt" else SplitBlend
         fs = []
         for j in range(N):
             e = np.zeros(N)
             e[j] = 1.0
-            fs.append(Split(N, ratio, a, b, e, closure=cl))
+            fs.append(cls(N, ratio, a, b, e, closure=cl))
         return lambda j, x: fs[j](x)
     from cases.pccd_gram import basis
     return basis(N, ratio, a, b, mode)
@@ -101,7 +102,7 @@ def main() -> None:
     from concurrent.futures import ProcessPoolExecutor
 
     jobs = []
-    for mode in ("none", "joint", "local", "split", "split_opt"):
+    for mode in ("none", "joint", "local", "split", "split_opt", "blend", "blend_opt"):
         for transport in ("remap", "galerkin"):
             for ratio in (1.0, 1e3, 1e6):
                 for c in (0.5, 0.05, 1e-3):

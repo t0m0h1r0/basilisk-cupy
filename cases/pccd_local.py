@@ -149,20 +149,36 @@ def explicit_closure():
 
 
 class Split:
-    def __init__(self, N, ratio, a, b, ubar, closure=None):
+    def __init__(self, N, ratio, a, b, ubar, closure=None, join=None):
+        """``join``: {mixed cell: (heavy?, datum)} -- the cell is solved as a pure cell of that phase with that
+        datum (docs/notes/95, the continuous variant); its minority part takes the minority neighbour's polynomial,
+        shifted to the joined polynomial's interface value."""
         self.N, self.ratio, self.a, self.b, self.h = N, ratio, a, b, 1.0 / N
         self.closure = closure or explicit_closure()
         P = self.P = pieces(N, a, b)
-        self.mixed = [i for i in range(N) if len(P[i]) > 1]
-        heavy = [i for i in range(N) if len(P[i]) == 1 and P[i][0][2]]
-        light = [i for i in range(N) if len(P[i]) == 1 and not P[i][0][2]]
+        join = join or {}
+        self.joined = join
+        self.mixed = [i for i in range(N) if len(P[i]) > 1 and i not in join]
+        heavy = [i for i in range(N) if (len(P[i]) == 1 and P[i][0][2]) or (i in join and join[i][0])]
+        light = [i for i in range(N) if (len(P[i]) == 1 and not P[i][0][2]) or (i in join and not join[i][0])]
+        data = ubar.astype(float).copy()
+        for i, (_, x) in join.items():
+            data[i] = x
         self.coef = np.zeros((N, 5))
         self.phase = {}
         for cells in (self._runs(heavy), self._runs(light)):
             for run in cells:
-                self._solve_run(run, ubar)
+                self._solve_run(run, data)
                 for i in run:
                     self.phase[i % N] = run
+        self.jmix = {}
+        for m, (hv_major, _) in join.items():
+            xg_s = [p1 for p0, p1, hv in P[m]][:-1][0]
+            minor_left = [hv for p0, p1, hv in P[m] if p0 == 0.0][0] != hv_major
+            nb, off = ((m - 1) % N, -1.0) if minor_left else ((m + 1) % N, 1.0)
+            uY = _mono(np.array([xg_s - off]))[0] @ self.coef[nb]
+            uX = _mono(np.array([xg_s]))[0] @ self.coef[m]
+            self.jmix[m] = (nb, off, xg_s, minor_left, uX - uY)
         # mixed cells: both neighbours' polynomials extended; the light one shifted to the heavy interface value
         self.mix = {}
         for m in self.mixed:
@@ -246,6 +262,12 @@ class Split:
 
     def _raw(self, i, s):
         """u~ in cell i at s (before the shift)."""
+        if i in self.jmix:
+            nb, off, xg_s, minor_left, c = self.jmix[i]
+            out = _mono(s) @ self.coef[i]
+            k = (s < xg_s) if minor_left else (s > xg_s)
+            out[k] = _mono(s[k] - off) @ self.coef[nb] + c
+            return out
         if i not in self.mix:
             return _mono(s) @ self.coef[i]
         ext, xg_s, jump = self.mix[i]
@@ -279,8 +301,76 @@ class Split:
         return out
 
 
+def _smooth(t):
+    t = np.clip(t, 0.0, 1.0)
+    return t * t * (3 - 2 * t)
+
+
+class SplitBlend:
+    """docs/notes/95 (continuous phase split): in a mixed cell whose minority phase (by volume) has volume share v and
+    mass share mu both small, blend the mixed-cell form (weight 1 - w) with the form where the cell joins the majority
+    phase's run (weight w = 1 - smooth(max(v, mu) / mu0)). The joined cell's datum is the majority polynomial's plain mean, from the mass-weighted
+    average with the minority part's integral replaced by the minority polynomial (exact for piecewise polynomials):
+
+        x = (m_s ubar - rho_Y int_Y P_Y) / rho_X + int_Y P_X(x)      (s-units; affine in x: solved by superposition)
+
+    As mu -> 0 the joined form becomes the pure configuration: the map is continuous across a face crossing."""
+
+    def __init__(self, N, ratio, a, b, ubar, closure=None, mu0=0.1):
+        import itertools
+
+        self.N, self.h = N, 1.0 / N
+        P = pieces(N, a, b)
+        cand = {}
+        for m in range(N):
+            if len(P[m]) < 2:
+                continue
+            vH = sum((p1 - p0) for p0, p1, hv in P[m] if hv)
+            mH, mL = vH, (1.0 - vH) / ratio
+            hv_major = vH >= 0.5                       # the majority by volume
+            vY = min(vH, 1.0 - vH)
+            mY = (mL if hv_major else mH) / (mH + mL)
+            # join only when the minority phase is small in volume AND in mass: a heavy sliver that carries most of
+            # the cell's mass (zeta >~ 1) cannot define the heavy polynomial over the whole cell (note 95)
+            w = 1.0 - float(_smooth(max(vY, mY) / mu0))
+            if w > 0:
+                cand[m] = (hv_major, w, mH + mL)
+        self.parts = []
+        ms = sorted(cand)
+        for pick in itertools.product((False, True), repeat=len(ms)):
+            weight = 1.0
+            for m, on in zip(ms, pick):
+                weight *= cand[m][1] if on else 1.0 - cand[m][1]
+            if weight <= 0:
+                continue
+            on = [m for m, o in zip(ms, pick) if o]
+            if not on:
+                self.parts.append((weight, Split(N, ratio, a, b, ubar, closure)))
+                continue
+            def resid(x):
+                sp = Split(N, ratio, a, b, ubar, closure, {m: (cand[m][0], x[k]) for k, m in enumerate(on)})
+                out = []
+                for k, m in enumerate(on):
+                    hv_major, _, ms_ = cand[m]
+                    rX, rY = (1.0, 1.0 / ratio) if hv_major else (1.0 / ratio, 1.0)
+                    nb, off, xg_s, minor_left, _ = sp.jmix[m]
+                    lo, hi = (0.0, xg_s) if minor_left else (xg_s, 1.0)
+                    s = lo + (hi - lo) * XG
+                    iY = (hi - lo) * (WG @ (_mono(s - off) @ sp.coef[nb]))
+                    iX = (hi - lo) * (WG @ (_mono(s) @ sp.coef[m]))
+                    out.append(x[k] - ((ms_ * ubar[m] - rY * iY) / rX + iX))
+                return np.array(out), sp
+            r0, _ = resid(np.zeros(len(on)))
+            Jm = np.stack([resid(np.eye(len(on))[k])[0] - r0 for k in range(len(on))], axis=1)
+            x = np.linalg.solve(Jm, -r0)
+            self.parts.append((weight, resid(x)[1]))
+
+    def __call__(self, x):
+        return sum(w * sp(x) for w, sp in self.parts)
+
+
 def basis_functions(N, ratio, a, b, mode):
-    cls = Local if mode == "local" else Split
+    cls = {"local": Local, "split": Split, "blend": SplitBlend}[mode]
     fs = []
     for j in range(N):
         e = np.zeros(N)
