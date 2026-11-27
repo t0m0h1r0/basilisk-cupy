@@ -1219,3 +1219,10 @@ meaningful velocities is 1 to 3 orders below the all-state worst case; enriching
 interface-following tents does not reduce the worst loss. Direct high-order remap, Galerkin and adjoint-corrected
 transports are all fourth order; the remap is the most dissipative and slightly gains energy. The 1-D study stops
 here; next is the 2-D oblique planar interface.
+
+2-D Galerkin transport (`docs/notes/87_galerkin2d.md`): a periodic oblique heavy band (integer slopes, exact
+geometry), the interface polynomial P0 + max(xi, 0) P1 (continuous velocity, jumping normal gradient; 25
+coefficients, over-determined window, shift), and G0, G1, C built on one common partition (new cell x moved old cell x
+phase), so that [[G0, C^T], [C, G1]] is positive semi-definite and the energy cannot grow. At density ratio 1000 the
+remap, Galerkin and corrected transports are all fourth order or better; at N = 64 Galerkin is 12 times more accurate
+than the remap, which can still gain energy in 2-D.
