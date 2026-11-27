@@ -105,6 +105,58 @@ def momentum(kind, conserving=True, n=32, ratio=1000.0, t_end=1.0, samples=(0.05
             "momentum_change": worst, "umax": umax, "failed": failed, "history": hist}
 
 
+def wall_budget(kind, n=32, ratio=1000.0, t_end=0.5):
+    """B's request on PR #157: the momentum budget WITH the walls' pressure force. Closed box (slip walls), no body
+    force, a drop (R = 0.15 at (0.5, 0.3), density ratio ``ratio``) in the Taylor-Green vortex (a slip-wall flow),
+    conserving transport. The cells take the mean of their two faces' forces and the wall faces carry none, so with
+    the arithmetic face density the sum over the cells telescopes to the pressures of the wall-adjacent cells:
+
+        d/dt sum rho u_x h^2 = h sum_j (p[0, j] - p[n-1, j]),      d/dt sum rho u_y h^2 = h sum_i (p[i, 0] - p[i, n-1])
+
+    (the discrete wall force: the wall pressure is the adjacent cell's). Returned: the largest residual of this
+    budget over the run, |P(t) - P(0) - sum dt F_wall|, normalised by sum rho |u| h^2 at t = 0, and the size of the
+    wall impulse itself (the budget is not trivially zero)."""
+    import warnings
+
+    warnings.filterwarnings("ignore")
+    from basilisk_cupy import CartesianGrid, CellField
+    from basilisk_cupy.backend import to_numpy
+    from basilisk_cupy.interface.fractions import fraction
+    from basilisk_cupy.time.basilisk_centered import CenteredNS
+
+    grid = CartesianGrid((n, n))
+    xp = grid.xp
+    ns = CenteredNS(grid, periodic=(), tolerance=1e-10)
+    f0 = to_numpy(fraction(grid, lambda x, y: 0.15 ** 2 - (x - 0.5) ** 2 - (y - 0.3) ** 2, refine=8))
+    tp = _two_phase(ns, CellField.from_interior(grid, f0, _bc(())), kind, ratio, True)
+    x = (np.arange(n) + 0.5) / n
+    X, Y = np.meshgrid(x, x, indexing="ij")
+    ns.u[0].interior = xp.asarray(np.sin(TWO_PI * X) * np.cos(TWO_PI * Y))
+    ns.u[1].interior = xp.asarray(-np.cos(TWO_PI * X) * np.sin(TWO_PI * Y))
+    h = 1.0 / n
+
+    def mom():
+        rho = to_numpy(tp.rho(tp.f.interior))
+        return np.array([float((rho * to_numpy(ns.u[a].interior)).sum()) * h * h for a in range(2)])
+
+    rho0 = to_numpy(tp.rho(tp.f.interior))
+    scale = float((rho0 * np.hypot(to_numpy(ns.u[0].interior), to_numpy(ns.u[1].interior))).sum()) * h * h
+    m0, imp = mom(), np.zeros(2)
+    ns.start(events=[t_end])
+    worst, failed = 0.0, None
+    while ns.clock.t < t_end - 1e-12:
+        ns.step()
+        p = to_numpy(ns.p.interior)
+        imp += ns.clock.dt * h * np.array([float((p[0, :] - p[-1, :]).sum()), float((p[:, 0] - p[:, -1]).sum())])
+        worst = max(worst, float(np.abs(mom() - m0 - imp).max()) / scale)
+        if ns.clock.i > 40 * n:
+            failed = "step limit"
+            break
+    return {"kind": kind, "n": n, "ratio": ratio, "steps": ns.clock.i, "budget_residual": worst,
+            "wall_impulse": float(np.abs(imp).max()) / scale, "momentum_change": float(np.abs(mom() - m0).max()) / scale,
+            "failed": failed}
+
+
 def one_d(n=16, ratio=1000.0, seed=0):
     """docs/notes/111, section 4, as a matrix identity (1-D, periodic): the cells take the mean of their two faces'
     accelerations -(dp)_f / (h rho_f). The change of the total momentum for a random pressure,
@@ -172,7 +224,7 @@ def hydrostatic(kind, theta_deg=0.0, gravity="plain", n=32, ratio=1000.0, t_end=
         for te in sorted(s for s in samples if s <= t_end + 1e-12):
             while ns.clock.t < te - 1e-12:
                 ns.step()
-                if ns.clock.i > 40 * n:                          # 20 times the steps of the state at rest
+                if ns.clock.i > 40 * n * max(1.0, t_end):        # 20 times the steps of the state at rest
                     raise RuntimeError("step limit: the time step collapsed at t = %.4f (max |uf| = %.3g)"
                                        % (ns.clock.t, max(float(abs(to_numpy(c)).max()) for c in ns.uf.components)))
             uc = max(float(np.abs(to_numpy(c.interior)).max()) for c in ns.u.components)
@@ -189,7 +241,7 @@ def hydrostatic(kind, theta_deg=0.0, gravity="plain", n=32, ratio=1000.0, t_end=
 
 def _job(a):
     kind, args, kw = a
-    return kind, {"momentum": momentum, "hydrostatic": hydrostatic}[kind](*args, **kw)
+    return kind, {"momentum": momentum, "hydrostatic": hydrostatic, "wall_budget": wall_budget}[kind](*args, **kw)
 
 
 def jobs():

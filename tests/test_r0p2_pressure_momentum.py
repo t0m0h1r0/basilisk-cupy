@@ -44,3 +44,12 @@ def test_interface_reaching_a_wall_within_a_cell_of_a_corner_is_not_balanced_on_
     assert 1e-4 < bad["cells"] < 1e-1
     ok = hydrostatic("smooth", 45.0, "reduced", 32, t_end=0.25, samples=(0.25,), offset=0.1171)["history"][-1]
     assert ok["cells"] < 1e-8
+
+
+def test_momentum_budget_closes_with_the_walls_pressure_force():
+    """B's request on PR #157: closed box, the wall force read from the wall-adjacent cells' pressure."""
+    from cases.r0p2_pressure_momentum import wall_budget
+
+    o = wall_budget("smooth", 32, t_end=0.25)
+    assert o["budget_residual"] < 1e-9 and o["wall_impulse"] > 1e-3          # closes, and is not trivially zero
+    assert wall_budget("gfm", 32, t_end=0.25)["budget_residual"] > 1e-3      # recorded: not with the GFM coefficient
