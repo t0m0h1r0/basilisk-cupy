@@ -152,8 +152,14 @@ def run(n, cfl, flow="tg", nu=0.01, boost=True, variant="conserving", level="n",
         for ax in range(2):
             for side in (0, 1):
                 bc.set((ax, side), Periodic())
+        import inspect
+
+        # the library after issue #146 / audit #149 has fresh ghosts by default and this flag for conserving.h's;
+        # before it, the ghosts are conserving.h's and ``periodic_momentum_ghosts`` (below) patches them
+        kw = ({"conserving_stale_ghosts": not ghost_fix}
+              if "conserving_stale_ghosts" in inspect.signature(TwoPhase.__init__).parameters else {})
         TwoPhase(ns, CellField.from_interior(grid, np.zeros((n, n)), bc), rho1=1.0, rho2=1.0, mu1=nu, mu2=nu,
-                 conserving=True, conserving_source=(source != "none"), conserving_predict=(level == "pred"))
+                 conserving=True, conserving_source=(source != "none"), conserving_predict=(level == "pred"), **kw)
     elif level != "n":
         raise ValueError("level applies to the conserving variant only")
     ns.cfl = cfl
