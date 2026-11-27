@@ -328,6 +328,65 @@ def _pt(j):
     return projection_test(*j)
 
 
+# --------------------------------------------------------------------------------------------- 2-D Schur complement
+def schur_2d(N, ratio, a, b, kind, ntheta=17):
+    """theta_x != 0: L = |b_x|^2 G_u^{-1} + D_y G_v^{-1} D_y^T / h^2 with G_u = h g_Fx G_C, G_v = h g_Cx G_F, against
+    L_ref built from the fixed references (G_u = h M_t, G_v = h M_n). Over theta_x in (0, pi]: the generalised
+    eigenvalues (min, max) and the Jacobi-scaled condition numbers of L and of L_ref."""
+    R = build(N, ratio, a, b, kind)
+    h = R["h"]
+    wr = R["w"] * R["rho"]
+    GF = R["PhiF"].T @ (wr[:, None] * R["PhiF"])
+    GC = R["PhiC"].T @ (wr[:, None] * R["PhiC"])
+    Mn, Mt, _ = references(N, ratio, a, b)
+    Dy = R["D"] / h
+    GFi, GCi = np.linalg.inv(GF), np.linalg.inv(GC)
+    out = {"min": np.inf, "max": 0.0, "jacobi_L": 0.0, "jacobi_Lref": 0.0}
+    for th in np.linspace(math.pi / (ntheta - 1), math.pi, ntheta - 1):
+        if kind == "B":
+            from cases.mac_pccd import g_C, g_F
+            gFx, gCx = g_F(th), g_C(th)
+        else:
+            gFx, gCx = (2 + math.cos(th)) / 3, 1.0
+        bx2 = (2 * math.sin(th / 2) / h) ** 2
+        L = bx2 * GCi / (h * gFx) + Dy @ GFi @ Dy.T / (h * gCx)
+        Lr = bx2 * np.diag(1.0 / (h * Mt)) + Dy @ np.diag(1.0 / (h * Mn)) @ Dy.T
+        C = np.linalg.inv(np.linalg.cholesky(Lr))
+        ev = np.linalg.eigvalsh(C @ (0.5 * (L + L.T)) @ C.T)
+        out["min"], out["max"] = min(out["min"], float(ev[0])), max(out["max"], float(ev[-1]))
+        out["jacobi_L"] = max(out["jacobi_L"], _jacobi_cond(L))
+        out["jacobi_Lref"] = max(out["jacobi_Lref"], _jacobi_cond(Lr))
+    return out
+
+
+def schur_2d_scan(N=32):
+    from concurrent.futures import ProcessPoolExecutor
+
+    cs = [None, 0.5, 0.25, 0.75, 0.1, 0.9, 1e-2, 1 - 1e-2, 1e-4, 1 - 1e-4]
+    zetas = (1e-4, 1e-2, 1.0, 1e2, 1e4)
+    jobs = []
+    for kind in ("A", "B", "D0m"):
+        for r in RATIOS:
+            for tag, v in [("c", c) for c in cs] + [("zeta", z) for z in zetas if r > 1] + [("zeta_light", z) for z in zetas]:
+                c = v if tag == "c" else (v / (r + v) if tag == "zeta" else r / (r + v))
+                jobs.append((kind, r, *geometry(N, c, c)))
+    with ProcessPoolExecutor(20) as ex:
+        res = list(ex.map(_s2, [(N, j[1], j[2], j[3], j[0]) for j in jobs]))
+    out = []
+    for kind in ("A", "B", "D0m"):
+        row = {"kind": kind}
+        for key, fn in (("min", min), ("max", max), ("jacobi_L", max), ("jacobi_Lref", max)):
+            vals = [fn(o[key] for (k, r, _, _), o in zip(jobs, res) if k == kind and r == rr) for rr in RATIOS]
+            row[key] = vals
+            row["slope_" + key] = slopes(vals)
+        out.append(row)
+    return out
+
+
+def _s2(j):
+    return schur_2d(*j)
+
+
 def slopes(vals):
     lr, lv = np.log10(np.array(RATIOS)), np.log10(np.maximum(np.array(vals, float), 1e-300))
     allr = float(np.polyfit(lr, lv, 1)[0])
@@ -392,6 +451,12 @@ def main() -> None:
             mn = ("min %.2e [all ratios %.2e] (slope %+.2f/%+.2f) " % (sm["min"][-1], sm["worst_min"], sm["slope_min"]["all"], sm["slope_min"]["high"])) if "min" in sm else ""
             print(" ", sm["kind"], sm["key"], mn + "max %.2e [all ratios %.2e] (slope %+.2f/%+.2f)"
                   % (sm["max"][-1], sm["worst_max"], sm["slope_max"]["all"], sm["slope_max"]["high"]))
+    res["schur_2d"] = schur_2d_scan(32)
+    for row in res["schur_2d"]:
+        print("schur 2-D", row["kind"], "min %.2e (%+.2f/%+.2f) max %.2e (%+.2f/%+.2f) jacobi L %.3g..%.3g (%+.2f/%+.2f), Lref %.3g..%.3g"
+              % (row["min"][-1], row["slope_min"]["all"], row["slope_min"]["high"], row["max"][-1], row["slope_max"]["all"],
+                 row["slope_max"]["high"], min(row["jacobi_L"]), max(row["jacobi_L"]), row["slope_jacobi_L"]["all"],
+                 row["slope_jacobi_L"]["high"], min(row["jacobi_Lref"]), max(row["jacobi_Lref"])))
     res["projection"] = projection_scan()
     for row in res["projection"]["rows"]:
         print("projection m=%d" % row["m"], row["kind"], row["ratio"],
