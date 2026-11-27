@@ -1375,3 +1375,13 @@ face; at density ratios >= 1e3 the heavy phase is unaffected. The 2-D full visco
 reconstruction (2N x 2N per x wavenumber) gives a method-D stiffness of 25-29 in ordinary cases and about 4.3 times
 the 1-D value for thin constant-viscosity slices (2045); the tangential B_y = int mu Y Y^T does not bring back the
 G_nu ill-conditioning.
+
+T1, layered two-phase MAC (`docs/notes/108_layered_mac.md`, issue #132): with the reference inner products fixed in
+advance (dual-cell mass for the normal velocity, harmonic density for the tangential one) the low-order MAC
+reconstruction, the single-phase MAC-PCCD and two low-order density-adapted commuting reconstructions all fail the
+uniform Gram / Schur equivalence (slopes +-1 in the density ratio), in agreement with the user's leak table and
+impossibility theorem for reconstructions that share R_C. The density-adapted D0m (the phase with the larger mobility in a cut cell restores the volume average), however, has reference-free
+(Jacobi-scaled) condition numbers that do not depend on the density ratio, and in an exact layered Helmholtz
+projection it converges independently of the ratio, while the lumped MAC built from the reference inner products
+themselves has O(1) errors when the heavy fraction of the cut cell exceeds 1/2. Whether the references should be
+revised is left to the user.
