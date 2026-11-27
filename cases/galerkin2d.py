@@ -62,6 +62,21 @@ class Geometry:
                     out.append(c)
         return sorted(out)
 
+    def second(self, x, y):
+        """The nearest line of the other family (the band's other side): signed normal distance and its value."""
+        Lv = self.L(x, y)
+        s1, c1 = self.nearest(x, y)
+        z1 = (c1 - self.d) % 1.0
+        z = self.zB if abs(z1 - self.zA) < abs(z1 - self.zB) else self.zA
+        best = None
+        k = round(Lv - self.d - z)
+        for kk in (k - 1, k, k + 1):
+            c = z + self.d + kk
+            sv = (Lv - c) / self.g
+            if best is None or abs(sv) < abs(best[0]):
+                best = (sv, c)
+        return best
+
     def nearest(self, x, y):
         """Signed normal distance (physical) from (x, y) to the nearest interface line, and that line's value."""
         Lv = self.L(x, y)
@@ -136,6 +151,16 @@ def pieces(geom, x0, y0, x1, y1):
     return out
 
 
+class LineHinge:
+    """n . (x - x0) / h for a line through x0 with unit normal n (picklable)."""
+
+    def __init__(self, x0, n, h):
+        self.x0, self.n, self.h = np.asarray(x0, dtype=float), np.asarray(n, dtype=float), h
+
+    def __call__(self, X):
+        return (X - self.x0) @ self.n / self.h
+
+
 _SHARED = {}
 
 
@@ -167,7 +192,8 @@ def _smooth(t):
 
 class Reconstruction2D:
     def __init__(self, N, geom, alpha=0.75, D1=3.5, D2=4.5, m_pw=3, m_s=2, kink=True, window="cell", R=4.5,
-                 switch="fixed", delta=1.0, tau=None, diff=False, workers=1, hinge="exact", centre_single=True):
+                 switch="fixed", delta=1.0, tau=None, diff=False, workers=1, hinge="exact", centre_single=True,
+                 two=None, R2=6.5, pair=None):
         """docs/notes/88 options: ``window`` "cell" (the (2 m_pw + 1)^2 cells around the cell, note 87) or "interface"
         (the cells within R cells of the cell's foot on the interface, weights (1 - (r/R)^2)^2: both sides of the
         interface always hold data); ``switch`` "fixed" (D1, D2) or "angle" (D1 = d_safe = (m_s + 1/2)(|nx| + |ny|)
@@ -180,6 +206,8 @@ class Reconstruction2D:
         self.window, self.R, self.tau, self.diff = window, R, tau, diff
         self.hinge = hinge  # curved interfaces (docs/notes/89): "exact" signed distance or "tangent" line
         self.centre_single = centre_single
+        self.two, self.R2 = two, R2  # (E1, E2): the second interface's distance (cells) where both kinks blend in
+        self.pair = pair  # the width (cells) of the blend of the fits about the two nearest interfaces
         self._switch, self._delta = switch, delta
         if switch == "angle" and not hasattr(geom, "frame"):
             D1 = (m_s + 0.5) * (abs(geom.n[0]) + abs(geom.n[1]))
@@ -224,10 +252,33 @@ class Reconstruction2D:
                 D2 = D1 + self._delta
             lam = 1.0 - _smooth((dist - D1) / (D2 - D1))
             comps = []
-            if lam > 0 and self.kink:
-                comps.append((lam, self._fit(ix, iy, m_pw, True, c, s)))
-            if lam < 1 or not self.kink:
-                comps.append((1.0 - lam if self.kink else 1.0, self._fit(ix, iy, m_s, False, c, s)))
+            mu = 0.0
+            if self.two is not None and hasattr(geom, "second"):
+                s2, line2 = geom.second(*c)
+                E1, E2 = self.two
+                mu = 1.0 - _smooth((abs(s2) / h - E1) / (E2 - E1))
+            if mu > 0:
+                # docs/notes/92: both interfaces within reach, a fit with both kinks, its window centred at the cell
+                # (no jump of the window when the nearest interface changes), blended by the second distance
+                comps.append((mu, self._fit_two(ix, iy, c, s, s2)))
+            if lam > 0 and self.kink and mu < 1:
+                w2 = 0.0
+                if self.pair is not None and hasattr(geom, "second"):
+                    # docs/notes/92: near the middle of a thin band, the fits about both interfaces, weighted by the
+                    # distance difference (1/2 each at equal distances: the swap of the nearest one is continuous)
+                    s2, _ = geom.second(*c)
+                    w2 = 0.5 * (1.0 - _smooth((abs(s2) - abs(s)) / h / self.pair))
+                    if w2 > 0:
+                        lam2 = 1.0 - _smooth((abs(s2) / h - D1) / (D2 - D1))
+                        if lam2 > 0:
+                            comps.append(((1.0 - mu) * w2 * lam2, self._fit(ix, iy, m_pw, True, c, s2)))
+                        if lam2 < 1:
+                            comps.append(((1.0 - mu) * w2 * (1.0 - lam2), self._fit(ix, iy, m_s, False, c, s2)))
+                comps.append(((1.0 - mu) * (1.0 - w2) * lam, self._fit(ix, iy, m_pw, True, c, s)))
+            if (lam < 1 or not self.kink) and mu < 1:
+                wl = (1.0 - w2) if (lam > 0 and self.kink) else 1.0
+                comps.append(((1.0 - mu) * wl * (1.0 - lam if self.kink else 1.0),
+                              self._fit(ix, iy, m_s, False, c, s)))
             row.append(comps)
         return row, self.sigma_min, self.rank_log
 
@@ -251,6 +302,9 @@ class Reconstruction2D:
             # the hinge variable: xi (a line) or a geometry's own (e.g. the signed distance to a circle, in cells)
             k = np.maximum(frame[3](X) if len(frame) > 3 and frame[3] is not None else xi, 0.0)
             cols += [k * xi ** p * eta ** q for p, q in P1_EXP]
+            if len(frame) > 4:       # a second interface in the window (docs/notes/92): its own kink columns
+                k2 = np.maximum(frame[4](X), 0.0)
+                cols += [k2 * xi ** p * eta ** q for p, q in P1_EXP]
         return np.stack(cols, axis=1)
 
     def _cell_points(self, jx, jy):
@@ -306,6 +360,35 @@ class Reconstruction2D:
         E = np.eye(len(cells))
         Wc = Astar + np.outer(e0, E[k] - A[k] @ Astar)
         return (np.array(cells), Wc, frame, pw)
+
+    def _fit_two(self, ix, iy, c, s, s2):
+        """Both interface lines of a thin band: P0 + max(d1, 0) P1 + max(d2, 0) P2 about the cell centre, the window
+        (radius R2) centred at the cell; each kink on the side away from the cell centre."""
+        h = self.h
+        n = self.geom.n
+        tau = np.array([-n[1], n[0]])
+        frame = (np.asarray(c, dtype=float), n, tau, LineHinge(c - s * n, -np.sign(s) * n, h),
+                 LineHinge(c - s2 * n, -np.sign(s2) * n, h))
+        R = self.R2
+        r0 = int(math.ceil(R + 1))
+        rows, cells, mass, geo = [], [], [], []
+        k = None
+        for dy in range(-r0, r0 + 1):
+            for dx in range(-r0, r0 + 1):
+                r = math.hypot(dx, dy) / R
+                if r >= 1 and not (dx == 0 and dy == 0):
+                    continue
+                X, W, j = self._cell_points(ix + dx, iy + dy)
+                rows.append(W @ self._mono(X, frame, True) / W.sum())
+                cells.append(j)
+                mass.append(W.sum())
+                geo.append(max(1.0 - r * r, 0.0) ** 2)
+                if dx == 0 and dy == 0:
+                    k = len(cells) - 1
+        A = np.array(rows)
+        mass = np.array(mass)
+        sw = np.sqrt(np.array(geo) * (mass / mass.max()) ** self.alpha)
+        return self._fit_split(A, sw, k, np.array(cells), frame, True, s)
 
     def _fit_split(self, A, sw, k, cells, frame, pw, s):
         """The shift on velocity differences, with the interface component (the hinge columns Y, after removing the

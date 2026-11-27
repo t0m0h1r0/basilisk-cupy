@@ -37,3 +37,22 @@ def test_partition_of_unity_far_from_the_interface():
     N = 24
     r = Reconstruction2D(N, Circle(cx=0.5871, cy=0.5436), hinge="exact", workers=4, **RK)
     assert max(abs(r.basis(i, r.qx[i])[1].sum(1) - 1).max() for i in range(N * N)) < 1e-12
+
+
+def test_height_function_parabola_converges():
+    """The height-function parabola (volume fractions only): its foot approaches the circle at third order in cells."""
+    from cases.galerkin2d_circle import fractions, height_frame
+
+    g = Circle(cx=0.5871, cy=0.5436)
+    worst = []
+    for N in (24, 48):
+        h = 1.0 / N
+        F = fractions(g, N)
+        w = 0.0
+        for k in range(100):
+            e = np.array([np.cos(2 * np.pi * k / 100), np.sin(2 * np.pi * k / 100)])
+            xg = np.array([g.cx, g.cy]) + g.R0 * e
+            xf, n, _ = height_frame(F, xg, xg + 0.3 * h * e, h)
+            w = max(w, abs(np.linalg.norm(xf - [g.cx, g.cy]) - g.R0) / h)
+        worst.append(w)
+    assert worst[1] < 1e-2 and worst[1] < worst[0] / 4

@@ -1,0 +1,3 @@
+     26s exact {'N': 32, 'hinge': 'exact'} 3.3885255371585497e-15
+     26s exact {'N': 32, 'hinge': 'tangent'} 0.01962265643953426
+     26s exact {'N': 32, 'hinge': 'quadratic'} 0.005511476807416857
