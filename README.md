@@ -1431,3 +1431,9 @@ ghosts from each phase's current velocity q_k / (c_k rho_k) with u's boundary co
 periodic image of q itself), which makes a periodic two-phase transport step independent of where the boundary cuts
 the flow to round-off; `conserving_stale_ghosts=True` keeps conserving.h's definition for comparisons with the C
 build (`tests/test_momentum_ghosts.py`). The pressure source in the face value stays off by default.
+
+A cell with c exactly 1/2 (audit #156): under vof.h's rule neither phase's momentum dilates there, and
+`TwoPhase(conserving=True)` then loses a uniform velocity (1.0e-2 at N = 32 for rho1 / rho2 = 1e-3, second order in
+h; the defect of `docs/notes/77_pure_advection.md`). The conserving form now gives that cell to the second phase
+(`VOFTracer(complementary=True)`), which keeps a uniform velocity to round-off; `conserving_vof_half=True` keeps
+vof.h's rule. The non-conserving path and `VOFTracer`'s own default are unchanged.
