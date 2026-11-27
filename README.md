@@ -1331,6 +1331,16 @@ Advection (PCCD-Galerkin) and viscosity (method D) on the same Gram matrix, Stra
 during the viscous half steps, solve the Galilean-boosted two-layer Stokes flow with no energy growth, exact momentum
 and second- to fourth-order convergence; the splitting error is negligible.
 
+Gate 0, records and the convergence protocol (`docs/notes/103_gate0_records.md`): after the independent audit
+(issues #114-#121) the research order was changed to decide the design risks first (pressure projection, oblique
+interfaces and short runs, general-flow advection, viscosity). Gate 0 corrects notes 91, 97, 100, 101 and 102 and
+remeasures with 10+ grids and 3 interface offsets: method D is 2.4-3.3th order in the max error (not 4th; the residual
+(G_nu - G_A) q'_C is first order), while C stays 4th order. The boost coupling keeps energy, momentum and the
+period-boundary Gram match and converges at the order of D. Its difference to a CFL 1/128 run falls only at order
+0.5-1.0; the continuous problem commutes, so this is discrete non-commutativity, and the statement above that the
+splitting error is negligible is withdrawn (the boost test cannot measure it). The consistent force correction is
+about 4th order in the start-up flow (2nd without it).
+
 Gate 1-A, pressure projection (`docs/notes/104_projection_gate.md`): the projection
 Pi = I - G^{-1} B^T (B G^{-1} B^T)^+ B is G-orthogonal for any face interpolation, so the user's skew high-order
 correction v_f += alpha/32 delta^4 (q_f - q_{f-1}) keeps energy stability and removes the single-phase checkerboard

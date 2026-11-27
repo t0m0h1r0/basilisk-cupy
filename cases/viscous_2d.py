@@ -85,12 +85,34 @@ def stiffness(N, method="C"):
     return float(max(rates(a, b, h, 1.0, method)[1] for a in th for b in th if (a, b) != (0.0, 0.0)) * h * h)
 
 
+def mixing(N, method="C", modes=((1, 0), (1, 1), (2, 1), (3, 2), (1, 3))):
+    """docs/notes/103 (the user's P0 for note 102): leakage between the transverse and longitudinal modes. The
+    derivative symbols c are imaginary, so K is real symmetric and its eigenvectors are real directions of the
+    amplitudes (alpha, beta). Slower rate: leakage |<e_slow, k_hat>| (should be divergence-free); faster rate:
+    |<e_fast, k_perp_hat>|."""
+    h = 1.0 / N
+    out = []
+    for m, n in modes:
+        tx, ty = 2 * math.pi * m * h, 2 * math.pi * n * h
+        ax, bx, cx = symbols_1d(tx, h)
+        ay, by, cy = symbols_1d(ty, h)
+        K = np.array([[2 * ax * by + bx * ay, cx * np.conj(cy)], [np.conj(cx) * cy, ax * by + 2 * bx * ay]])
+        assert np.abs(K.imag).max() < 1e-12 * np.abs(K).max()
+        g = bx * by if method == "C" else h * h * symbols(tx, 0.37)["gram"].real * symbols(ty, 0.37)["gram"].real
+        ev, V = np.linalg.eigh(K.real / g)
+        k = np.array([m, n], float) / math.hypot(m, n)
+        kp = np.array([-k[1], k[0]])
+        out.append({"mode": [m, n], "slow_leak": float(abs(V[:, 0] @ k)), "fast_leak": float(abs(V[:, 1] @ kp))})
+    return out
+
+
 def main() -> None:
     res = {"scan": {}, "isotropy": {}, "stiffness": {}}
     for method in ("C", "D"):
         res["scan"][method] = {N: scan(N, method) for N in (16, 32, 64, 128)}
         res["isotropy"][method] = isotropy(32, 0.5, method)
         res["stiffness"][method] = stiffness(32, method)
+    res["mixing"] = {m: {N: mixing(N, m) for N in (16, 32, 64, 128)} for m in ("C", "D")}
     json.dump(res, open("docs/figures/viscous_2d.json", "w"), indent=1)
     for method in ("C", "D"):
         for N, rows in res["scan"][method].items():
@@ -99,6 +121,8 @@ def main() -> None:
         print(method, "isotropy |k|h = 0.5: div-free", f"{min(r['div_free'] for r in iso):+.2e} .. {max(r['div_free'] for r in iso):+.2e}",
               "curl-free", f"{min(r['curl_free'] for r in iso):+.2e} .. {max(r['curl_free'] for r in iso):+.2e}",
               "stiffness", f"{res['stiffness'][method]:.2f}")
+        for N, rows in res["mixing"][method].items():
+            print(method, N, "leak", " ".join(f"{r['mode']}: {r['slow_leak']:.1e}" for r in rows))
 
 
 if __name__ == "__main__":
