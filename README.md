@@ -1358,3 +1358,10 @@ periodic: Gram g_F in [0.501, 1], minimum Schur ratio 0.656 (1-D) / 0.429 (2-D) 
 only the constant pressure in the null space, a G-orthogonal projection that keeps divergence-free waves to rounding,
 and a superconvergent weak pressure gradient. Two phases, momentum conservation and cut faces are open; the choice of
 state variable waits for Gate 1-B.
+
+Roadmap revision (`docs/notes/98_roadmap.md`, 2026-11-27): after the audit the plan is organised as gates that decide
+the design risks before integration: Gate 0 records (done), Gate 1-A pressure projection (cell-centred split-PCCD
+projection fails in two phases; MAC-PCCD holds in one phase), Gate 1-B static reconstruction on oblique and curved
+interfaces and short runs comparing cell-average and face-average state variables, Gate 1-C general-flow advection
+and time-step dependence, Gate 1-D viscosity, then Gate 2 (design decision), Gate 3 (two-phase Navier-Stokes) and
+Gate 4 (GPU). Method D stays provisional (not 4th order) and C is the viscous Oracle.
