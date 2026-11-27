@@ -1241,3 +1241,9 @@ the planar approximation order) and the osculating parabola xi + (h / 2 R0) eta^
 with nearly equal errors; the tangent line drops to second-to-third order. At N = 64 Galerkin is 4.5 times more
 accurate than the direct remap. Fixes the window centre for curved hinges, and centres the single polynomial at the
 cell instead of the interface foot (about 20 cells away the quartic monomials cancelled to 1e-9 free-stream error).
+
+Correction (`docs/notes/90_shift_correction.md`): the "velocity-difference shift" of notes 88-89 subtracted the target
+cell's row, which is the least squares constrained to the cell mean that note 85 rejected (found by the user's
+review). Subtracting the weighted-mean row instead gives the unconstrained fit plus the constant (equal to the plain
+shift to 2.5e-10); at density ratio 1e6 and phase-mass ratio 100 the reconstruction's amplification drops from 397 to
+26 (corner-cut 45 degrees: 317 to 12).

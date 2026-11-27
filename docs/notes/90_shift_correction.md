@@ -9,7 +9,7 @@
 ```
 python -m cases.galerkin2d_shiftfix            # 等価性と、ζ の走査（docs/figures/galerkin2d_shiftfix.json）
 python -m cases.galerkin2d_shiftfix --rerun    # ノート88 の 3〜5 節を直した形で（galerkin2d_rank_shift.json）
-python -m cases.galerkin2d_circle              # ノート89 を直した形で（galerkin2d_circle.json。旧は *_constrained.json）
+python -m cases.galerkin2d_circle              # ノート89 を直した形で（旧の結果は galerkin2d_circle_constrained.json）
 ```
 
 ライブラリは変えていない（`cases/galerkin2d.py` の `Reconstruction2D(lsq=...)`）。
@@ -87,4 +87,11 @@ min_â Σ_j w_j [(A_j − Ā)_{1:} â − (u_j − ū)]²
 - 密度比 1000 では差は 1.5〜2.3 倍で、ノート88・89 の試験（密度比 1000）が通ったことと矛盾しない。
 - ζ が小さい（重い相がほとんどない）所では、ノート88 の形の方が少し小さい（8.7 対 9.9）。ここは両者とも小さい。
 
-（RERUN）
+## ノート88・89 の測り直し
+直した形で、ノート88 の 3〜5 節とノート89 の円の計算をやり直している（`--rerun`、`galerkin2d_circle`）。結果は次の PR で、このノートに追記する。
+
+## まとめ
+- ノート88・89 の「速度差の shift」は、セル平均に拘束した最小二乗だった。重み付き平均の行を引く形に直し、普通の shift と一致させた。
+- 密度比 1e6 の薄片のセルのまわりで、増幅率は 397 → 26（0°）、317 → 12（45°）。
+- 密度比 1000 では差は 1.5〜2.3 倍で、ノート88・89 の結論（次数、Galerkin と Remap の比）が大きく変わるとは考えにくいが、測り直しで確かめる。
+- 研究の方針の転換（ノート91）により、最小二乗 Galerkin は参照解法（Oracle）として残す。
