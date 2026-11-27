@@ -26,3 +26,14 @@ def test_exact_distance_hinge_is_exact_and_tangent_hinge_is_not():
     assert exactness(24, "exact", workers=4) < 1e-12
     q, t = exactness(24, "quadratic", workers=4), exactness(24, "tangent", workers=4)
     assert 1e-4 < q < t / 4
+
+
+def test_partition_of_unity_far_from_the_interface():
+    """The single polynomial is centred at the cell (not at the interface foot ~10-20 cells away): the basis sums to
+    one to rounding everywhere."""
+    from cases.galerkin2d import Reconstruction2D
+    from cases.galerkin2d_circle import RK
+
+    N = 24
+    r = Reconstruction2D(N, Circle(cx=0.5871, cy=0.5436), hinge="exact", workers=4, **RK)
+    assert max(abs(r.basis(i, r.qx[i])[1].sum(1) - 1).max() for i in range(N * N)) < 1e-12
