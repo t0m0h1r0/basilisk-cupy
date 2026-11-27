@@ -25,11 +25,11 @@ def _sqrtm(A):
     return V @ np.diag(np.sqrt(w)) @ V.T, V @ np.diag(1 / np.sqrt(w)) @ V.T
 
 
-def step_stats(n, p, s, ds, alpha, ratio, mode="ls", extra=1):
+def step_stats(n, p, s, ds, alpha, ratio, mode="ls", extra=1, fit="constrained"):
     """One step s -> s + ds: T, ||T||_inf, ||T||_2, the energy-norm amplification and the smallest energy-norm
     singular value (worst-case energy loss 1 - smin^2), cond(M^-1/2 G M^-1/2) of the new G, sigma_min of the fits."""
-    G, C, old, new = matrices(n, p, s, ds, mode, ratio=ratio, alpha=alpha, extra=extra)
-    G0 = matrices(n, p, s - ds, ds, mode, ratio=ratio, alpha=alpha, extra=extra)[0]
+    G, C, old, new = matrices(n, p, s, ds, mode, ratio=ratio, alpha=alpha, extra=extra, fit=fit)
+    G0 = matrices(n, p, s - ds, ds, mode, ratio=ratio, alpha=alpha, extra=extra, fit=fit)[0]
     T = np.linalg.solve(G, C)
     G1h, _ = _sqrtm(G)
     _, G0ih = _sqrtm(G0)
@@ -49,7 +49,7 @@ def positions(n, samples):
 
 
 # -- P0-1: the jump across a cell boundary ------------------------------------------------------------------------
-def p0_1(alpha, ratio, n=48, p=4, mode="ls", kind="kink", extra=1):
+def p0_1(alpha, ratio, n=48, p=4, mode="ls", kind="kink", extra=1, fit="constrained"):
     h = 1.0 / n
     k = int(round(A0 / h)) + 1
     out = {}
@@ -58,7 +58,7 @@ def p0_1(alpha, ratio, n=48, p=4, mode="ls", kind="kink", extra=1):
         for eps in (1e-2, 1e-4, 1e-6, 1e-8):
             start = (k * h if across else (k + 0.5) * h) - eps * h
             s0, ds = start - A0, 2 * eps * h
-            st = step_stats(n, p, s0, ds, alpha, ratio, mode, extra)
+            st = step_stats(n, p, s0, ds, alpha, ratio, mode, extra, fit)
             u0 = exact_averages(n, s0, st["old"].mass, kind, ratio)
             u1 = st["T"] @ u0
             ex = exact_averages(n, s0 + ds, st["new"].mass, kind, ratio)
@@ -273,11 +273,11 @@ def corrected(T, G0, C, beta):
     return T + beta * (T - T @ (Td @ T))
 
 
-def step10(n, p, s, ds, alpha, ratio, beta, mode="ls", extra=1):
+def step10(n, p, s, ds, alpha, ratio, beta, mode="ls", extra=1, fit="constrained"):
     """One corrected step: T_beta and its structure (free stream, momentum, energy-norm singular values,
     ||T||_inf) at the displacement s -> s + ds."""
-    G, C, old, new = matrices(n, p, s, ds, mode, ratio=ratio, alpha=alpha, extra=extra)
-    G0 = matrices(n, p, s - ds, ds, mode, ratio=ratio, alpha=alpha, extra=extra)[0]
+    G, C, old, new = matrices(n, p, s, ds, mode, ratio=ratio, alpha=alpha, extra=extra, fit=fit)
+    G0 = matrices(n, p, s - ds, ds, mode, ratio=ratio, alpha=alpha, extra=extra, fit=fit)[0]
     T = corrected(np.linalg.solve(G, C), G0, C, beta)
     G1h, _ = _sqrtm(G)
     _, G0ih = _sqrtm(G0)
@@ -288,12 +288,12 @@ def step10(n, p, s, ds, alpha, ratio, beta, mode="ls", extra=1):
             "old": old, "new": new, "G": G, "G0": G0}
 
 
-def sweep10(alpha, ratio, beta, cfl=0.37, n=48, p=4, samples=12, extra=1):
+def sweep10(alpha, ratio, beta, cfl=0.37, n=48, p=4, samples=12, extra=1, fit="constrained"):
     """Max over interface positions of the structure of T_beta and the one-step error of the 'phases' q."""
     h = 1.0 / n
     res = {"free_stream": 0.0, "momentum": 0.0, "amp": 0.0, "loss": 0.0, "inf": 0.0, "err": 0.0}
     for s0 in positions(n, samples):
-        st = step10(n, p, s0, cfl * h, alpha, ratio, beta, extra=extra)
+        st = step10(n, p, s0, cfl * h, alpha, ratio, beta, extra=extra, fit=fit)
         u0 = exact_averages(n, s0, st["old"].mass, "phases", ratio)
         ex = exact_averages(n, s0 + cfl * h, st["new"].mass, "phases", ratio)
         for k in ("free_stream", "momentum", "amp", "loss", "inf"):
@@ -304,7 +304,7 @@ def sweep10(alpha, ratio, beta, cfl=0.37, n=48, p=4, samples=12, extra=1):
 
 
 def run10(n, p, alpha, ratio, beta, kind="phases", t_end=0.137, cfl=0.37, samples=(0.05, 0.1), extra=1,
-          transient=False):
+          transient=False, fit="constrained"):
     """Errors at the sample times and t_end, E(t_end)/E(0), max one-step ||T||_inf; with ``transient`` also
     max_{j<k} ||T_{k-1} .. T_j||_inf."""
     steps = int(math.ceil(t_end / (cfl / n)))
@@ -314,8 +314,8 @@ def run10(n, p, alpha, ratio, beta, kind="phases", t_end=0.137, cfl=0.37, sample
     Ts = []
     inf1 = 0.0
     for k in range(steps):
-        G, C, old, new = matrices(n, p, k * ds, ds, "ls", ratio=ratio, alpha=alpha, extra=extra)
-        G0 = matrices(n, p, (k - 1) * ds, ds, "ls", ratio=ratio, alpha=alpha, extra=extra)[0]
+        G, C, old, new = matrices(n, p, k * ds, ds, "ls", ratio=ratio, alpha=alpha, extra=extra, fit=fit)
+        G0 = matrices(n, p, (k - 1) * ds, ds, "ls", ratio=ratio, alpha=alpha, extra=extra, fit=fit)[0]
         if u is None:
             u = exact_averages(n, 0.0, old.mass, kind, ratio)
             E0 = float(u @ G0 @ u)

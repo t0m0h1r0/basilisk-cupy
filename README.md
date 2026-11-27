@@ -1203,3 +1203,11 @@ stream, total momentum and energy stability are kept exactly while a one-step lo
 density ratio 1 the small-CFL dissipation per unit time vanishes with Delta t, fourth order is kept. Losses saturated
 at O(1) in a light cell next to the interface are not recovered, and the max-norm amplification peaks (272 at density
 ratio 1e6) where a heavy sliver enters a light cell.
+
+Source of the amplification (`docs/notes/85_amplification_source.md`): comparing the piecewise-constant remap (always
+1), the geometric high-order remap, the Galerkin and the corrected transports over the phase-mass ratio zeta, the peak
+comes from the constrained fit pushing a mixed cell's average mismatch into the light phase's polynomial, amplified by
+1 + zeta. An unconstrained fit plus a constant shift restoring the cell average (the correction of least rho-norm)
+brings ||T||_inf from 272 to 13 at density ratio 1e6 with accuracy, continuity, conditioning and viscous stiffness
+unchanged. The small-CFL saturated loss is rank one per interface (one oracle mode removes it); a mass-coordinate
+continuity correction multiplies the viscous stiffness by up to 1e9 and is rejected.

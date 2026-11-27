@@ -69,8 +69,10 @@ class Reconstruction:
     """The basis at displacement s: on cell i, u_h(x) = sum_k phi_{i,k}(x) u_{stencil_i[k]}."""
 
     def __init__(self, n: int, p: int, s: float, piecewise: bool = False, ratio: float = RHO_IN / RHO_OUT,
-                 alpha: float = 0.0, extra: int = 0):
+                 alpha: float = 0.0, extra: int = 0, c0=None, fit: str = "constrained"):
         self.n, self.p, self.s = n, p, s
+        self.fit = fit  # "ls": "constrained" (note 82) or "shift" (note 85: unconstrained fit + a constant shift)
+        self.c0 = None  # set at the end (the face functionals need the uncorrected basis)
         self.alpha = alpha
         self.extra = extra  # "ls": the window reaches `extra` more cells on each side (over-determined everywhere)
         self.sigma_min = np.inf  # "ls": min over the constrained fits of sigma_min(W^1/2 A Z)
@@ -198,6 +200,18 @@ class Reconstruction:
         wts = geo * (mass / mass.max()) ** self.alpha
         k = int(np.where(cells == c)[0][0])
         b = A[k]
+        if self.fit == "shift":
+            # docs/notes/85: the weighted fit without the constraint, then the constant (a0 direction) that restores
+            # cell c's average: the correction of least rho-weighted norm, bounded independently of the density ratio
+            sw = np.sqrt(wts)
+            Bw = sw[:, None] * A
+            sv = np.linalg.svd(Bw, compute_uv=False)
+            self.sigma_min = min(self.sigma_min, float(sv[-1] / sv[0]))
+            Astar = np.linalg.lstsq(Bw, np.diag(sw), rcond=None)[0]  # a* = Astar u
+            e0 = np.zeros(2 * p + 1)
+            e0[0] = 1.0
+            E = np.eye(len(cells))
+            return Astar + np.outer(e0, E[k] - b @ Astar)
         # null space of b^T and a particular solution: a = b (u_c)/(b.b) + Z y
         _, _, Vt = np.linalg.svd(b[None, :])
         Z = Vt[1:].T
@@ -248,7 +262,76 @@ class Reconstruction:
         self.last_matrix = A
         return np.linalg.solve(A, np.eye(2 * p + 1))
 
+    def enable_c0(self, how: str):
+        """docs/notes/85 (P0-12c): the face-continuous correction in the mass coordinate s_i(x) = int_{x_L}^x rho / m_i:
+        u_h <- P_i + l(s) e_L + r(s) e_R, l = 1 - 4s + 3s^2, r = -2s + 3s^2 (zero mass-weighted mean), e = v_f - P_i(face);
+        the face value v_f is the mean of the two one-sided values ("mean") or their cell-mass-weighted mean ("mass")."""
+        h, n = self.h, self.n
+        eps = 1e-12
+        L, R = [], []
+        for i in range(n):
+            idx, v = self._basis_raw(np.array([i * h + eps * h]))
+            L.append(dict(zip(idx.tolist(), v[0].tolist())))
+            idx, v = self._basis_raw(np.array([(i + 1) * h - eps * h]))
+            R.append(dict(zip(idx.tolist(), v[0].tolist())))
+        faces = []  # face i + 1/2
+        for i in range(n):
+            j = (i + 1) % n
+            wi, wj = (0.5, 0.5) if how == "mean" else (self.mass[i] / (self.mass[i] + self.mass[j]),
+                                                         self.mass[j] / (self.mass[i] + self.mass[j]))
+            f = {}
+            for c, val in R[i].items():
+                f[c] = f.get(c, 0.0) + wi * val
+            for c, val in L[j].items():
+                f[c] = f.get(c, 0.0) + wj * val
+            faces.append(f)
+        self._c0 = (L, R, faces)
+        self.c0 = how
+
+    def _mass_coordinate(self, i, x):
+        """s_i(x) for points x in cell i (frame of cell i: x in [i h, (i + 1) h])."""
+        h = self.h
+        out = np.zeros_like(x)
+        cuts = [z + m for z in interfaces(self.s) for m in (-1, 0, 1)]
+        xg, wg = np.polynomial.legendre.leggauss(2)
+        for k, xx in enumerate(x):
+            acc = 0.0
+            for a, b in _pieces(i * h, xx, cuts):
+                xq = 0.5 * (b - a) * xg + 0.5 * (a + b)
+                acc += 0.5 * (b - a) * float(np.sum(wg * rho_at(xq, self.s, self.ratio)))
+            out[k] = acc / self.mass[i]
+        return out
+
     def basis(self, x):
+        """For points x (unwrapped, within one cell and on one side of the interface): the cells and basis values."""
+        idx, vals = self._basis_raw(x)
+        if self.c0 is None:
+            return idx, vals
+        h = self.h
+        cell = int(math.floor(float(np.mean(x)) / h))
+        i = cell % self.n
+        L, R, faces = self._c0
+        sc = self._mass_coordinate(i, x - (cell - i) * h)
+        lf, rf = 1 - 4 * sc + 3 * sc * sc, -2 * sc + 3 * sc * sc
+        # e_L = v_{i-1/2} - P_i(x_L), e_R = v_{i+1/2} - P_i(x_R)
+        eL = dict(faces[(i - 1) % self.n])
+        for c, v in L[i].items():
+            eL[c] = eL.get(c, 0.0) - v
+        eR = dict(faces[i])
+        for c, v in R[i].items():
+            eR[c] = eR.get(c, 0.0) - v
+        cols = sorted(set(idx.tolist()) | set(eL) | set(eR))
+        pos = {c: k for k, c in enumerate(cols)}
+        out = np.zeros((x.size, len(cols)))
+        for k, c in enumerate(idx.tolist()):
+            out[:, pos[c]] += vals[:, k]
+        for c, v in eL.items():
+            out[:, pos[c]] += lf * v
+        for c, v in eR.items():
+            out[:, pos[c]] += rf * v
+        return np.array(cols), out
+
+    def _basis_raw(self, x):
         """For points x (unwrapped, within one cell and on one side of the interface): the cells and basis values."""
         h = self.h
         cell = int(math.floor(float(np.mean(x)) / h))
@@ -276,11 +359,14 @@ class Reconstruction:
 
 
 def matrices(n: int, p: int, s: float, ds: float, piecewise: bool = False, ratio: float = RHO_IN / RHO_OUT,
-             remap: bool = False, alpha: float = 0.0, extra: int = 0):
+             remap: bool = False, alpha: float = 0.0, extra: int = 0, c0=None, fit: str = "constrained"):
     """G^{n+1} and C for the displacement s -> s + ds, and the reconstructions; ``remap``: also the direct geometric
     remap's matrix Cg_ij = int rho^n(x) 1_{K_i}(x + ds) phi_j^n(x) dx (u_g = M^{-1} Cg u^n)."""
-    old = Reconstruction(n, p, s, piecewise, ratio, alpha, extra)
-    new = Reconstruction(n, p, s + ds, piecewise, ratio, alpha, extra)
+    old = Reconstruction(n, p, s, piecewise, ratio, alpha, extra, fit=fit)
+    new = Reconstruction(n, p, s + ds, piecewise, ratio, alpha, extra, fit=fit)
+    if c0 is not None:
+        old.enable_c0(c0)
+        new.enable_c0(c0)
     h = 1.0 / n
     order = 2 * p + 2
     xg, wg = np.polynomial.legendre.leggauss(order)
