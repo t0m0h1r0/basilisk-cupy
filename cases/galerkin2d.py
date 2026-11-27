@@ -140,10 +140,22 @@ def _smooth(t):
 
 
 class Reconstruction2D:
-    def __init__(self, N, geom, alpha=0.75, D1=3.5, D2=4.5, m_pw=3, m_s=2, kink=True):
+    def __init__(self, N, geom, alpha=0.75, D1=3.5, D2=4.5, m_pw=3, m_s=2, kink=True, window="cell", R=4.5,
+                 switch="fixed", delta=1.0, tau=None, diff=False):
+        """docs/notes/88 options: ``window`` "cell" (the (2 m_pw + 1)^2 cells around the cell, note 87) or "interface"
+        (the cells within R cells of the cell's foot on the interface, weights (1 - (r/R)^2)^2: both sides of the
+        interface always hold data); ``switch`` "fixed" (D1, D2) or "angle" (D1 = d_safe = (m_s + 1/2)(|nx| + |ny|)
+        cells, the reach of the single window, D2 = D1 + delta); ``tau``: the continuous SVD filter of the
+        interface component's pseudo-inverse (relative to its largest singular value), None = plain lstsq;
+        ``diff``: the shift written on velocity differences (u_i + sum (m_k - mbar_k) a_k, a = W (u - u_i 1))."""
         self.N, self.geom, self.alpha = N, geom, alpha
         self.h = h = 1.0 / N
         self.kink = kink
+        self.window, self.R, self.tau, self.diff = window, R, tau, diff
+        if switch == "angle":
+            D1 = (m_s + 0.5) * (abs(geom.n[0]) + abs(geom.n[1]))
+            D2 = D1 + delta
+        self.rank_log = []  # (distance in cells, numerical rank of the interface component, its size)
         # every cell's quadrature (canonical position), rho-weights, mass
         self.qx, self.qw, self.mass = [], [], np.zeros(N * N)
         for iy in range(N):
@@ -199,16 +211,35 @@ class Reconstruction2D:
 
     def _fit(self, ix, iy, m, pw, c, s):
         frame = self._frame(c, s)
-        rows, cells, mass = [], [], []
-        for dy in range(-m, m + 1):
-            for dx in range(-m, m + 1):
-                X, W, j = self._cell_points(ix + dx, iy + dy)
-                rows.append(W @ self._mono(X, frame, pw) / W.sum())
-                cells.append(j)
-                mass.append(W.sum())
+        rows, cells, mass, geo = [], [], [], []
+        h = self.h
+        if pw and self.window == "interface":
+            xw = c - s * self.geom.n            # the foot of the cell centre on the interface line
+            R = self.R
+            r0 = int(math.ceil(R + abs(s) / h + 1))
+            offs = []
+            for dy in range(-r0, r0 + 1):
+                for dx in range(-r0, r0 + 1):
+                    cj = c + np.array([dx, dy]) * h
+                    r = float(np.linalg.norm(cj - xw)) / h
+                    if r < R or (dx == 0 and dy == 0):
+                        offs.append((dx, dy, max(1.0 - (r / R) ** 2, 0.0) ** 2))
+        else:
+            offs = [(dx, dy, 1.0) for dy in range(-m, m + 1) for dx in range(-m, m + 1)]
+        k = None
+        for t, (dx, dy, wg) in enumerate(offs):
+            X, W, j = self._cell_points(ix + dx, iy + dy)
+            rows.append(W @ self._mono(X, frame, pw) / W.sum())
+            cells.append(j)
+            mass.append(W.sum())
+            geo.append(wg)
+            if dx == 0 and dy == 0:
+                k = t
         A = np.array(rows)
         mass = np.array(mass)
-        sw = np.sqrt((mass / mass.max()) ** self.alpha)
+        sw = np.sqrt(np.array(geo) * (mass / mass.max()) ** self.alpha)
+        if self.diff or self.tau is not None or self.window == "interface":
+            return self._fit_split(A, sw, k, np.array(cells), frame, pw, s)
         Bw = sw[:, None] * A
         sv = np.linalg.svd(Bw, compute_uv=False)
         self.sigma_min = min(self.sigma_min, float(sv[-1] / sv[0]))
@@ -219,6 +250,39 @@ class Reconstruction2D:
         E = np.eye(len(cells))
         Wc = Astar + np.outer(e0, E[k] - A[k] @ Astar)
         return (np.array(cells), Wc, frame, pw)
+
+    def _fit_split(self, A, sw, k, cells, frame, pw, s):
+        """The shift on velocity differences, with the interface component (the hinge columns Y, after removing the
+        ordinary polynomial X) inverted by the continuous filter f_tau (or plain lstsq when tau is None)."""
+        n0 = len(P0_EXP)
+        E = np.eye(len(cells))
+        D = E - np.outer(np.ones(len(cells)), E[k])        # u - u_k 1
+        Ad = A - A[k][None, :]                               # rows minus the cell's own row (constant drops out)
+        Xw = sw[:, None] * Ad[:, 1:n0]
+        Sw = np.diag(sw) @ D
+        if pw:
+            Yw = sw[:, None] * Ad[:, n0:]
+            Xp = np.linalg.pinv(Xw)
+            Z = Yw - Xw @ (Xp @ Yw)
+            U, S, Vt = np.linalg.svd(Z, full_matrices=False)
+            rank = int(np.sum(S > 1e-10 * max(S[0], 1e-300)))
+            self.rank_log.append((abs(s) / self.h, rank, Z.shape[1]))
+            if self.tau is None:
+                f = np.where(S > 1e-12 * max(S[0], 1e-300), 1.0 / np.where(S > 0, S, 1.0), 0.0)
+            else:
+                t = self.tau * max(S[0], 1e-300)
+                f = np.where(S >= t, 1.0 / np.where(S > 0, S, 1.0), 2 * S / t ** 2 - S ** 3 / t ** 4)
+            Zp = Vt.T @ (f[:, None] * U.T)
+            Bmap = Zp @ (Sw - Xw @ (Xp @ Sw))                # hinge coefficients
+            Amap = Xp @ (Sw - Yw @ Bmap)                     # ordinary coefficients (k >= 1)
+            coef = np.vstack([Amap, Bmap])
+        else:
+            coef = np.linalg.lstsq(Xw, Sw, rcond=None)[0]
+            sv = np.linalg.svd(Xw, compute_uv=False)
+            self.sigma_min = min(self.sigma_min, float(sv[-1] / sv[0]))
+        # P = u_k + sum_{m >= 1} (mono_m - A[k, m]) coef_m: constant coefficient = e_k - A[k, 1:] coef
+        Wc = np.vstack([E[k] - A[k, 1:] @ coef, coef])
+        return (cells, Wc, frame, pw)
 
     def basis(self, i, X):
         """Values at points X (near cell i's canonical position) of the basis functions on the cells: (cells, V)."""
@@ -292,7 +356,7 @@ def field(geom0, kind="phases"):
 
 
 def run(N, transport="galerkin", ratio=1e3, a=1, b=1, U=(1.0, 0.5), t_end=0.1, cfl=0.37, kind="phases",
-        alpha=0.75, samples=()):
+        alpha=0.75, samples=(), rk=None):
     h = 1.0 / N
     umax = max(abs(U[0]), abs(U[1]))
     steps = int(math.ceil(t_end / (cfl * h / umax)))
@@ -300,14 +364,16 @@ def run(N, transport="galerkin", ratio=1e3, a=1, b=1, U=(1.0, 0.5), t_end=0.1, c
     g0 = Geometry(a, b, ratio=ratio)
     q0 = field(g0, kind)
     exact = lambda t: averages(N, g0.moved(U, t), lambda x, y: q0(x - U[0] * t, y - U[1] * t))  # noqa: E731
-    rec0 = Reconstruction2D(N, g0, alpha)
+    rk = rk or {}
+    rec0 = Reconstruction2D(N, g0, alpha, **rk)
     u = exact(0.0)
+    cond_max, umax = 0.0, 0.0
     u_init_max = float(np.abs(u).max())
     E0 = None
     errs, infs, smin = {}, 0.0, rec0.sigma_min
     at = {int(round(t / dt)): t for t in samples}
     for k in range(steps):
-        rec1 = Reconstruction2D(N, g0.moved(U, (k + 1) * dt), alpha)
+        rec1 = Reconstruction2D(N, g0.moved(U, (k + 1) * dt), alpha, **rk)
         smin = min(smin, rec1.sigma_min)
         G0, G1, C, Cg = assemble(N, rec0, rec1, U, dt)
         if E0 is None:
@@ -319,7 +385,11 @@ def run(N, transport="galerkin", ratio=1e3, a=1, b=1, U=(1.0, 0.5), t_end=0.1, c
             if transport == "corr":
                 T = T + 0.5 * (T - T @ np.linalg.solve(G0, C.T @ T))
         infs = max(infs, float(np.abs(T).sum(1).max()))
+        Mh = np.diag(1 / np.sqrt(rec1.mass))
+        ev = np.linalg.eigvalsh(Mh @ G1 @ Mh)
+        cond_max = max(cond_max, float(ev.max() / ev.min()))
         u = T @ u
+        umax = max(umax, float(np.abs(u).max()))
         if k + 1 in at:
             errs[at[k + 1]] = float(np.abs(u - exact((k + 1) * dt)).max())
         rec0 = rec1
@@ -328,15 +398,16 @@ def run(N, transport="galerkin", ratio=1e3, a=1, b=1, U=(1.0, 0.5), t_end=0.1, c
     Mh = np.diag(1 / np.sqrt(rec0.mass))
     ev = np.linalg.eigvalsh(Mh @ Glast @ Mh)
     return {"errors": errs, "energy": float(u @ Glast @ u) / E0, "inf_step": infs, "steps": steps,
-            "cond": float(ev.max() / ev.min()), "sigma_min": smin,
-            "umax_ratio": float(np.abs(u).max()) / u_init_max}
+            "cond": float(ev.max() / ev.min()), "cond_max": cond_max, "sigma_min": smin,
+            "umax_ratio": float(np.abs(u).max()) / u_init_max, "umax_over_run": umax / u_init_max}
 
 
-def free_stream(N, ratio=1e3, a=1, b=1, U=(1.0, 0.5), cfl=0.37):
+def free_stream(N, ratio=1e3, a=1, b=1, U=(1.0, 0.5), cfl=0.37, rk=None):
     h = 1.0 / N
     g0 = Geometry(a, b, ratio=ratio)
     dt = cfl * h / max(abs(U[0]), abs(U[1]))
-    rec0, rec1 = Reconstruction2D(N, g0), Reconstruction2D(N, g0.moved(U, dt))
+    rk = rk or {}
+    rec0, rec1 = Reconstruction2D(N, g0, **rk), Reconstruction2D(N, g0.moved(U, dt), **rk)
     G0, G1, C, Cg = assemble(N, rec0, rec1, U, dt)
     T = np.linalg.solve(G1, C)
     one = np.ones(N * N)
@@ -350,43 +421,113 @@ def free_stream(N, ratio=1e3, a=1, b=1, U=(1.0, 0.5), cfl=0.37):
             "remap_free_stream": float(np.abs(Cg @ one / rec1.mass - 1).max())}
 
 
-def exactness(N, ratio=1e3, a=1, b=1, seed=0):
-    """Per-phase polynomials P0 + max(xi, 0) P1 around the line a x + b y = zA (the band's lower edge), checked in
-    the cells within 2.5 cells of the line: each target's window data are the averages over the window's cells at the
-    unwrapped positions the reconstruction uses (the polynomial is not periodic)."""
-    rng = np.random.default_rng(seed)
+def exactness(N, ratio=1e3, a=1, b=1, seed=0, near=2.5, **rk):
+    """Each of the 25 local basis functions (xi^p eta^q, and max(xi, 0) xi^p eta^q, xi and eta in cells, about the
+    line a x + b y = zA), one at a time, against the reconstruction in the cells within ``near`` cells of the line;
+    the largest error relative to the function's largest value on the checked cells (docs/notes/88). ``rk``:
+    options of Reconstruction2D."""
     g = Geometry(a, b, ratio=ratio)
-    rec = Reconstruction2D(N, g)
+    rec = Reconstruction2D(N, g, **rk)
     h = 1.0 / N
-    c0, c1 = rng.normal(size=15), rng.normal(size=10)
     n = g.n
     tau = np.array([-n[1], n[0]])
     xg = n * g.zA / g.g
-
-    def q(X):
-        d = X - xg
-        xi, eta = d @ n, d @ tau
-        v = sum(c * xi ** p * eta ** q_ for c, (p, q_) in zip(c0, P0_EXP))
-        return v + np.maximum(xi, 0.0) * sum(c * xi ** p * eta ** q_ for c, (p, q_) in zip(c1, P1_EXP))
-
-    err = 0.0
+    funcs = [(False, e) for e in P0_EXP] + [(True, e) for e in P1_EXP]
+    worst = 0.0
+    targets = []
     for iy in range(N):
         for ix in range(N):
-            # the copy of the cell nearest to the line (shift in x by integers)
             cxy = np.array([(ix + 0.5) * h, (iy + 0.5) * h])
-            sx = -round((g.L(*cxy) - g.zA) / a) if a else 0
-            if abs(g.L(cxy[0] + sx, cxy[1]) - g.zA) / g.g / h > 2.5:
-                continue
+            if a:
+                sx, sy = -round((g.L(*cxy) - g.zA) / a), 0
+            else:
+                sx, sy = 0, -round((g.L(*cxy) - g.zA) / b)
+            if abs(g.L(cxy[0] + sx, cxy[1] + sy) - g.zA) / g.g / h <= near:
+                targets.append((ix, iy, np.array([sx, sy], dtype=float)))
+    for hinge, (p, q_) in funcs:
+        def q(X):
+            d = X - xg
+            xi, eta = d @ n / h, d @ tau / h
+            v = xi ** p * eta ** q_
+            return np.maximum(xi, 0.0) * v if hinge else v
+        err, scale = 0.0, 0.0
+        for ix, iy, sh in targets:
             i = iy * N + ix
             X = rec.qx[i]
             idx, V = rec.basis(i, X)
             u = {}
-            for dy in range(-3, 4):
-                for dx in range(-3, 4):
+            for dy in range(-7, 8):
+                for dx in range(-7, 8):
                     Xc, W, j = rec._cell_points(ix + dx, iy + dy)
-                    u[j] = float(W @ q(Xc + np.array([sx, 0.0]))) / W.sum()
-            err = max(err, float(np.abs(V @ np.array([u[j] for j in idx]) - q(X + np.array([sx, 0.0]))).max()))
-    return err
+                    u[j] = float(W @ q(Xc + sh)) / W.sum()
+            ref = q(X + sh)
+            err = max(err, float(np.abs(V @ np.array([u[j] for j in idx]) - ref).max()))
+            scale = max(scale, float(np.abs(ref).max()))
+        worst = max(worst, err / max(scale, 1e-300))
+    return worst
+
+
+def one_step(N, ratio=1e3, a=1, b=1, U=(1.0, 0.5), cfl=0.37, kind="phases", offsets=6, rk=None, transport="galerkin"):
+    """docs/notes/88: the largest one-step error, ||T||_inf and cond over ``offsets`` interface positions across one
+    cell (the same geometric statistics for every N)."""
+    h = 1.0 / N
+    rk = rk or {}
+    dt = cfl * h / max(abs(U[0]), abs(U[1]))
+    err = inf = cond = 0.0
+    for o in np.linspace(0.0, 1.0, offsets, endpoint=False):
+        g0 = Geometry(a, b, ratio=ratio, d=o * h * math.hypot(a, b))
+        q0 = field(g0, kind)
+        rec0, rec1 = Reconstruction2D(N, g0, **rk), Reconstruction2D(N, g0.moved(U, dt), **rk)
+        G0, G1, C, Cg = assemble(N, rec0, rec1, U, dt)
+        T = Cg / rec1.mass[:, None] if transport == "geo" else np.linalg.solve(G1, C)
+        u0 = averages(N, g0, q0)
+        ex = averages(N, g0.moved(U, dt), lambda x, y: q0(x - U[0] * dt, y - U[1] * dt))
+        err = max(err, float(np.abs(T @ u0 - ex).max()))
+        inf = max(inf, float(np.abs(T).sum(1).max()))
+        Mh = np.diag(1 / np.sqrt(rec1.mass))
+        ev = np.linalg.eigvalsh(Mh @ G1 @ Mh)
+        cond = max(cond, float(ev.max() / ev.min()))
+    return {"err": err, "inf": inf, "cond": cond}
+
+
+def recon_jump(N, a=1, b=1, ratio=1e3, spacing=4e-3, rk=None, seed=0):
+    """The largest change of the reconstructed field (random cell data, 5 x 5 points per cell) between interface
+    positions ``spacing`` cells apart (normal), over one cell: a jump does not shrink with the spacing."""
+    h = 1.0 / N
+    rk = rk or {}
+    u = np.random.default_rng(seed).normal(size=N * N)
+    pts = [np.stack(np.meshgrid((ix + np.linspace(0.1, 0.9, 5)) * h, (iy + np.linspace(0.1, 0.9, 5)) * h), -1)
+           .reshape(-1, 2) for iy in range(N) for ix in range(N)]
+    worst, where, prev = 0.0, None, None
+    for o in np.arange(0.0, 1.0, spacing):
+        rec = Reconstruction2D(N, Geometry(a, b, ratio=ratio, d=o * h * math.hypot(a, b)), **rk)
+        vals = []
+        for i in range(N * N):
+            idx, V = rec.basis(i, pts[i])
+            vals.append(V @ u[idx])
+        vals = np.concatenate(vals)
+        if prev is not None:
+            dv = float(np.abs(vals - prev).max())
+            if dv > worst:
+                worst, where = dv, float(o)
+        prev = vals
+    return {"max_change": worst, "at_offset": where}
+
+
+def continuity(N, a=1, b=1, ratio=1e3, spacing=4e-3, rk=None):
+    """The largest relative change of G between interface positions ``spacing`` cells apart (normal), over one cell:
+    a jump of the reconstruction does not shrink with the spacing."""
+    h = 1.0 / N
+    rk = rk or {}
+    worst, prev = 0.0, None
+    U, dt = (1.0, 0.0), 1e-9
+    for o in np.arange(0.0, 1.0, spacing):
+        g = Geometry(a, b, ratio=ratio, d=o * h * math.hypot(a, b))
+        G1 = assemble(N, Reconstruction2D(N, g, **rk), Reconstruction2D(N, g.moved(U, dt), **rk), U, dt)[1]
+        if prev is not None:
+            worst = max(worst, float(np.linalg.norm(G1 - prev, 2) / np.linalg.norm(G1, 2)))
+        prev = G1
+    return worst
 
 
 def main() -> None:

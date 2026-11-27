@@ -1,0 +1,49 @@
+exact {'N': 24, 'a': 0, 'b': 1} 0.03369406126013864
+free_stream {'N': 24, 'a': 0, 'b': 1, 'rk': {}} {'free_stream': 0.013156910490208507, 'momentum': 2.033601150839681e-07, 'mass_G1': 0.0005801201022018593, 'block_min_eig': 8.576579242315912e-13, 'remap_free_stream': 0.0010952047024515021}
+one_step {'N': 16, 'a': 0, 'b': 1, 'rk': {}} {'err': 0.0380490738890219, 'inf': 21.883421002934742, 'cond': 4.047050737975662}
+one_step {'N': 24, 'a': 0, 'b': 1, 'rk': {}} {'err': 0.0197991899511733, 'inf': 20.606171520296417, 'cond': 4.106588463240094}
+one_step {'N': 32, 'a': 0, 'b': 1, 'rk': {}} {'err': 0.024210693152702023, 'inf': 26.030775546771963, 'cond': 5.7778406819813135}
+one_step {'N': 48, 'a': 0, 'b': 1, 'rk': {}} {'err': 0.01601460496543103, 'inf': 23.196010687190313, 'cond': 3.7840288451103956}
+one_step {'N': 64, 'a': 0, 'b': 1, 'rk': {}} {'err': 0.014533142416463918, 'inf': 19.897271204287183, 'cond': 7.8610367242766355}
+exact {'N': 24, 'a': 1, 'b': 2} 0.004234704672183442
+free_stream {'N': 24, 'a': 1, 'b': 2, 'rk': {}} {'free_stream': 1.732833876388895e-10, 'momentum': 6.371994929488221e-15, 'mass_G1': 2.0708434966820657e-13, 'block_min_eig': -8.75752394688721e-17, 'remap_free_stream': 1.1346945605339442e-10}
+one_step {'N': 16, 'a': 1, 'b': 2, 'rk': {}} {'err': 0.02932140078273393, 'inf': 10.374104451860084, 'cond': 2.768200814954487}
+one_step {'N': 24, 'a': 1, 'b': 2, 'rk': {}} {'err': 0.003121846464896716, 'inf': 10.029614641230175, 'cond': 2.370469091936946}
+one_step {'N': 32, 'a': 1, 'b': 2, 'rk': {}} {'err': 0.0002743370009161139, 'inf': 6.415904426181905, 'cond': 2.2951402519689195}
+one_step {'N': 48, 'a': 1, 'b': 2, 'rk': {}} {'err': 4.450553702316229e-05, 'inf': 6.07954817965917, 'cond': 2.2899862103174673}
+one_step {'N': 64, 'a': 1, 'b': 2, 'rk': {}} {'err': 1.1901735684272108e-05, 'inf': 6.04587121872192, 'cond': 2.2649477752376557}
+exact {'N': 24, 'a': 1, 'b': 1} 1.831389668021118e-11
+free_stream {'N': 24, 'a': 1, 'b': 1, 'rk': {}} {'free_stream': 2.4536273013353593e-09, 'momentum': 1.178419876681743e-14, 'mass_G1': 1.5021733856812548e-12, 'block_min_eig': -1.2064008648197878e-17, 'remap_free_stream': 2.5415194393474394e-09}
+one_step {'N': 16, 'a': 1, 'b': 1, 'rk': {}} {'err': 0.010213271171599758, 'inf': 10.649542497438414, 'cond': 2.586398642997906}
+one_step {'N': 24, 'a': 1, 'b': 1, 'rk': {}} {'err': 0.0011609403733959245, 'inf': 6.641161304078225, 'cond': 2.586506707998706}
+one_step {'N': 32, 'a': 1, 'b': 1, 'rk': {}} {'err': 0.0003051744010005297, 'inf': 6.59456883111338, 'cond': 2.5863962647715377}
+one_step {'N': 48, 'a': 1, 'b': 1, 'rk': {}} {'err': 3.4023973962515885e-05, 'inf': 6.945139652073252, 'cond': 2.502512259474884}
+one_step {'N': 64, 'a': 1, 'b': 1, 'rk': {}} {'err': 1.1054318651615436e-05, 'inf': 7.348480140225352, 'cond': 2.5783992981964423}
+continuity {'N': 24, 'a': 0, 'b': 1, 'spacing': 0.004, 'rk': {}} 0.20486123699375963
+continuity {'N': 24, 'a': 0, 'b': 1, 'spacing': 0.002, 'rk': {}} 0.2050397556106762
+continuity {'N': 24, 'a': 1, 'b': 1, 'spacing': 0.004, 'rk': {}} 0.04535348346999746
+continuity {'N': 24, 'a': 1, 'b': 1, 'spacing': 0.002, 'rk': {}} 0.023814829302175492
+exact {'N': 24, 'a': 0, 'b': 1, 'window': 'interface', 'switch': 'angle', 'diff': True} 2.8199664825478976e-14
+free_stream {'N': 24, 'a': 0, 'b': 1, 'rk': {'window': 'interface', 'switch': 'angle', 'diff': True}} {'free_stream': 1.5785150964120476e-12, 'momentum': 1.8612013380572487e-16, 'mass_G1': 3.5871305925638677e-13, 'block_min_eig': -1.9138765449123276e-16, 'remap_free_stream': 1.4643841694805815e-12}
+one_step {'N': 16, 'a': 0, 'b': 1, 'rk': {'window': 'interface', 'switch': 'angle', 'diff': True}} {'err': 0.0012586525775808433, 'inf': 9.080590310334262, 'cond': 5.938353137401493}
+one_step {'N': 24, 'a': 0, 'b': 1, 'rk': {'window': 'interface', 'switch': 'angle', 'diff': True}} {'err': 0.00020438822402169335, 'inf': 8.673068903546628, 'cond': 6.030472228569298}
+one_step {'N': 32, 'a': 0, 'b': 1, 'rk': {'window': 'interface', 'switch': 'angle', 'diff': True}} {'err': 4.839593345484783e-05, 'inf': 8.367382518238443, 'cond': 4.454844357277415}
+one_step {'N': 48, 'a': 0, 'b': 1, 'rk': {'window': 'interface', 'switch': 'angle', 'diff': True}} {'err': 8.060199033987914e-06, 'inf': 7.909762688153827, 'cond': 3.9730260888706828}
+one_step {'N': 64, 'a': 0, 'b': 1, 'rk': {'window': 'interface', 'switch': 'angle', 'diff': True}} {'err': 2.0103637625723536e-06, 'inf': 7.581824722420285, 'cond': 13.08883385153487}
+exact {'N': 24, 'a': 1, 'b': 2, 'window': 'interface', 'switch': 'angle', 'diff': True} 3.758933821213201e-09
+free_stream {'N': 24, 'a': 1, 'b': 2, 'rk': {'window': 'interface', 'switch': 'angle', 'diff': True}} {'free_stream': 3.2573943542502093e-13, 'momentum': 2.195519004678792e-17, 'mass_G1': 1.423861029081758e-14, 'block_min_eig': -8.925232694936739e-17, 'remap_free_stream': 2.90878432451791e-14}
+one_step {'N': 16, 'a': 1, 'b': 2, 'rk': {'window': 'interface', 'switch': 'angle', 'diff': True}} {'err': 0.009694433949658257, 'inf': 11.018120131434694, 'cond': 3.160009559524832}
+one_step {'N': 24, 'a': 1, 'b': 2, 'rk': {'window': 'interface', 'switch': 'angle', 'diff': True}} {'err': 0.001055917602939438, 'inf': 12.607018324306821, 'cond': 3.934133170550661}
+one_step {'N': 32, 'a': 1, 'b': 2, 'rk': {'window': 'interface', 'switch': 'angle', 'diff': True}} {'err': 0.00048738031464526377, 'inf': 12.974459894791977, 'cond': 3.7441896864140416}
+one_step {'N': 48, 'a': 1, 'b': 2, 'rk': {'window': 'interface', 'switch': 'angle', 'diff': True}} {'err': 7.331154372502979e-05, 'inf': 11.951227193460083, 'cond': 3.9329300350774115}
+one_step {'N': 64, 'a': 1, 'b': 2, 'rk': {'window': 'interface', 'switch': 'angle', 'diff': True}} {'err': 1.8171995301852206e-05, 'inf': 11.851778912834693, 'cond': 4.148113118421487}
+exact {'N': 24, 'a': 1, 'b': 1, 'window': 'interface', 'switch': 'angle', 'diff': True} 3.042011087472929e-14
+free_stream {'N': 24, 'a': 1, 'b': 1, 'rk': {'window': 'interface', 'switch': 'angle', 'diff': True}} {'free_stream': 3.3284486278262193e-13, 'momentum': 1.0079428157843545e-16, 'mass_G1': 3.4972025275692305e-14, 'block_min_eig': -4.904598472604347e-16, 'remap_free_stream': 1.092459456231154e-13}
+one_step {'N': 16, 'a': 1, 'b': 1, 'rk': {'window': 'interface', 'switch': 'angle', 'diff': True}} {'err': 0.010662212715319086, 'inf': 18.08367130617646, 'cond': 4.966216909183552}
+one_step {'N': 24, 'a': 1, 'b': 1, 'rk': {'window': 'interface', 'switch': 'angle', 'diff': True}} {'err': 0.0013760469536118203, 'inf': 16.178002432126803, 'cond': 5.263290383621681}
+one_step {'N': 32, 'a': 1, 'b': 1, 'rk': {'window': 'interface', 'switch': 'angle', 'diff': True}} {'err': 0.00040676833928027234, 'inf': 17.311014958800772, 'cond': 5.134999729410664}
+one_step {'N': 48, 'a': 1, 'b': 1, 'rk': {'window': 'interface', 'switch': 'angle', 'diff': True}} {'err': 3.096244508948853e-05, 'inf': 12.023867619636134, 'cond': 5.098187332534062}
+one_step {'N': 64, 'a': 1, 'b': 1, 'rk': {'window': 'interface', 'switch': 'angle', 'diff': True}} {'err': 1.7094359105462864e-05, 'inf': 18.50380846170098, 'cond': 5.415437525624203}
+continuity {'N': 24, 'a': 0, 'b': 1, 'spacing': 0.004, 'rk': {'window': 'interface', 'switch': 'angle', 'diff': True}} 1.4874773381637612
+continuity {'N': 24, 'a': 0, 'b': 1, 'spacing': 0.002, 'rk': {'window': 'interface', 'switch': 'angle', 'diff': True}} 1.4978074432789423
+continuity {'N': 24, 'a': 1, 'b': 1, 'spacing': 0.004, 'rk': {'window': 'interface', 'switch': 'angle', 'diff': True}} 0.5949523381353896

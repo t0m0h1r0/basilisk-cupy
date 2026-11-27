@@ -14,3 +14,17 @@ def test_structure_on_the_common_partition():
 def test_piecewise_polynomials_are_exact():
     """P0 + max(xi, 0) P1 (continuous, normal gradient jump) is reproduced near the interface."""
     assert exactness(24) < 1e-9
+
+
+def test_interface_window_is_rank_safe_parallel_to_the_grid():
+    """docs/notes/88: an interface parallel to the grid on a cell boundary: the 7 x 7 cell-centred window cannot
+    reproduce the piecewise quartics, the interface-centred window of radius 5.5 can."""
+    import cases.galerkin2d as g
+
+    G = g.Geometry
+    try:
+        g.Geometry = lambda a=1, b=1, zA=5 / 24, zB=0.647, ratio=1e3, d=0.0: G(a, b, zA, zB, ratio, d)
+        assert exactness(24, a=0, b=1) > 1e-3
+        assert exactness(24, a=0, b=1, window="interface", switch="angle", diff=True, R=5.5) < 1e-10
+    finally:
+        g.Geometry = G
