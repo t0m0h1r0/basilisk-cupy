@@ -1375,3 +1375,33 @@ face; at density ratios >= 1e3 the heavy phase is unaffected. The 2-D full visco
 reconstruction (2N x 2N per x wavenumber) gives a method-D stiffness of 25-29 in ordinary cases and about 4.3 times
 the 1-D value for thin constant-viscosity slices (2045); the tangential B_y = int mu Y Y^T does not bring back the
 G_nu ill-conditioning.
+
+T1, layered two-phase MAC (`docs/notes/108_layered_mac.md`, issue #132): with the reference inner products fixed in
+advance (dual-cell mass for the normal velocity, harmonic density for the tangential one) the low-order MAC
+reconstruction, the single-phase MAC-PCCD and two low-order density-adapted commuting reconstructions all fail the
+uniform Gram / Schur equivalence (slopes +-1 in the density ratio), in agreement with the user's leak table and
+impossibility theorem for reconstructions that share R_C. The density-adapted D0m (the phase with the larger mobility in a cut cell restores the volume average), however, has reference-free
+(Jacobi-scaled) condition numbers that do not depend on the density ratio, and in an exact layered Helmholtz
+projection it converges independently of the ratio, while the lumped MAC built from the reference inner products
+themselves has O(1) errors when the heavy fraction of the cut cell exceeds 1/2. A first high-order prototype of the same structure (per-phase PCCD on volume
+averages, the larger-mobility phase restoring the cut cell's average) gives 4.3-5.0th order max-norm projection
+errors at density ratio 1e6 with ratio-independent Jacobi-scaled condition numbers (349-1110). Whether the
+references should be revised is left to the user.
+
+T4, momentum transform (`docs/notes/109_mac_momentum.md`, issue #134): for the layered two-phase MAC the normalised
+transform Q = M^{-1/2} P G^{-1/2} from face velocities to control-volume momenta satisfies sigma <= 1 (theorem 7), but
+with the usual dual control volumes its smallest singular value goes to zero with the density ratio for every
+reconstruction tried, as the user's preliminary computation found. With phase-aware control volumes that follow the
+ownership of the density-adapted reconstruction D0m (in a cut cell the minority-mobility phase is attached to the
+face and the pure cell on its own side) the transform of D0m stays in [0.67, 1.00] (0.77 on the divergence-free
+subspace) and its normal Gram is uniformly equivalent to the control-volume masses. Local momentum conservation
+itself (fluxes of the moving control volumes) is not tested.
+
+Transport with moving phase-aware control volumes (`docs/notes/110_mac_transport.md`): in 1-D with an exact
+translation of the layered interface, the transfers m_ij, p_ij built from the common transport measure balance to
+rounding even when the ownership switches and a control-volume mass changes by r^2 (9.1e11 at density ratio 1e6), and
+the free stream is kept. With the density-adapted D0m and its own control volumes the tangential component is an
+isometry, so Galerkin and the exact-momentum Remap coincide: local momentum conservation and energy non-increase hold
+together. For the normal component they do not: the Remap has a worst one-step energy amplification of 1.3 that did
+not compound over 259 steps (<= 1.13), Galerkin has a normalised local-momentum defect of 0.4. With the usual dual
+cells the Remap blows up (energy x 6052 for a smooth field).
