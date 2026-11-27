@@ -1314,3 +1314,11 @@ viscosity jumps, where the lumped H_4 is second order; G_nu = M + D^T H^{-1} Q H
 matrix is not bounded uniformly in the density ratio. Using the advection Gram G_A instead, G_A q' = -K_nu q shares
 the advection's energy, keeps fourth-order decay rates and a single-phase-like stiffness for water-air properties.
 Also corrects note 99's exact Stokes rates (a coarse scan had skipped the lowest modes).
+
+Viscous method and walls (`docs/notes/101_viscous_d_walls.md`): the user's decision is to integrate method D
+(G_A q' = -K_nu q, the advection's energy) and keep C as the accurate reference. D's larger errors come from the
+phase-split PCCD's one-sided run ends next to the interface: with the true single-phase periodic PCCD, D is as
+accurate as C. With walls, H tau = D_b q + b balances momentum and energy (wall work included) exactly; Couette flow is
+exact, Poiseuille flow driven by an acceleration is exact for the minimum-energy stress and wall-bounded unsteady
+Stokes flow is fourth order, while a volume force (a pressure gradient) across a density jump is second to third
+order, a point for the projection to come.
