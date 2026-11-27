@@ -1247,3 +1247,11 @@ cell's row, which is the least squares constrained to the cell mean that note 85
 review). Subtracting the weighted-mean row instead gives the unconstrained fit plus the constant (equal to the plain
 shift to 2.5e-10); at density ratio 1e6 and phase-mass ratio 100 the reconstruction's amplification drops from 397 to
 26 (corner-cut 45 degrees: 317 to 12).
+
+Research pivot (the user, `docs/notes/91_pccd.md`): CCD is the core again; the least-squares Galerkin of notes 80-90
+stays as a reference. P0 of the primitive-function CCD (PCCD): the 6th-order CCD applied to the primitive of the cell
+averages gives face values and gradients (a 2 x 2 block tridiagonal system, condition number 21); a cubic Hermite plus
+a mean-restoring bubble gives a C^1, mean-preserving, fifth-order reconstruction. On it the direct remap is fifth
+order and the Galerkin transport ninth order or better (its symbol is a Rayleigh quotient: the error squares). At four
+cells per wavelength and CFL 0.37 the dissipation is 8.1e-3 (remap) and 6.7e-5 (Galerkin), against 0.56 (BCG),
+0.073 (FUCCD4) and 0.036 (the cell-wise quartic of notes 80-81); |T| <= 1 at all wavenumbers and CFL numbers tested.
