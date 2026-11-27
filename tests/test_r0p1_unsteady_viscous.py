@@ -76,3 +76,32 @@ def test_fixed_configuration_is_second_order_and_the_library_is_not():
         assert fix[0] / fix[1] > 3.5
         assert lib[1] > fix[1]
     assert math.isfinite(lib[0])
+
+
+def test_flow_that_is_not_an_eigenmode_is_second_order_when_all_three_are_fixed():
+    """B's request on PR #152: two waves of different Laplacian eigenvalues with different time factors (a
+    manufactured flow with its body force)."""
+    fix = [_run("cons/ab+visc+cn", n, flow="mix")["max"] for n in (32, 64)]
+    lib = [_run("cons", n, flow="mix")["max"] for n in (32, 64)]
+    assert fix[0] / fix[1] > 3.5 and lib[0] / lib[1] < 3.0 and lib[1] > 1.5 * fix[1]
+
+
+def test_time_coefficient_from_field_differences_scales_with_h_only_when_fixed(tmp_path):
+    """Same grid, same time, dt halved: a1 = |u(dt) - u(dt / 2)| / (dt / 2) as a difference of FIELDS. With all
+    three fixes a1 is proportional to h (the error is O(h dt)); with the fixes of note 112 alone it is not."""
+    import numpy as np
+
+    def a1(name, n):
+        f, dt = [], []
+        for cfl in (0.5, 0.25):
+            path = str(tmp_path / ("%s_%d_%g.npy" % (name.replace("/", "-"), n, cfl)))
+            o = run(n, cfl, flow="mix", nu=NU["mix"], boost=True, t_ends=(0.25,), save=path, **CONFIGS[name])
+            f.append(np.load(path))
+            dt.append(0.25 / o["errors"][-1]["steps"])
+        d = np.hypot(f[0][0] - f[1][0], f[0][1] - f[1][1])
+        return float(np.sqrt((d * d).mean()) / (dt[0] - dt[1]))
+
+    fixed = [a1("cons/ab+visc+cn", n) for n in (32, 64)]
+    lib = [a1("cons", n) for n in (32, 64)]
+    assert fixed[0] / fixed[1] > 1.7                             # ~ h
+    assert lib[0] / lib[1] < 1.55 and lib[1] > 1.5 * fixed[1]    # tends to a constant (1.42 here; 1.04 for 128 -> 256)

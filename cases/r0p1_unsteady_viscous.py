@@ -71,6 +71,32 @@ def k2(flow):
     return (8.0 if flow == "tg" else 20.0) * math.pi ** 2
 
 
+def mix(nu, U):
+    """The manufactured flow "mix" (B's request on PR #152): two waves of DIFFERENT Laplacian eigenvalues with
+    different time factors, carried by U,
+        psi = 0.6 exp(-t) sin 2 pi X sin 2 pi Y / (2 pi) + 0.3 cos(3 t) cos(2 pi (2 X + Y) + 0.5) / (2 pi),
+        X = x - U_x t, Y = y - U_y t,   u = U + (psi_y, -psi_x),
+    with the body force a = u_t + (u . grad) u - nu lap u (the pressure of the exact solution is zero; a is not a
+    gradient-free field, the solver's pressure takes its gradient part). Not an eigenmode: (w . grad) w is not a
+    gradient and the viscous term is not proportional to the velocity. Lambdified psi, u, v, a_x, a_y of (x, y, t)."""
+    key = (float(nu), tuple(U))
+    if key not in mix.cache:
+        import sympy as sp
+
+        x, y, t = sp.symbols("x y t")
+        X, Y = x - U[0] * t, y - U[1] * t
+        psi = (sp.Rational(3, 5) * sp.exp(-t) * sp.sin(2 * sp.pi * X) * sp.sin(2 * sp.pi * Y)
+               + sp.Rational(3, 10) * sp.cos(3 * t) * sp.cos(2 * sp.pi * (2 * X + Y) + sp.Rational(1, 2))) / (2 * sp.pi)
+        u, v = U[0] + sp.diff(psi, y), U[1] - sp.diff(psi, x)
+        lap = lambda f: sp.diff(f, x, 2) + sp.diff(f, y, 2)  # noqa: E731
+        a = [sp.diff(c, t) + u * sp.diff(c, x) + v * sp.diff(c, y) - nu * lap(c) for c in (u, v)]
+        mix.cache[key] = [sp.lambdify((x, y, t), e, "numpy") for e in (psi, u, v, a[0], a[1])]
+    return mix.cache[key]
+
+
+mix.cache = {}
+
+
 def w_cells(flow, n, shift):
     """Cell averages of the normalised w(x - shift)."""
     h = 1.0 / n
@@ -88,6 +114,16 @@ def w_cells(flow, n, shift):
 
 def exact_cells(flow, n, t, nu, U):
     """Cell averages of the exact velocity at time t."""
+    if flow == "mix":
+        _, fu, fv, _, _ = mix(nu, U)
+        i = np.arange(n)
+        u, v = np.zeros((n, n)), np.zeros((n, n))
+        for a, wa in zip(_GX, _GW):
+            for b, wb in zip(_GX, _GW):
+                X, Y = np.meshgrid((i + a) / n, (i + b) / n, indexing="ij")
+                u += wa * wb * fu(X, Y, t)
+                v += wa * wb * fv(X, Y, t)
+        return u, v
     amp = math.exp(-nu * k2(flow) * t)
     u, v = w_cells(flow, n, (U[0] * t, U[1] * t))
     return U[0] + amp * u, U[1] + amp * v
@@ -96,6 +132,8 @@ def exact_cells(flow, n, t, nu, U):
 def error_shapes(flow, n, t, nu, U, delta=1e-4):
     """The two fields the first-order time errors are predicted along (docs/notes/113, section B):
     s1 = w~ (the amplitude) and s2 = (U . grad) w~ (a shift of the pattern), w~ = exp(-nu k^2 t) w(x - U t)."""
+    if flow == "mix":
+        return None, None
     amp = math.exp(-nu * k2(flow) * t)
     s1 = [amp * a for a in w_cells(flow, n, (U[0] * t, U[1] * t))]
     if U[0] == 0.0 and U[1] == 0.0:
@@ -110,13 +148,17 @@ def exact_faces(flow, n, t, nu, U):
     discretely divergence-free)."""
     h = 1.0 / n
     xv = np.arange(n + 1) * h
+    if flow == "mix":
+        X, Y = np.meshgrid(xv, xv, indexing="ij")
+        P = mix(nu, U)[0](X, Y, t)
+        return U[0] + (P[:, 1:] - P[:, :-1]) / h, U[1] - (P[1:, :] - P[:-1, :]) / h
     X, Y = np.meshgrid(xv - U[0] * t, xv - U[1] * t, indexing="ij")
     P = _scale(flow) * math.exp(-nu * k2(flow) * t) * _psi_raw(flow, X, Y)
     return U[0] + (P[:, 1:] - P[:, :-1]) / h, U[1] - (P[1:, :] - P[:-1, :]) / h
 
 
 def run(n, cfl, flow="tg", nu=0.01, boost=True, variant="conserving", level="n", source="g", visc="be",
-        ghost_fix=True, tolerance=1e-10, t_ends=T_ENDS):
+        ghost_fix=True, tolerance=1e-10, t_ends=T_ENDS, save=None):
     """One run of the library's solver with modifications made from hooks.
 
     variant  "plain" (centered.h's BCG advection) or "conserving" (TwoPhase(conserving=True), f = 0).
@@ -129,6 +171,8 @@ def run(n, cfl, flow="tg", nu=0.01, boost=True, variant="conserving", level="n",
              acceleration (u^n - u*^{n-1}) / dt_{n-1} (u*: the velocity just after the previous transport).
     visc     "be" backward Euler (the library); "cn" Crank-Nicolson with the explicit half on u^n; "cn-naive"
              Crank-Nicolson applied to the solver's intermediate velocity u* + dt g^n.
+    ``flow`` "mix": the manufactured flow of ``mix`` with its body force (face centres, time t^n + dt / 2).
+    ``save``: a path for the velocity at the last of ``t_ends`` (.npy), for differences of fields.
     Returns, at ``t_ends``: the max and RMS of |u - u_exact|, the sum of dt^2, and the error's projections c1, c2 on
     ``error_shapes``."""
     import warnings
@@ -220,6 +264,19 @@ def run(n, cfl, flow="tg", nu=0.01, boost=True, variant="conserving", level="n",
         ns.viscous = CrankNicolson()
     ns.on("vof", before)                                         # registered later: runs before TwoPhase's vof hook
     ns.on("viscous_term", after_transport)
+    if flow == "mix":
+        _, _, _, fax, fay = mix(nu, U)
+        hh = 1.0 / n
+        Xx, Yx = np.meshgrid(np.arange(n + 1) * hh, (np.arange(n) + 0.5) * hh, indexing="ij")
+        Xy, Yy = np.meshgrid((np.arange(n) + 0.5) * hh, np.arange(n + 1) * hh, indexing="ij")
+        ns.a_is_constant = False
+
+        def force(solver):
+            tm = solver.clock.t + 0.5 * solver.clock.dt
+            solver.a[0] = solver.a[0] + xp.asarray(fax(Xx, Yx, tm))
+            solver.a[1] = solver.a[1] + xp.asarray(fay(Xy, Yy, tm))
+
+        ns.on("acceleration", force)
     u0, v0 = exact_cells(flow, n, 0.0, nu, U)
     ns.u[0].interior = xp.asarray(u0)
     ns.u[1].interior = xp.asarray(v0)
@@ -241,6 +298,8 @@ def run(n, cfl, flow="tg", nu=0.01, boost=True, variant="conserving", level="n",
                     row[key] = float(((ex * sh[0]).sum() + (ey * sh[1]).sum())
                                      / ((sh[0] ** 2).sum() + (sh[1] ** 2).sum()))
             out["errors"].append(row)
+        if save:
+            np.save(save, np.stack([to_numpy(ns.u[0].interior), to_numpy(ns.u[1].interior)]))
 
     try:
         if ghost_fix and variant == "conserving":
@@ -278,7 +337,7 @@ CONFIGS = {
     "cons/ab+visc+cn,stale": dict(variant="conserving", level="ab", source="g+visc", visc="cn", ghost_fix=False),
 }
 INVISCID = ("plain", "cons", "cons/ab", "cons/pred", "cons/exact", "cons/ab+lag+cn")
-NU = {"tg": 0.01, "asym": 0.004}                                 # nu k^2 = 0.79 for both
+NU = {"tg": 0.01, "asym": 0.004, "mix": 0.01}                    # nu k^2 = 0.79 for tg and asym
 
 
 def _job(a):
@@ -311,7 +370,63 @@ def jobs(quick=False):
         for n in (64, 128):
             for cfl in (0.5, 0.25, 0.125, 0.0625):
                 out.append((name, n, cfl, "asym", NU["asym"], True))
+    # (4) B's request on PR #152: a manufactured flow that is not an eigenmode (13 grids, fixed CFL)
+    for name in ("plain", "plain+visc+cn", "cons", "cons/ab+visc+cn", "cons/ab+lag+cn", "cons/exact+visc+cn"):
+        for n in GRIDS:
+            out.append((name, n, 0.5, "mix", NU["mix"], True))
     return sorted(set(out), key=lambda a: -a[1] ** 3 / a[2])     # the longest first
+
+
+# ------------------------------------------ the first-order-in-time coefficient from differences of FIELDS (B, PR #152)
+TC_CONFIGS = ("plain", "plain+visc+cn", "cons", "cons/ab+visc+cn", "cons/ab+lag+cn")
+TC_GRIDS = (64, 128, 256)
+TC_CFLS = (0.5, 0.25, 0.125, 0.0625)
+
+
+def _field_job(a):
+    name, n, cfl, flow, path = a
+    if not os.path.exists(path):
+        o = run(n, cfl, flow=flow, nu=NU[flow], boost=True, t_ends=(0.5,), save=path + ".tmp.npy", **CONFIGS[name])
+        json.dump({"steps": o["errors"][-1]["steps"], "sum_dt2": o["errors"][-1]["sum_dt2"],
+                   "max": o["errors"][-1]["max"]}, open(path + ".json", "w"))
+        os.replace(path + ".tmp.npy", path)
+    return a
+
+
+def time_coefficient(directory):
+    """Same grid, same physical time t = 0.5, time steps halved: D = u(dt) - u(dt / 2) as FIELDS (max and RMS of the
+    vector's magnitude). With an error A dt + B dt^2 + (terms without dt), D = A dt / 2 + 3 B dt^2 / 4: the
+    coefficient estimate is a1 = |D| / (dt - dt / 2), and the order of the dt-dependent part is
+    log2(|D(dt)| / |D(dt / 2)|). docs/figures/r0p1_time_coefficient.json."""
+    import multiprocessing as mp
+
+    os.makedirs(directory, exist_ok=True)
+    todo = [(name, n, cfl, flow, os.path.join(directory, "%s_%s_%d_%g.npy" % (name.replace("/", "-"), flow, n, cfl)))
+            for flow in ("asym", "mix") for name in TC_CONFIGS for n in TC_GRIDS for cfl in TC_CFLS]
+    todo.sort(key=lambda a: -a[1] ** 3 / a[2])
+    with mp.get_context("spawn").Pool(int(os.environ.get("R0P1_PROCS", "20"))) as pool:
+        for a in pool.imap_unordered(_field_job, todo):
+            print("field", a[:4], flush=True)
+    rows = []
+    for flow in ("asym", "mix"):
+        for name in TC_CONFIGS:
+            for n in TC_GRIDS:
+                f, dt = [], []
+                for cfl in TC_CFLS:
+                    path = os.path.join(directory, "%s_%s_%d_%g.npy" % (name.replace("/", "-"), flow, n, cfl))
+                    f.append(np.load(path))
+                    dt.append(0.5 / json.load(open(path + ".json"))["steps"])
+                pairs = []
+                for k in range(len(TC_CFLS) - 1):
+                    d = np.hypot(f[k][0] - f[k + 1][0], f[k][1] - f[k + 1][1])
+                    pairs.append({"cfl": TC_CFLS[k], "dt": dt[k], "dt_half": dt[k + 1], "max": float(d.max()),
+                                  "rms": float(np.sqrt((d * d).mean())),
+                                  "a1_max": float(d.max() / (dt[k] - dt[k + 1])),
+                                  "a1_rms": float(np.sqrt((d * d).mean()) / (dt[k] - dt[k + 1]))})
+                orders = [math.log2(pairs[k]["rms"] / pairs[k + 1]["rms"]) for k in range(len(pairs) - 1)]
+                rows.append({"flow": flow, "config": name, "n": n, "pairs": pairs, "orders_rms": orders})
+    json.dump({"t": 0.5, "rows": rows}, open("docs/figures/r0p1_time_coefficient.json", "w"), indent=1)
+    return rows
 
 
 def slope(ns, es):
@@ -322,6 +437,11 @@ def main() -> None:
     """Results are appended to a .jsonl file as they arrive, and a rerun skips the runs already there."""
     import multiprocessing as mp
 
+    if "--time-coefficient" in sys.argv:
+        for r in time_coefficient(os.environ.get("R0P1_FIELDS", "r0p1_fields")):
+            print(r["flow"], r["config"], r["n"], ["%.3e" % p["a1_rms"] for p in r["pairs"]],
+                  ["%.2f" % o for o in r["orders_rms"]], flush=True)
+        return
     quick = "--quick" in sys.argv
     path = "docs/figures/r0p1_unsteady_viscous%s.json" % ("_quick" if quick else "")
     part = os.environ.get("R0P1_PARTIAL", path + "l")
