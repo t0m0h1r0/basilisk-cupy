@@ -1255,3 +1255,12 @@ a mean-restoring bubble gives a C^1, mean-preserving, fifth-order reconstruction
 order and the Galerkin transport ninth order or better (its symbol is a Rayleigh quotient: the error squares). At four
 cells per wavelength and CFL 0.37 the dissipation is 8.1e-3 (remap) and 6.7e-5 (Galerkin), against 0.56 (BCG),
 0.073 (FUCCD4) and 0.036 (the cell-wise quartic of notes 80-81); |T| <= 1 at all wavenumbers and CFL numbers tested.
+
+PCCD with interfaces, P1 (`docs/notes/92_pccd_density.md` to `94_pccd_jump_estimate.md`): with a density jump and a
+smooth velocity, the plain averages of the mixed cells are recovered from the mass-weighted ones (a Schur system,
+condition number <= 1.40 up to density ratio 1e6) and the reconstruction stays fifth order. When the velocity's
+derivatives jump, PCCD applied directly is first order and, through the implicit CCD coupling, pollutes cells far
+from the interface; separating the jump (u = w + J, J the jump's Taylor polynomial under a smooth cut-off) restores
+fifth order, with known jumps and with jumps estimated from the data. The one-sided estimate (five pure cells per
+side) jumps when the interface crosses a face; fitting both sides at once, mixed cell included, with continuous
+weights is continuous and amplifies the data at most 8.7 times.
