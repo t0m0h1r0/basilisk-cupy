@@ -119,3 +119,44 @@ def stiffness(N, ratio, c, mode="blend_partial", eps=1e-7):
     m = np.bincount(cell, weights=W, minlength=N)
     s = 1.0 / np.sqrt(m)
     return float(np.linalg.eigvalsh(K * s[:, None] * s[None, :])[-1] * h * h)
+
+
+def _objects(N, ratio, a, mode):
+    """Reconstruction objects with an analytic derivative() for the unit averages."""
+    import json as _json
+
+    from cases.pccd_closure import closure
+    from cases.pccd_local import Split, SplitBlend
+
+    out = []
+    for j in range(N):
+        e = np.zeros(N)
+        e[j] = 1.0
+        if mode == "blend_partial":
+            out.append(SplitBlend(N, ratio, a, B_, e, mixed_mode="partial"))
+        elif mode == "split_partial":
+            out.append(Split(N, ratio, a, B_, e, mixed_mode="partial"))
+        elif mode == "blend_opt":
+            cl = closure(np.array(_json.load(open("docs/figures/pccd_closure.json"))["best"]))
+            out.append(SplitBlend(N, ratio, a, B_, e, closure=cl))
+        else:
+            raise ValueError(mode)
+    return out
+
+
+def stiffness_analytic(N, ratio, c, mode="blend_partial"):
+    """As stiffness(), with the reconstructions' analytic derivatives (docs/notes/97 correction: the central
+    differences of stiffness() can straddle a piece boundary of a tiny cut cell). Also returns the user's lower bound
+    for the partial-cell form with the mixed-cell datum alone, (24/5)(r/c + 1/(1-c))/(rc + 1 - c)."""
+    h = 1.0 / N
+    a = (N // 4 + 1 - c) * h
+    objs = _objects(N, ratio, a, mode)
+    X, W, _, cell = quadrature(N, ratio, a, B_)
+    dB = np.stack([o.derivative(X) for o in objs], axis=1)
+    K = dB.T @ (W[:, None] * dB)
+    m = np.bincount(cell, weights=W, minlength=N)
+    s = 1.0 / np.sqrt(m)
+    lam = float(np.linalg.eigvalsh(K * s[:, None] * s[None, :])[-1] * h * h)
+    r = ratio
+    bound = 24 / 5 * (r / c + 1 / (1 - c)) / (r * c + 1 - c)
+    return {"lambda": lam, "bound_mixed_datum": float(bound)}

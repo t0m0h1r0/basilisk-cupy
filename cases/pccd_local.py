@@ -27,6 +27,11 @@ from cases.pccd_density import pieces
 from cases.pccd_jump import estimate_terms_joint, jump_terms
 
 
+def _dmono(s):
+    s = np.asarray(s, dtype=float)
+    return np.stack([np.zeros_like(s), np.ones_like(s), 2 * s, 3 * s * s, 4 * s ** 3], axis=-1)
+
+
 def hb(v0, g0, v1, g1, q):
     """s-coefficients of the mean-preserving Hermite (cubic Hermite + bubble)."""
     c = v0 * H_V0 + g0 * H_G0 + v1 * H_V1 + g1 * H_G1
@@ -342,6 +347,51 @@ class Split:
             out[k] = self._raw(ii, s[k]) + self.shift[ii]
         return out
 
+    def _draw(self, i, s):
+        """d u~/ds in cell i (analytic; the constants of the shift and of the light extension drop out)."""
+        dm = lambda z, c: _dmono(z) @ c  # noqa: E731
+        if i in self.jmix:
+            nb, off, xg_s, minor_left, _ = self.jmix[i]
+            out = dm(s, self.coef[i])
+            k = (s < xg_s) if minor_left else (s > xg_s)
+            out[k] = dm(s[k] - off, self.coef[nb])
+            return out
+        if i not in self.mix:
+            return dm(s, self.coef[i])
+        if i in self.partial:
+            ext, xg_s, uG = self.partial[i]
+            out = np.empty_like(s)
+            heavy_left = ext[True][1] < 0
+            for hv in (True, False):
+                nb, off = ext[hv]
+                face = 0.0 if off < 0 else 1.0
+                k = (s < xg_s) if (hv == heavy_left) else (s >= xg_s)
+                w = abs(xg_s - face)
+                t = np.abs(s[k] - face) / w
+                sg = np.sign(s[k] - face)
+                pg = _mono(np.array([xg_s - off]))[0] @ self.coef[nb]
+                out[k] = dm(s[k] - off, self.coef[nb]) + (uG - pg) * (6 * t - 6 * t * t) * sg / w
+            return out
+        ext, xg_s, _ = self.mix[i]
+        out = np.empty_like(s)
+        heavy_left = ext[True][1] < 0
+        left = s < xg_s
+        for hv in (True, False):
+            nb, off = ext[hv]
+            k = left if (hv == heavy_left) else ~left
+            out[k] = dm(s[k] - off, self.coef[nb])
+        return out
+
+    def derivative(self, x):
+        """du_h/dx (analytic)."""
+        cell = np.floor(x / self.h).astype(int)
+        s = x / self.h - cell
+        out = np.empty_like(x)
+        for i in np.unique(cell):
+            k = cell == i
+            out[k] = self._draw(int(i) % self.N, s[k]) / self.h
+        return out
+
 
 def _smooth(t):
     t = np.clip(t, 0.0, 1.0)
@@ -413,6 +463,9 @@ class SplitBlend:
 
     def __call__(self, x):
         return sum(w * sp(x) for w, sp in self.parts)
+
+    def derivative(self, x):
+        return sum(w * sp.derivative(x) for w, sp in self.parts)
 
 
 def basis_functions(N, ratio, a, b, mode):

@@ -49,9 +49,19 @@ def test_floquet_and_fixed_time_convergence():
     from cases.pccd_floquet import floquet_general, run_periodic
 
     r = floquet_general(32, 1e6, 1e-6, "blend_partial", "galerkin", 1, 16)
-    assert r["spectral_radius"] < 1 + 1e-9 and r["sv_one_period"] < 2.2
+    assert r["spectral_radius"] < 1 + 1e-9 and r["sv_any_start"] < 2.2
     r = floquet_general(32, 1e6, 1e-6, "blend_partial", "remap", 1, 2)
     assert r["spectral_radius"] < 1 + 1e-9 and r["sv_max_powers"] < 4
     a = run_periodic(32, 1e6, "blend_partial", "galerkin", t_end=0.5, samples=())
     b = run_periodic(64, 1e6, "blend_partial", "galerkin", t_end=0.5, samples=())
     assert math.log2(a[0.5] / b[0.5]) > 3.5
+
+
+def test_floquet_any_start_and_analytic_stiffness_bound():
+    from cases.pccd_floquet import floquet_general
+    from cases.pccd_gram import stiffness_analytic
+
+    g = floquet_general(32, 1e6, 1e-6, "blend_partial", "galerkin", 1, 4)
+    assert g["sv_any_start"] < 2.2 and g["sv_partial"] < 2.8 and g["spectral_radius"] < 1 + 1e-9
+    s = stiffness_analytic(32, 1e4, 1e-4)
+    assert s["lambda"] >= s["bound_mixed_datum"] > 1e8               # the user's lower bound, ~ (12/5) r^2
