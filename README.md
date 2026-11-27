@@ -1322,3 +1322,11 @@ accurate as C. With walls, H tau = D_b q + b balances momentum and energy (wall 
 exact, Poiseuille flow driven by an acceleration is exact for the minimum-energy stress and wall-bounded unsteady
 Stokes flow is fourth order, while a volume force (a pressure gradient) across a density jump is second to third
 order, a point for the projection to come.
+
+Consistent force, 2-D viscous tensor, coupling (`docs/notes/102_force_2d_coupled.md`): discretising a volume force
+consistently with the minimum-viscous-energy reconstruction (F + D_b^T H^{-1} d, the user's stress correction) makes
+volume-driven two-layer Poiseuille flow exact. The full viscous stress tensor built from tensor products of the 1-D
+minimum-energy reconstructions is fourth order, isotropic and correct in its mixed derivatives in 2-D (single phase).
+Advection (PCCD-Galerkin) and viscosity (method D) on the same Gram matrix, Strang-split with the interface frozen
+during the viscous half steps, solve the Galilean-boosted two-layer Stokes flow with no energy growth, exact momentum
+and second- to fourth-order convergence; the splitting error is negligible.
