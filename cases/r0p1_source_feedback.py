@@ -60,6 +60,26 @@ def _drop(grid, r=0.15, c=(0.5, 0.5)):
     return to_numpy(fraction(grid, lambda x, y: r * r - (x - c[0]) ** 2 - (y - c[1]) ** 2, refine=8))
 
 
+def _bubble(grid):
+    """The light phase inside (a bubble of radius 0.15 in the heavy phase)."""
+    return 1.0 - _drop(grid)
+
+
+def _band(grid):
+    """An oblique periodic band of the heavy phase: 0.2 < frac(x + 2 y) < 0.6 (the interfaces along x + 2 y)."""
+    from basilisk_cupy.backend import to_numpy
+    from basilisk_cupy.interface.fractions import fraction
+
+    def phi(x, y):
+        s = (x + 2.0 * y) % 1.0
+        return 0.2 - abs(s - 0.4)
+
+    return to_numpy(fraction(grid, phi, refine=8))
+
+
+SHAPES = {"drop": _drop, "bubble": _bubble, "band": _band}
+
+
 class face_average:
     """Context manager (the library is not changed): the face value's source as another average of the two cells'
     g than the library's arithmetic mean, by rewriting that one line of ``vof._sweep``.
@@ -125,6 +145,18 @@ def solver(n, ratio, mode, f0=None, tolerance=1e-10):
             for u, g in zip(s.u.components, st["G"]):
                 u.interior = u.interior + 0.5 * dt * g
             s.u.fill_ghosts()
+        if mode == "trapezoid-p" and "phi" in st:
+            # docs/notes/116: the half impulse from the MEAN of the last two pressures, with the face coefficients
+            # and the cell average of the present densities (a force that sums to zero: conserving)
+            phi = st["phi"] if "phi_prev" not in st else 0.5 * (st["phi"] + st["phi_prev"])
+            keep = s.p.data.copy()
+            s.p.data[...] = phi
+            s.p.fill_ghosts()
+            for ax, u in enumerate(s.u.components):
+                gf = -s.alpha[ax] * s.ops.grad_f(s.p, ax)
+                u.interior = u.interior + 0.5 * dt * s.ops.face_to_cell(gf, ax, periodic=True)
+            s.p.data[...] = keep
+            s.u.fill_ghosts()
 
     def after(s):                                                # "tracer_advection": just after the transport
         dt = s.clock.dt
@@ -139,11 +171,19 @@ def solver(n, ratio, mode, f0=None, tolerance=1e-10):
         first = "G" not in st                                    # (the first step is the library's: G^1 = g~)
         st["G"] = [(1.0 if first else 2.0) * g.interior.copy() for g in s.g.components]
 
-    if mode != "none":
+    if mode not in ("none", "trapezoid-p"):
         ns.on("vof", before)
         ns.on("tracer_advection", after)
+    def end_p(s):                                                # "trapezoid-p": the potential of dt/2 G^{n+1}
+        if "phi" in st:
+            st["phi_prev"] = st["phi"]
+        st["phi"] = (2.0 if "phi" in st else 1.0) * s.p.data.copy()   # (the first step is the library's)
+
     if mode == "trapezoid":
         ns.on("end_timestep", end, after=True)
+    if mode == "trapezoid-p":
+        ns.on("vof", before)
+        ns.on("end_timestep", end_p, after=True)
     return grid, ns, tp
 
 
@@ -230,15 +270,15 @@ def one_sweep(ratio, n=32, cfl=0.5, seed=0):
 
 
 # ------------------------------------------------------------------------------------------- growth of round-off
-def growth(ratio, mode, n=32, cfl=0.5, steps=200, U=U0):
+def growth(ratio, mode, n=32, cfl=0.5, steps=200, U=U0, shape="drop"):
     """A drop (R = 0.15) carried by the uniform flow U, no surface tension (docs/notes/77, P0-1): max |u - U| per
     step, and the growth per step between 1e-9 and 1e-3 (nan if it never gets there)."""
     from basilisk_cupy.backend import to_numpy
 
     if mode in ("face-upwind", "face-massw"):                    # the same source, averaged differently
         with face_average(mode[5:], ratio):
-            return dict(growth(ratio, "face", n, cfl, steps, U), mode=mode)
-    grid, ns, tp = solver(n, ratio, mode, f0=_drop)
+            return dict(growth(ratio, "face", n, cfl, steps, U, shape), mode=mode)
+    grid, ns, tp = solver(n, ratio, mode, f0=SHAPES[shape])
     ns.cfl = cfl
     for ax in range(2):
         ns.u[ax].interior = U[ax] + 0.0 * ns.u[ax].interior
@@ -257,7 +297,7 @@ def growth(ratio, mode, n=32, cfl=0.5, steps=200, U=U0):
     k2 = next((i for i, e in enumerate(es) if e > 1e-3), None)
     rate = (es[k2] / es[k1]) ** (1.0 / (k2 - k1)) if k1 is not None and k2 is not None and k2 > k1 else float("nan")
     grow = [w for e, w in zip(es, where) if 1e-9 < e < 1e-3]
-    return {"ratio": ratio, "mode": mode, "n": n, "cfl": cfl, "steps": len(es), "max": max(es), "last": es[-1],
+    return {"ratio": ratio, "mode": mode, "n": n, "cfl": cfl, "shape": shape, "steps": len(es), "max": max(es), "last": es[-1],
             "rate": rate, "unstable": bool(max(es) > 1e-3),
             "max_cell_emptied_share": float(np.mean([w > 2.0 for w in grow])) if grow else float("nan")}
 
