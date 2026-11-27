@@ -15,6 +15,7 @@
 python -m cases.gate0_protocol        # D と C、残差、始動流（docs/figures/gate0_protocol.json）
 python -m cases.coupled_boost         # 移流と粘性の統合の測り直し（docs/figures/coupled_boost.json）
 python -m cases.viscous_2d            # 固有ベクトルの混合を追加（docs/figures/viscous_2d.json）
+python -m cases.gate0_figure          # docs/figures/gate0_records.png
 ```
 
 ライブラリは変えていない。
