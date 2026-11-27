@@ -27,4 +27,4 @@ def test_coupled_advection_viscosity_is_stable_conservative_and_convergent():
     b = run(64, 1e3, "water-air", t_end=0.25, samples=())
     for r in (a, b):
         assert r["energy_max_increase"] == 0.0 and r["momentum_drift"] < 1e-11 and r["eps_G"] < 1e-11
-    assert math.log2(a["errors"][0.25] / b["errors"][0.25]) > 3.3
+    assert math.log2(a["errors"][0.25] / b["errors"][0.25]) > 3.3   # the best condition; all properties: test_gate0_records

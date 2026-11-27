@@ -246,6 +246,59 @@ def wall_stokes(N, ratio, kind, a=0.3613, t=0.01):
     return res
 
 
+def startup(N, ratio, kind, force="volume", a=0.3613, t=0.01, nmodes=None):
+    """docs/notes/103 (#115): the start-up flow between fixed walls (u = 0 at t = 0, a constant force switched on).
+    Exact: u = u_s - sum_k c_k exp(-lambda_k t) phi_k, c_k = int rho u_s phi_k / int rho phi_k^2 (the wall modes are
+    rho-orthogonal). Method C (G_nu q' = -K_nu q + F_eff) with and without the consistent force correction
+    (F_eff = F + D_b^T H^{-1} d); relative max error of the averages at time t."""
+    mu_H, mu_L = mus(ratio, kind)
+    W = Wall(N, ratio, a, mu_H, mu_L)
+    us = exact_steady(mu_H, mu_L, ratio, a, 0.0, 0.0, force, 1.0)
+    n = nmodes or 40
+    lams, phi = wall_rates(mu_H, mu_L, ratio, a, which=n)
+    while nmodes is None and lams[-1] * t < 60.0:          # enough modes that exp(-lambda t) < 1e-26
+        n *= 2
+        lams, phi = wall_rates(mu_H, mu_L, ratio, a, which=n)
+
+    def mode(lam, x):
+        x = np.asarray(x, dtype=float)
+        z = phi(a, 1.0, mu_H, lam) @ np.array([0.0, 1.0])
+        return np.array([(phi(xx, 1.0, mu_H, lam) @ np.array([0.0, 1.0]))[0] if xx <= a
+                         else (phi(xx - a, 1.0 / ratio, mu_L, lam) @ z)[0] for xx in x])
+    # rho-weighted quadrature on (0, a) and (a, 1), 64 panels of 8-point Gauss each
+    xs, ws = [], []
+    for lo, hi, rho in ((0.0, a, 1.0), (a, 1.0, 1.0 / ratio)):
+        e = np.linspace(lo, hi, 65)
+        for p0, p1 in zip(e[:-1], e[1:]):
+            xs.append(p0 + (p1 - p0) * XG)
+            ws.append(rho * (p1 - p0) * WG)
+    xs, ws = np.concatenate(xs), np.concatenate(ws)
+    usq = us(xs)
+    coef = []
+    for lam in lams:
+        ph = mode(lam, xs)
+        coef.append(float(ws @ (usq * ph) / (ws @ (ph * ph))))
+
+    def u(x):
+        out = us(x)
+        for lam, c in zip(lams, coef):
+            out = out - c * math.exp(-lam * t) * mode(lam, x)
+        return out
+    qe = W.averages(u)
+    F = W.forcing(force, 1.0)
+    d = W.force_correction(force, 1.0)
+    res = {"modes": len(lams), "u_at_t_over_steady": float(np.abs(qe).max() / np.abs(W.averages(us)).max())}
+    L = np.linalg.cholesky(W.Gnu)
+    Li = np.linalg.inv(L)
+    ev, V = np.linalg.eigh(Li @ W.Knu @ Li.T)
+    V = Li.T @ V
+    for name, Fe in (("uncorrected", F), ("corrected", F + W.Db.T @ np.linalg.solve(W.H, d))):
+        qs = np.linalg.solve(W.Knu, Fe)
+        q = qs - V @ (np.exp(-ev * t) * (V.T @ (W.Gnu @ qs)))
+        res[name] = float(np.abs(q - qe).max() / np.abs(qe).max())
+    return res
+
+
 def balances(N=32, ratio=1e3, kind="water-air", a=0.3613, seed=0):
     """Momentum and energy balances of A with moving walls and a force: the discrete identities checked on random
     data (they hold algebraically; the check guards the wall rows)."""
