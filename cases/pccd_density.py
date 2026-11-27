@@ -22,13 +22,15 @@ from cases.pccd import XG, WG, _mono, reconstruction_operator
 
 
 def pieces(N, xa, xb):
-    """Per cell: [(s0, s1, heavy)], heavy on (xa, xb) (0 < xa < xb < 1, periodic unit interval)."""
+    """Per cell: [(s0, s1, heavy)], heavy on the periodic arc from xa to xb (xa, xb in [0, 1); the arc may wrap)."""
     h = 1.0 / N
+    L = (xb - xa) % 1.0
     out = []
     for i in range(N):
-        cuts = [0.0, 1.0] + [(x - i * h) / h for x in (xa, xb) if i * h < x < (i + 1) * h]
+        cuts = [0.0, 1.0] + [(x - i * h) / h for x in (xa % 1.0, xb % 1.0) if i * h < x < (i + 1) * h]
         cuts = sorted(cuts)
-        out.append([(a, b, xa < (i + 0.5 * (a + b)) * h < xb) for a, b in zip(cuts[:-1], cuts[1:]) if b - a > 0])
+        out.append([(a, b, ((i + 0.5 * (a + b)) * h - xa) % 1.0 < L) for a, b in zip(cuts[:-1], cuts[1:])
+                    if b - a > 0])
     return out
 
 

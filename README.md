@@ -1241,3 +1241,12 @@ the planar approximation order) and the osculating parabola xi + (h / 2 R0) eta^
 with nearly equal errors; the tangent line drops to second-to-third order. At N = 64 Galerkin is 4.5 times more
 accurate than the direct remap. Fixes the window centre for curved hinges, and centres the single polynomial at the
 cell instead of the interface foot (about 20 cells away the quartic monomials cancelled to 1e-9 free-stream error).
+
+Density-robust two-phase PCCD (`docs/notes/95_pccd_density_robust.md`): the Gram matrix's ill-conditioning comes from
+the light phase's data leaking into the heavy phase through the implicit CCD coupling (lambda_max >= r times the leak;
+the top eigenmode lives on the light cells). Correcting only the CCD rows that straddle an interface (no cut-off
+function) is the most accurate but still grows with the density ratio; PCCD solved separately in each phase, joined at
+the interface and made mean-preserving by the shift, keeps lambda_max below 57 at any density ratio (with end
+closures optimised under quartic exactness), stays fifth order, and grows by at most 3.6 over a Floquet period for both
+remap and Galerkin. The cut-off jump term makes the remap Floquet-unstable. The phase split still jumps when an
+interface crosses a cell face.
