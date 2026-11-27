@@ -160,7 +160,45 @@ def _y_operators(N, ratio, a, b):
     return G, I, S.m, jump
 
 
-def layered(N=32, ratio=1e3, a=0.2613, b=0.7137, alphas=(0.0, 1.2), ntheta=33, variant="cross"):
+def _volume_average(N, ratio, a, b):
+    """V (N x N): the plain volume average over each cell of the split-PCCD reconstruction of the (mass-weighted)
+    averages q. In a mixed cell int rho u / int rho != int u / |K|; the x-face flux of a y-layered cell needs the
+    volume average (docs/notes/104 supplement, the user's review of PR #123)."""
+    from cases.pccd import WG, XG
+    from cases.viscous_minenergy import MinEnergy, advection_basis
+    from cases.viscous_stress import Setup
+
+    S = Setup(N, ratio, a, b, 1.0, 1.0)
+    ME = MinEnergy(S, nodes=(XG, WG))
+    V = np.zeros((N, N))
+    h = 1.0 / N
+    for i, (X, Wr, _, _) in enumerate(ME.cells):
+        heavy = ((X - a) % 1.0) < ((b - a) % 1.0)
+        w = Wr / np.where(heavy, 1.0, 1.0 / ratio)              # geometric weights
+        V[i] = w @ advection_basis(N, ratio, a, b, X) / h
+    return V
+
+
+def _mobilities(N, ratio, a, b):
+    """Interval mobilities for the 2nd-order reference: x (within a y-layered cell, parallel): mean of 1/rho over the
+    cell; y (between the centres of cells f-1 and f, in series): h / int rho."""
+    from cases.pccd import WG, XG
+
+    h = 1.0 / N
+
+    def rho(y):
+        return np.where(((y - a) % 1.0) < ((b - a) % 1.0), 1.0, 1.0 / ratio)
+
+    def integ(fun, lo, hi):
+        cuts = sorted({lo, hi, *[c + k for c in (a, b) for k in (-1.0, 0.0, 1.0) if lo < c + k < hi]})
+        return sum((q - p) * (WG @ fun((p + (q - p) * XG) % 1.0)) for p, q in zip(cuts[:-1], cuts[1:]))
+    bx = np.array([integ(lambda y: 1.0 / rho(y), i * h, (i + 1) * h) / h for i in range(N)])
+    by = np.array([h / integ(rho, (f - 0.5) * h, (f + 0.5) * h) for f in range(N)])
+    return bx, by
+
+
+def layered(N=32, ratio=1e3, a=0.2613, b=0.7137, alphas=(0.0, 1.2), ntheta=33, variant="cross", xavg="mass",
+            ref="point"):
     """Two-phase, interface on y-lines (rho depends on y only), Fourier in x: per theta_x the N x N Schur complement
     L = |b_x|^2 / (h g_x) G_y^{-1} / h^2 + D_y I_y G_y^{-1} I_y^T D_y^T / (h^3 g_x) against the 2nd-order
     variable-density Laplacian L2 = 4 sin^2(theta_x / 2) / h^3 M^{-1} + D_y M_f^{-1} D_y^T / h^3 (M cell masses, M_f
@@ -177,6 +215,8 @@ def layered(N=32, ratio=1e3, a=0.2613, b=0.7137, alphas=(0.0, 1.2), ntheta=33, v
              any(i * h < x < (i + 1) * h for x in (a, b))]
     Dy = np.roll(np.eye(N), -1, axis=0) - np.eye(N)      # (B v)_i = v_{i+1} - v_i  (faces x -> cells)
     Gi = np.linalg.inv(G)
+    Vx = _volume_average(N, ratio, a, b) if xavg == "volume" else np.eye(N)
+    bxm, bym = _mobilities(N, ratio, a, b)
     out = {"N": N, "ratio": ratio, "face_jump": jump, "gram_max": float(np.linalg.eigvalsh(G * (1 / np.sqrt(m))[:, None] * (1 / np.sqrt(m))[None, :])[-1]), "alphas": {}}
     for al in alphas:
         Cm = correction_matrix(N)
@@ -193,8 +233,11 @@ def layered(N=32, ratio=1e3, a=0.2613, b=0.7137, alphas=(0.0, 1.2), ntheta=33, v
             sx = math.sin(tx / 2)
             Ix = float(np.interp(tx, th, Itab))
             bx2 = (2 * sx) ** 2 * (Ix ** 2 + (al * sx ** 5) ** 2)
-            L = (bx2 * Gi + By @ Gi @ By.T) / (gx * h ** 3)
-            L2 = (4 * sx ** 2 * np.diag(1 / m) + Dy @ np.diag(1 / mf) @ Dy.T) / h ** 3
+            L = (bx2 * Vx @ Gi @ Vx.T + By @ Gi @ By.T) / (gx * h ** 3)
+            if ref == "interval":
+                L2 = (4 * sx ** 2 * np.diag(bxm) + Dy @ np.diag(bym) @ Dy.T) / h ** 4
+            else:
+                L2 = (4 * sx ** 2 * np.diag(1 / m) + Dy @ np.diag(1 / mf) @ Dy.T) / h ** 3
             # generalised eigenvalues on the complement of the constants when theta_x = 0
             if tx == 0.0:
                 Q = np.linalg.qr(np.column_stack([np.ones(N), np.eye(N)[:, :N - 1]]))[0][:, 1:]
@@ -242,6 +285,28 @@ def main() -> None:
     json.dump(res, open("docs/figures/projection_gate.json", "w"), indent=1, default=float)
 
 
+def supplement() -> None:
+    """docs/notes/104 supplement: volume averages for the x-face fluxes, and the interval-mobility reference."""
+    from concurrent.futures import ProcessPoolExecutor
+
+    jobs = [(N, r, c, xa, ref) for N in (32, 64) for r in (1.0, 1e3, 1e6) for c in (0.5, 0.01)
+            for xa in ("mass", "volume") for ref in ("point", "interval")]
+    out = []
+    with ProcessPoolExecutor(18) as ex:
+        fs = [(j, ex.submit(layered, j[0], j[1], (j[0] // 4 + 1 - j[2]) / j[0], xavg=j[3], ref=j[4])) for j in jobs]
+        for (N, r, c, xa, ref), f in fs:
+            o = f.result()
+            row = {"N": N, "ratio": r, "c": c, "xavg": xa, "ref": ref,
+                   "alphas": {al: {k: v[k] for k in ("null_By", "min", "max", "near_zero")} for al, v in o["alphas"].items()}}
+            out.append(row)
+            print(N, r, c, xa, ref, " ".join(f"a{al}: null {v['null_By']} min {v['min']:.2e} max {v['max']:.2e}"
+                                              for al, v in row["alphas"].items()), flush=True)
+    vdev = {r: float(np.abs(_volume_average(32, r, (8 + 0.5) / 32, 0.7137) - np.eye(32)).max()) for r in (1.0, 1e3, 1e6)}
+    print("max |V - I|", vdev)
+    json.dump({"rows": out, "volume_minus_identity": vdev}, open("docs/figures/projection_gate_supplement.json", "w"),
+              indent=1, default=float)
+
+
 def figure() -> None:
     """docs/figures/projection_gate.png: the 1-D Schur ratio L(theta)/theta^2 for several alpha, and the smallest
     generalised eigenvalue of (L, L2) against the density ratio for the layered two-phase case."""
@@ -285,4 +350,9 @@ def figure() -> None:
 if __name__ == "__main__":
     import sys
 
-    figure() if "--figure" in sys.argv else main()
+    if "--figure" in sys.argv:
+        figure()
+    elif "--supplement" in sys.argv:
+        supplement()
+    else:
+        main()
