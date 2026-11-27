@@ -92,13 +92,19 @@ def _piece_values(N, P, ratio, kind):
     return out
 
 
+def _sub(s0, s1):
+    """The piece [s0, s1] cut at the dual-cell boundary s = 1/2 (control-volume integrals need it)."""
+    return [(s0, 0.5), (0.5, s1)] if s0 < 0.5 < s1 else [(s0, s1)]
+
+
 def build(N, ratio, a, b, kind):
     """Quadrature values of the bases: PhiC (points x N cells) for R_C, PhiF (points x N faces) for R_F, with the
-    geometric weights w, the density rho, and the reproduction errors."""
+    geometric weights w, the density rho, the phase flag (from the geometry, also valid at density ratio 1) and the
+    reproduction errors. Every phase piece is also cut at s = 1/2, so that sums over the dual cells are exact."""
     h = 1.0 / N
     P = pieces(N, a, b)
     D = np.roll(np.eye(N), -1, axis=0) - np.eye(N)              # (D f)_i = f_{i+1} - f_i
-    X, W, RHO, PC, PF = [], [], [], [], []
+    X, W, RHO, PC, PF, HV = [], [], [], [], [], []
     face_err = avg_err = 0.0
     if kind in ("D5m", "D5b"):
         return _build_high(N, ratio, a, b, kind, P, D, h)
@@ -107,32 +113,34 @@ def build(N, ratio, a, b, kind):
 
         RF, RC, _, _, _ = operators(N)
         for i, ps in enumerate(P):
-            for s0, s1, hv in ps:
-                s = s0 + (s1 - s0) * XG
-                X.append((i + s) * h), W.append((s1 - s0) * h * WG)
-                RHO.append(np.full(XG.size, 1.0 if hv else 1.0 / ratio))
-                PC.append(_mono(s) @ RC[i])
-                PF.append(np.stack([s ** p for p in range(6)], axis=-1) @ RF[i])
+            for q0, q1, hv in ps:
+                for s0, s1 in _sub(q0, q1):
+                    s = s0 + (s1 - s0) * XG
+                    X.append((i + s) * h), W.append((s1 - s0) * h * WG)
+                    RHO.append(np.full(XG.size, 1.0 if hv else 1.0 / ratio)), HV.append(np.full(XG.size, hv))
+                    PC.append(_mono(s) @ RC[i])
+                    PF.append(np.stack([s ** p for p in range(6)], axis=-1) @ RF[i])
     else:
         vals = _piece_values(N, P, ratio, kind)
         for i, cell in enumerate(vals):
             cum = np.zeros(N)                                   # int_0^{s0} R_C (per unit cell data)
             e = np.zeros(N)
             e[i] = 1.0
-            for s0, s1, hv, row in cell:
-                s = s0 + (s1 - s0) * XG
-                X.append((i + s) * h), W.append((s1 - s0) * h * WG)
-                RHO.append(np.full(XG.size, 1.0 if hv else 1.0 / ratio))
-                PC.append(np.tile(row, (XG.size, 1)))
-                PF.append(e[None, :] + (cum[None, :] + np.outer(s - s0, row)) @ D)
-                cum = cum + (s1 - s0) * row
+            for q0, q1, hv, row in cell:
+                for s0, s1 in _sub(q0, q1):
+                    s = s0 + (s1 - s0) * XG
+                    X.append((i + s) * h), W.append((s1 - s0) * h * WG)
+                    RHO.append(np.full(XG.size, 1.0 if hv else 1.0 / ratio)), HV.append(np.full(XG.size, hv))
+                    PC.append(np.tile(row, (XG.size, 1)))
+                    PF.append(e[None, :] + (cum[None, :] + np.outer(s - s0, row)) @ D)
+                    cum = cum + (s1 - s0) * row
             avg_err = max(avg_err, float(np.abs(cum - e).max()))
             e1 = np.zeros(N)
             e1[(i + 1) % N] = 1.0
             face_err = max(face_err, float(np.abs(e + cum @ D - e1).max()))
     X, W, RHO = np.concatenate(X), np.concatenate(W), np.concatenate(RHO)
     PC, PF = np.concatenate(PC), np.concatenate(PF)
-    return {"X": X, "w": W, "rho": RHO, "PhiC": PC, "PhiF": PF, "D": D, "h": h, "P": P,
+    return {"X": X, "w": W, "rho": RHO, "heavy": np.concatenate(HV), "PhiC": PC, "PhiF": PF, "D": D, "h": h, "P": P,
             "avg_err": avg_err, "face_err": face_err}
 
 
@@ -150,7 +158,7 @@ def _build_high(N, ratio, a, b, kind, P, D, h):
         e[j] = 1.0
         RCp[:, :, j] = SplitShort(N, 1.0, a, b, e, mixed_mode="extend").coef
     pure = [len(ps) == 1 for ps in P]
-    X, W, RHO, PC, PF = [], [], [], [], []
+    X, W, RHO, PC, PF, HV = [], [], [], [], [], []
     face_err = avg_err = 0.0
     pw = np.arange(5)
 
@@ -195,20 +203,22 @@ def _build_high(N, ratio, a, b, kind, P, D, h):
                 c[0] += wgt * (e - tot) / (len_h if hv else 1.0 - len_h)
                 cos.append(c)
         cum = np.zeros(N)
-        for c, (s0, s1, hv) in zip(cos, ps):
-            sq = s0 + (s1 - s0) * XG
-            X.append((i + sq) * h), W.append((s1 - s0) * h * WG)
-            RHO.append(np.full(XG.size, 1.0 if hv else 1.0 / ratio))
-            PC.append(_mono(sq) @ c)
-            base = prim(c, np.array([s0]))[0]
-            PF.append(e[None, :] + (cum[None, :] + prim(c, sq) - base[None, :]) @ D)
-            cum = cum + prim(c, np.array([s1]))[0] - base
+        for c, (q0, q1, hv) in zip(cos, ps):
+            for s0, s1 in _sub(q0, q1):
+                sq = s0 + (s1 - s0) * XG
+                X.append((i + sq) * h), W.append((s1 - s0) * h * WG)
+                RHO.append(np.full(XG.size, 1.0 if hv else 1.0 / ratio)), HV.append(np.full(XG.size, hv))
+                PC.append(_mono(sq) @ c)
+                base = prim(c, np.array([s0]))[0]
+                PF.append(e[None, :] + (cum[None, :] + prim(c, sq) - base[None, :]) @ D)
+                cum = cum + prim(c, np.array([s1]))[0] - base
         avg_err = max(avg_err, float(np.abs(cum - e).max()))
         e1 = np.zeros(N)
         e1[(i + 1) % N] = 1.0
         face_err = max(face_err, float(np.abs(e + cum @ D - e1).max()))
-    return {"X": np.concatenate(X), "w": np.concatenate(W), "rho": np.concatenate(RHO), "PhiC": np.concatenate(PC),
-            "PhiF": np.concatenate(PF), "D": D, "h": h, "P": P, "avg_err": avg_err, "face_err": face_err}
+    return {"X": np.concatenate(X), "w": np.concatenate(W), "rho": np.concatenate(RHO), "heavy": np.concatenate(HV),
+            "PhiC": np.concatenate(PC), "PhiF": np.concatenate(PF), "D": D, "h": h, "P": P, "avg_err": avg_err,
+            "face_err": face_err}
 
 
 def references(N, ratio, a, b):
