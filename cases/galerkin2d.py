@@ -167,7 +167,8 @@ def _smooth(t):
 
 class Reconstruction2D:
     def __init__(self, N, geom, alpha=0.75, D1=3.5, D2=4.5, m_pw=3, m_s=2, kink=True, window="cell", R=4.5,
-                 switch="fixed", delta=1.0, tau=None, diff=False, workers=1, hinge="exact", centre_single=True):
+                 switch="fixed", delta=1.0, tau=None, diff=False, workers=1, hinge="exact", centre_single=True,
+                 lsq="shift"):
         """docs/notes/88 options: ``window`` "cell" (the (2 m_pw + 1)^2 cells around the cell, note 87) or "interface"
         (the cells within R cells of the cell's foot on the interface, weights (1 - (r/R)^2)^2: both sides of the
         interface always hold data); ``switch`` "fixed" (D1, D2) or "angle" (D1 = d_safe = (m_s + 1/2)(|nx| + |ny|)
@@ -180,6 +181,7 @@ class Reconstruction2D:
         self.window, self.R, self.tau, self.diff = window, R, tau, diff
         self.hinge = hinge  # curved interfaces (docs/notes/89): "exact" signed distance or "tangent" line
         self.centre_single = centre_single
+        self.lsq = lsq  # docs/notes/90: "shift" (unconstrained LS + constant) or "constrained" (notes 88-89)
         self._switch, self._delta = switch, delta
         if switch == "angle" and not hasattr(geom, "frame"):
             D1 = (m_s + 0.5) * (abs(geom.n[0]) + abs(geom.n[1]))
@@ -308,14 +310,25 @@ class Reconstruction2D:
         return (np.array(cells), Wc, frame, pw)
 
     def _fit_split(self, A, sw, k, cells, frame, pw, s):
-        """The shift on velocity differences, with the interface component (the hinge columns Y, after removing the
-        ordinary polynomial X) inverted by the continuous filter f_tau (or plain lstsq when tau is None)."""
+        """The shift (docs/notes/85) on velocity differences, with the interface component (the hinge columns Y, after
+        removing the ordinary polynomial X) inverted by the continuous filter f_tau (or plain lstsq when tau is None).
+
+        docs/notes/90 (the user's review of PR #102): the constant column is removed by subtracting the WEIGHTED MEAN
+        row (A - 1 p^T A, u - 1 p^T u, p = w / sum w): the non-constant coefficients are then those of the
+        unconstrained weighted least squares, and the constant alone restores the cell's mean (the shift).
+        ``lsq="constrained"`` keeps the form of notes 88-89 (the cell's own row subtracted), which is the least squares
+        constrained to the cell mean, A_k a = u_k: the form that note 85 rejected (amplification in light cells)."""
         n0 = len(P0_EXP)
         E = np.eye(len(cells))
-        D = E - np.outer(np.ones(len(cells)), E[k])        # u - u_k 1
-        Ad = A - A[k][None, :]                               # rows minus the cell's own row (constant drops out)
+        D = E - np.outer(np.ones(len(cells)), E[k])        # u - u_k 1 (zero for a uniform field, exactly)
+        if self.lsq == "constrained":
+            Ad = A - A[k][None, :]
+            Sw = np.diag(sw) @ D
+        else:
+            p = sw * sw / float(sw @ sw)
+            Ad = A - (p @ A)[None, :]
+            Sw = np.diag(sw) @ (D - np.outer(np.ones(len(cells)), p @ D))   # (I - 1 p^T)(u - u_k 1)
         Xw = sw[:, None] * Ad[:, 1:n0]
-        Sw = np.diag(sw) @ D
         if pw:
             Yw = sw[:, None] * Ad[:, n0:]
             Xp = np.linalg.pinv(Xw)
