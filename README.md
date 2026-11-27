@@ -1385,3 +1385,12 @@ impossibility theorem for reconstructions that share R_C. The density-adapted D0
 projection it converges independently of the ratio, while the lumped MAC built from the reference inner products
 themselves has O(1) errors when the heavy fraction of the cut cell exceeds 1/2. Whether the references should be
 revised is left to the user.
+
+T4, momentum transform (`docs/notes/109_mac_momentum.md`, issue #134): for the layered two-phase MAC the normalised
+transform Q = M^{-1/2} P G^{-1/2} from face velocities to control-volume momenta satisfies sigma <= 1 (theorem 7), but
+with the usual dual control volumes its smallest singular value goes to zero with the density ratio for every
+reconstruction tried, as the user's preliminary computation found. With phase-aware control volumes that follow the
+ownership of the density-adapted reconstruction D0m (in a cut cell the minority-mobility phase is attached to the
+face and the pure cell on its own side) the transform of D0m stays in [0.67, 1.00] (0.77 on the divergence-free
+subspace) and its normal Gram is uniformly equivalent to the control-volume masses. Local momentum conservation
+itself (fluxes of the moving control volumes) is not tested.
