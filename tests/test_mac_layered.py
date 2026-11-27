@@ -59,3 +59,17 @@ def test_blended_d0b_is_continuous_bounded_and_as_accurate():
         e = projection_test(64, 1e6, a, b, "D0b", 2, src)
         assert e["u_err"] < 0.05 and e["v_err"] < 0.01
         assert projection_test(64, 1e6, a, b, "M", 2, src)["u_err"] > 1.0
+
+
+def test_high_order_prototype_is_ratio_independent_and_fifth_order():
+    a, b = 0.2613, 0.7137
+    e = {N: projection_test(N, 1e6, a, b, "D5m", 2) for N in (32, 64)}
+    assert e[64]["u_err"] < 1e-5 and e[64]["v_err"] < 1e-6
+    assert np.log2(e[32]["u_err"] / e[64]["u_err"]) > 3.8
+    e3 = projection_test(64, 1e3, a, b, "D5m", 2)
+    assert np.isclose(e3["u_err"], e[64]["u_err"], rtol=0.02)
+    for r in (1e3, 1e6):
+        o = measure(32, r, *geometry(32, 0.75, 0.75), "D5m")
+        assert o["avg_err"] < 1e-12 and o["face_err"] < 1e-12 and o["const_C"] < 1e-9
+        assert o["jacobi_GF"] < 400 and o["jacobi_GC"] < 1200 and o["jacobi_L"] < 500
+        assert o["GF_Mn"][0] < 1e-3                             # the fixed reference M_n still fails (the theorem)

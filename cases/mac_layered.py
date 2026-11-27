@@ -35,7 +35,8 @@ from cases.pccd import WG, XG, _mono
 from cases.pccd_density import pieces
 
 RATIOS = (1.0, 1e1, 1e2, 1e3, 1e4, 1e5, 1e6)
-KINDS = ("A", "B", "D0", "D0m", "D0b", "D1")
+KINDS = ("A", "B", "D0", "D0m", "D0b", "D1", "D5m", "D5b")
+S2KINDS = ("A", "B", "D0m", "D5m", "D5b")
 
 
 def _piece_values(N, P, ratio, kind):
@@ -99,6 +100,8 @@ def build(N, ratio, a, b, kind):
     D = np.roll(np.eye(N), -1, axis=0) - np.eye(N)              # (D f)_i = f_{i+1} - f_i
     X, W, RHO, PC, PF = [], [], [], [], []
     face_err = avg_err = 0.0
+    if kind in ("D5m", "D5b"):
+        return _build_high(N, ratio, a, b, kind, P, D, h)
     if kind == "B":
         from cases.mac_pccd import operators
 
@@ -131,6 +134,81 @@ def build(N, ratio, a, b, kind):
     PC, PF = np.concatenate(PC), np.concatenate(PF)
     return {"X": X, "w": W, "rho": RHO, "PhiC": PC, "PhiF": PF, "D": D, "h": h, "P": P,
             "avg_err": avg_err, "face_err": face_err}
+
+
+def _build_high(N, ratio, a, b, kind, P, D, h):
+    """docs/notes/108, section 4 (a first high-order prototype, not the work of #136): per phase the PCCD run on the
+    volume averages of the pure cells (cases.pccd_local / cases.short_runs with density ratio 1, so the averages are
+    volume averages), and in a cut cell the D0m / D0b structure with polynomials: every phase part is the extension
+    of its own run's end-cell polynomial, and the phase that restores the volume average (larger mobility, or the
+    D0b blend) gets a constant added."""
+    from cases.short_runs import SplitShort
+
+    RCp = np.zeros((N, 5, N))                                   # pure cells: s-coefficients per unit datum
+    for j in range(N):
+        e = np.zeros(N)
+        e[j] = 1.0
+        RCp[:, :, j] = SplitShort(N, 1.0, a, b, e, mixed_mode="extend").coef
+    pure = [len(ps) == 1 for ps in P]
+    X, W, RHO, PC, PF = [], [], [], [], []
+    face_err = avg_err = 0.0
+    pw = np.arange(5)
+
+    def shifted(k_cell, off):
+        """(5, N) s-coefficient map of P_k(s - off) expanded in s."""
+        out = np.zeros((5, N))
+        for q in range(5):
+            for p_ in range(q + 1):
+                out[p_] += RCp[k_cell, q] * math.comb(q, p_) * (-off) ** (q - p_)
+        return out
+
+    def prim(co, s):
+        """int_0^s of sum co_p t^p: (len(s), N)."""
+        return np.stack([s ** (p_ + 1) / (p_ + 1) for p_ in pw], axis=-1) @ co
+    for i, ps in enumerate(P):
+        e = np.zeros(N)
+        e[i] = 1.0
+        if pure[i]:
+            cos = [RCp[i]]
+        else:
+            ext = []
+            for s0, s1, hv in ps:
+                k = None
+                if s0 == 0.0 and pure[(i - 1) % N] and P[(i - 1) % N][0][2] == hv:
+                    k, off = (i - 1) % N, -1.0
+                elif s1 == 1.0 and pure[(i + 1) % N] and P[(i + 1) % N][0][2] == hv:
+                    k, off = (i + 1) % N, 1.0
+                ext.append(shifted(k, off) if k is not None else np.zeros((5, N)))
+            tot = sum(prim(c, np.array([s1]))[0] - prim(c, np.array([s0]))[0] for c, (s0, s1, hv) in zip(ext, ps))
+            mob_h = sum(s1 - s0 for s0, s1, hv in ps if hv)
+            mob_l = sum(s1 - s0 for s0, s1, hv in ps if not hv) * ratio
+            if kind == "D5b":
+                t = min(max((mob_h / (mob_h + mob_l) - 0.25) / 0.5, 0.0), 1.0)
+                wh = t * t * (3 - 2 * t)
+            else:
+                wh = 1.0 if mob_h > mob_l else 0.0
+            len_h = sum(s1 - s0 for s0, s1, hv in ps if hv)
+            cos = []
+            for c, (s0, s1, hv) in zip(ext, ps):
+                c = c.copy()
+                wgt = wh if hv else 1.0 - wh                    # the share of the correction this phase takes
+                c[0] += wgt * (e - tot) / (len_h if hv else 1.0 - len_h)
+                cos.append(c)
+        cum = np.zeros(N)
+        for c, (s0, s1, hv) in zip(cos, ps):
+            sq = s0 + (s1 - s0) * XG
+            X.append((i + sq) * h), W.append((s1 - s0) * h * WG)
+            RHO.append(np.full(XG.size, 1.0 if hv else 1.0 / ratio))
+            PC.append(_mono(sq) @ c)
+            base = prim(c, np.array([s0]))[0]
+            PF.append(e[None, :] + (cum[None, :] + prim(c, sq) - base[None, :]) @ D)
+            cum = cum + prim(c, np.array([s1]))[0] - base
+        avg_err = max(avg_err, float(np.abs(cum - e).max()))
+        e1 = np.zeros(N)
+        e1[(i + 1) % N] = 1.0
+        face_err = max(face_err, float(np.abs(e + cum @ D - e1).max()))
+    return {"X": np.concatenate(X), "w": np.concatenate(W), "rho": np.concatenate(RHO), "PhiC": np.concatenate(PC),
+            "PhiF": np.concatenate(PF), "D": D, "h": h, "P": P, "avg_err": avg_err, "face_err": face_err}
 
 
 def references(N, ratio, a, b):
@@ -287,7 +365,7 @@ def projection_test(N, ratio, a, b, kind, m=1, source="normal"):
         wr = R["w"] * R["rho"]
         GF = R["PhiF"].T @ (wr[:, None] * R["PhiF"])
         GC = R["PhiC"].T @ (wr[:, None] * R["PhiC"])
-        if kind == "B":
+        if kind in ("B", "D5m", "D5b"):
             from cases.mac_pccd import g_C, g_F
             gFx, gCx = g_F(th), g_C(th)
         else:
@@ -377,7 +455,7 @@ def schur_2d(N, ratio, a, b, kind, ntheta=17):
     GFi, GCi = np.linalg.inv(GF), np.linalg.inv(GC)
     out = {"min": np.inf, "max": 0.0, "jacobi_L": 0.0, "jacobi_Lref": 0.0}
     for th in np.linspace(math.pi / (ntheta - 1), math.pi, ntheta - 1):
-        if kind == "B":
+        if kind in ("B", "D5m", "D5b"):
             from cases.mac_pccd import g_C, g_F
             gFx, gCx = g_F(th), g_C(th)
         else:
@@ -399,7 +477,7 @@ def schur_2d_scan(N=32):
     cs = [None, 0.5, 0.25, 0.75, 0.1, 0.9, 1e-2, 1 - 1e-2, 1e-4, 1 - 1e-4]
     zetas = (1e-4, 1e-2, 1.0, 1e2, 1e4)
     jobs = []
-    for kind in ("A", "B", "D0m"):
+    for kind in S2KINDS:
         for r in RATIOS:
             for tag, v in [("c", c) for c in cs] + [("zeta", z) for z in zetas if r > 1] + [("zeta_light", z) for z in zetas]:
                 c = v if tag == "c" else (v / (r + v) if tag == "zeta" else r / (r + v))
@@ -407,7 +485,7 @@ def schur_2d_scan(N=32):
     with ProcessPoolExecutor(20) as ex:
         res = list(ex.map(_s2, [(N, j[1], j[2], j[3], j[0]) for j in jobs]))
     out = []
-    for kind in ("A", "B", "D0m"):
+    for kind in S2KINDS:
         row = {"kind": kind}
         for key, fn in (("min", min), ("max", max), ("jacobi_L", max), ("jacobi_Lref", max)):
             vals = [fn(o[key] for (k, r, _, _), o in zip(jobs, res) if k == kind and r == rr) for rr in RATIOS]
@@ -429,7 +507,7 @@ def projection_slivers(N=64):
     cs = [None, 0.5, 0.25, 0.75, 0.1, 0.9, 1e-2, 1 - 1e-2, 1e-4, 1 - 1e-4]
     zetas = (1e-4, 1e-2, 1.0, 1e2, 1e4)
     jobs = []
-    for kind in ("M", "A", "D0m", "D0b", "D1"):
+    for kind in ("M", "A", "D0m", "D0b", "D1", "D5m", "D5b"):
         for r in (1e3, 1e6):
             for tag, v in [("c", c) for c in cs] + [("zeta", z) for z in zetas] + [("zeta_light", z) for z in zetas]:
                 c = v if tag == "c" else (v / (r + v) if tag == "zeta" else r / (r + v))
@@ -438,7 +516,7 @@ def projection_slivers(N=64):
     with ProcessPoolExecutor(20) as ex:
         res = list(ex.map(_pt, jobs))
     out = []
-    for kind in ("M", "A", "D0m", "D0b", "D1"):
+    for kind in ("M", "A", "D0m", "D0b", "D1", "D5m", "D5b"):
         for r in (1e3, 1e6):
             sel = [o for j, o in zip(jobs, res) if j[4] == kind and j[1] == r]
             out.append({"kind": kind, "ratio": r, "u_err": max(o["u_err"] for o in sel), "v_err": max(o["v_err"] for o in sel),
@@ -450,7 +528,7 @@ def switch_continuity(N=32, ratio=3.0, eps=1e-7):
     """The piece values of R_C in the cut cell as the heavy fraction c crosses the equal-mobility point
     (c = ratio (1 - c)): max |row(c + eps) - row(c)| / eps over c in [0.55, 0.95]. A jump gives ~ 1 / eps."""
     out = {}
-    for kind in ("D0m", "D0b"):
+    for kind in ("D0m", "D0b"):                                  # (the high-order kinds share these two rules)
         worst = 0.0
         for c in np.linspace(0.55, 0.95, 401):
             rows = []
@@ -561,12 +639,12 @@ def figure() -> None:
     matplotlib.use("Agg")
     import matplotlib.pyplot as plt
 
-    col = {"A": "#257de0", "B": "#f47230", "D0": "#00b894", "D1": "#f2a600", "M": "#666666"}
+    col = {"A": "#257de0", "B": "#f47230", "D0": "#00b894", "D1": "#f2a600", "M": "#666666", "D5m": "#ee7fac"}
     res = json.load(open("docs/figures/mac_layered.json"))
     sm = res["scan_32"]["summary"]
     fig, axes = plt.subplots(1, 3, figsize=(14, 3.6), dpi=150)
     col["D0m"] = col["D0"]
-    for k in ("A", "B", "D0m"):
+    for k in ("A", "B", "D0m", "D5m"):
         g = next(x for x in sm if x["kind"] == k and x["key"] == "GF_Mn")
         axes[0].loglog(RATIOS, g["max"], "-o", color=col[k], lw=2, ms=4, label=f"{k} max")
         axes[0].loglog(RATIOS, g["min"], "--s", color=col[k], lw=1.5, ms=4, label=f"{k} min")
@@ -579,7 +657,7 @@ def figure() -> None:
     for a in axes[:2]:
         a.set_xlabel("density ratio", fontsize=8)
     pr = res["projection"]
-    for k in ("M", "A", "B", "D0m", "D1"):
+    for k in ("M", "A", "B", "D0m", "D1", "D5m"):
         row = next(x for x in pr["rows"] if x["kind"] == k and x["ratio"] == 1e6 and x["m"] == 2)
         axes[2].loglog(pr["NS"], row["u_rms"], "-o", color=col[k], lw=2, ms=4, label=f"{k} (u, rms)")
     axes[2].set_title("projection error, ratio 1e6, m = 2 (worst of 3 offsets)", fontsize=9)
