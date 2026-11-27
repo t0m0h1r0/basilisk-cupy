@@ -151,10 +151,14 @@ def continuity(N, ratio, spacing, mode, span=0.2, seed=0):
 
 
 def floquet_general(N, ratio, c, mode, transport, p=1, q=4, powers=40):
-    """CFL = p/q: after q steps the configuration has moved p cells. P_rel = S^{-p} T_{q-1}..T_0. Returns the spectral
-    radius, the largest |eigenvalue| other than the free stream's 1 (the dissipation of the rest), the largest mass-norm
-    singular value of P_rel (one period) and of P_rel^k for k <= ``powers`` (long-time transient growth), and for every
-    starting step the one-period growth (the transient from any start)."""
+    """CFL = p/q: after q steps the configuration has moved p cells. With S the one-cell shift, the step maps repeat as
+    T_{jq+k} = S^{jp} T_k S^{-jp}. Returns, in the mass norms of the geometries involved:
+
+    * spectral radius of P_rel = S^{-p} T_{q-1} .. T_0, and max_{k <= powers} ||P_rel^k|| (long-time growth);
+    * sv_any_start: max over the starting step s = 0 .. q-1 of the one-period map from step s (docs/notes/97
+      correction: the earlier version measured s = 0 only);
+    * sv_partial: max over every start and every length 1 .. q of the partial products (growth inside a period),
+      ||M_end^{1/2} T_{s+l-1} .. T_s M_start^{-1/2}||."""
     h = 1.0 / N
     m = N // 4
     a = (m + 1 - c) * h
@@ -164,25 +168,36 @@ def floquet_general(N, ratio, c, mode, transport, p=1, q=4, powers=40):
     for k in range(q):
         T, phi, _, _, m1 = step(N, ratio, (a + k * D) % 1.0, (B_ + k * D) % 1.0, D, mode, transport, phi)
         Ts.append(T)
-        masses.append(m1)
+        masses.append(m1)                         # masses of geometry k + 1
+    def Tn(n):
+        j, k = divmod(n, q)
+        return np.roll(np.roll(Ts[k], j * p, axis=0), j * p, axis=1)
+    def mass(n):                                  # masses of geometry n
+        j, k = divmod(n - 1, q)
+        return np.roll(masses[k], j * p)
     S = np.roll(np.eye(N), p, axis=0)
-    # the start geometry's masses: the end geometry shifted back by p cells
-    mstart = np.roll(masses[-1], -p)
-    sm = np.sqrt(mstart)
-    def per(start):
-        P = np.eye(N)
-        for k in range(q):
-            P = Ts[(start + k) % q] @ P
-        return P
-    P = S.T @ per(0)
-    ev = np.sort(np.abs(np.linalg.eigvals(P)))[::-1]
-    Pm = (sm[:, None] * P) / sm[None, :]
-    sv1 = float(np.linalg.norm(Pm, 2))
+    def norm(P, n0, n1):
+        a0, a1 = np.sqrt(mass(n0)), np.sqrt(mass(n1))
+        return float(np.linalg.norm((a1[:, None] * P) / a0[None, :], 2))
+    P = np.eye(N)
+    for n in range(q):
+        P = Tn(n) @ P
+    Prel = S.T @ P
+    rho = float(np.max(np.abs(np.linalg.eigvals(Prel))))
+    sm = np.sqrt(np.roll(mass(q), -p))           # geometry q seen in the relative frame = geometry 0
+    Pm = (sm[:, None] * Prel) / sm[None, :]
     Pk, svk = np.eye(N), 0.0
     for _ in range(powers):
         Pk = Pm @ Pk
         svk = max(svk, float(np.linalg.norm(Pk, 2)))
-    return {"spectral_radius": float(ev[0]), "second": float(ev[1]), "sv_one_period": sv1, "sv_max_powers": svk}
+    sv_start, sv_part = 0.0, 0.0
+    for s0 in range(q):
+        P = np.eye(N)
+        for l in range(1, q + 1):
+            P = Tn(s0 + l - 1) @ P
+            sv_part = max(sv_part, norm(P, s0, s0 + l))
+        sv_start = max(sv_start, norm(P, s0, s0 + q))
+    return {"spectral_radius": rho, "sv_max_powers": svk, "sv_any_start": sv_start, "sv_partial": sv_part}
 
 
 CFLS = ((1, 16), (1, 8), (1, 4), (1, 3), (1, 2), (3, 4), (9, 10))

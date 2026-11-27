@@ -6,9 +6,9 @@
   "transport": "remap",
   "cfl": "1/16",
   "spectral_radius": 0.9999999999999978,
-  "second": 0.9999999999999978,
-  "sv_one_period": 16.112245458118426,
-  "sv_max_powers": 16.112245458118426
+  "sv_max_powers": 16.112245458118426,
+  "sv_any_start": 18.7877986730362,
+  "sv_partial": 18.7877986730362
  },
  {
   "ratio": 1.0,
@@ -17,9 +17,9 @@
   "transport": "galerkin",
   "cfl": "1/16",
   "spectral_radius": 1.0000000000000122,
-  "second": 1.0000000000000084,
-  "sv_one_period": 1.9868260814179306,
-  "sv_max_powers": 1.9868260814179306
+  "sv_max_powers": 1.9868260814179306,
+  "sv_any_start": 2.0527301535821985,
+  "sv_partial": 2.459055197801509
  },
  {
   "ratio": 1.0,
@@ -28,9 +28,9 @@
   "transport": "remap",
   "cfl": "1/16",
   "spectral_radius": 0.9999999999999973,
-  "second": 0.9999999999999968,
-  "sv_one_period": 17.89796748216072,
-  "sv_max_powers": 17.89796748216072
+  "sv_max_powers": 17.89796748216072,
+  "sv_any_start": 18.787805072577743,
+  "sv_partial": 18.787805072577743
  },
  {
   "ratio": 1.0,
@@ -39,9 +39,9 @@
   "transport": "galerkin",
   "cfl": "1/16",
   "spectral_radius": 1.0000000000000127,
-  "second": 1.0000000000000038,
-  "sv_one_period": 1.9868713953507275,
-  "sv_max_powers": 1.9868713953507275
+  "sv_max_powers": 1.9868713953507275,
+  "sv_any_start": 1.986871395350726,
+  "sv_partial": 2.4657102861258093
  },
  {
   "ratio": 1.0,
@@ -50,9 +50,9 @@
   "transport": "remap",
   "cfl": "1/16",
   "spectral_radius": 0.9999999999999981,
-  "second": 0.9999999999999981,
-  "sv_one_period": 17.3259139823801,
-  "sv_max_powers": 17.3259139823801
+  "sv_max_powers": 17.3259139823801,
+  "sv_any_start": 18.787805069404673,
+  "sv_partial": 18.787805069404673
  },
  {
   "ratio": 1.0,
@@ -61,9 +61,9 @@
   "transport": "galerkin",
   "cfl": "1/16",
   "spectral_radius": 1.000000000000009,
-  "second": 0.9999999999999998,
-  "sv_one_period": 1.9866085254865702,
-  "sv_max_powers": 1.9866085254865702
+  "sv_max_powers": 1.9866085254865702,
+  "sv_any_start": 1.9866085254865706,
+  "sv_partial": 2.4658338047740243
  },
  {
   "ratio": 1.0,
@@ -72,9 +72,9 @@
   "transport": "remap",
   "cfl": "1/16",
   "spectral_radius": 0.9999999999999981,
-  "second": 0.9999999999999978,
-  "sv_one_period": 17.320129388913656,
-  "sv_max_powers": 17.320129388913656
+  "sv_max_powers": 17.320129388913656,
+  "sv_any_start": 18.787805069374578,
+  "sv_partial": 18.787805069374578
  },
  {
   "ratio": 1.0,
@@ -83,9 +83,9 @@
   "transport": "galerkin",
   "cfl": "1/16",
   "spectral_radius": 1.0000000000000089,
-  "second": 1.0000000000000002,
-  "sv_one_period": 1.986606430263556,
-  "sv_max_powers": 1.986606430263556
+  "sv_max_powers": 1.986606430263556,
+  "sv_any_start": 1.9866064302635558,
+  "sv_partial": 2.465835187485206
  },
  {
   "ratio": 1000.0,
@@ -94,9 +94,9 @@
   "transport": "remap",
   "cfl": "1/16",
   "spectral_radius": 1.0000000000000024,
-  "second": 1.0000000000000018,
-  "sv_one_period": 13.55454392477727,
-  "sv_max_powers": 13.714529438864886
+  "sv_max_powers": 13.714529438864886,
+  "sv_any_start": 39.01456137161289,
+  "sv_partial": 39.01456137161289
  },
  {
   "ratio": 1000.0,
@@ -105,9 +105,9 @@
   "transport": "galerkin",
   "cfl": "1/16",
   "spectral_radius": 1.0000000000000138,
-  "second": 1.0000000000000084,
-  "sv_one_period": 2.011975163549458,
-  "sv_max_powers": 2.011975163549458
+  "sv_max_powers": 2.011975163549458,
+  "sv_any_start": 2.041539932326623,
+  "sv_partial": 2.6954096853459157
  },
  {
   "ratio": 1000.0,
@@ -116,9 +116,9 @@
   "transport": "remap",
   "cfl": "1/16",
   "spectral_radius": 1.0000000000000018,
-  "second": 1.0000000000000007,
-  "sv_one_period": 28.623479575322396,
-  "sv_max_powers": 28.623479575322396
+  "sv_max_powers": 28.623479575322396,
+  "sv_any_start": 38.07195457583654,
+  "sv_partial": 38.07195457583654
  },
  {
   "ratio": 1000.0,
@@ -127,9 +127,9 @@
   "transport": "galerkin",
   "cfl": "1/16",
   "spectral_radius": 1.000000000000016,
-  "second": 1.0000000000000029,
-  "sv_one_period": 2.011540641183992,
-  "sv_max_powers": 2.011540641183992
+  "sv_max_powers": 2.011540641183992,
+  "sv_any_start": 2.0115406411839905,
+  "sv_partial": 2.6946025689952426
  },
  {
   "ratio": 1000.0,
@@ -138,9 +138,9 @@
   "transport": "remap",
   "cfl": "1/16",
   "spectral_radius": 1.0000000000000013,
-  "second": 1.0000000000000009,
-  "sv_one_period": 13.554543738620538,
-  "sv_max_powers": 13.718721420026432
+  "sv_max_powers": 13.718721420026432,
+  "sv_any_start": 39.004628616675866,
+  "sv_partial": 39.004628616675866
  },
  {
   "ratio": 1000.0,
@@ -149,9 +149,9 @@
   "transport": "galerkin",
   "cfl": "1/16",
   "spectral_radius": 1.0000000000000133,
-  "second": 1.0000000000000073,
-  "sv_one_period": 2.011522136020753,
-  "sv_max_powers": 2.011522136020753
+  "sv_max_powers": 2.011522136020753,
+  "sv_any_start": 2.0115221360207527,
+  "sv_partial": 2.6946752999398784
  },
  {
   "ratio": 1000.0,
@@ -160,9 +160,9 @@
   "transport": "remap",
   "cfl": "1/16",
   "spectral_radius": 1.0000000000000009,
-  "second": 1.0000000000000009,
-  "sv_one_period": 13.554550494548778,
-  "sv_max_powers": 13.725218427322394
+  "sv_max_powers": 13.725218427322394,
+  "sv_any_start": 39.012577197322884,
+  "sv_partial": 39.012577197322884
  },
  {
   "ratio": 1000.0,
@@ -171,9 +171,9 @@
   "transport": "galerkin",
   "cfl": "1/16",
   "spectral_radius": 1.000000000000009,
-  "second": 1.0000000000000042,
-  "sv_one_period": 2.0115130445242593,
-  "sv_max_powers": 2.0115130445242593
+  "sv_max_powers": 2.0115130445242593,
+  "sv_any_start": 2.0115130445242597,
+  "sv_partial": 2.6946761075497028
  },
  {
   "ratio": 1000000.0,
@@ -182,9 +182,9 @@
   "transport": "remap",
   "cfl": "1/16",
   "spectral_radius": 1.0000000000000016,
-  "second": 1.0000000000000004,
-  "sv_one_period": 13.548038989966038,
-  "sv_max_powers": 13.707790651574078
+  "sv_max_powers": 13.707790651574078,
+  "sv_any_start": 39.20368606539306,
+  "sv_partial": 39.20368606539306
  },
  {
   "ratio": 1000000.0,
@@ -193,9 +193,9 @@
   "transport": "galerkin",
   "cfl": "1/16",
   "spectral_radius": 1.0000000000000224,
-  "second": 1.000000000000014,
-  "sv_one_period": 2.011519684717071,
-  "sv_max_powers": 2.011519684717071
+  "sv_max_powers": 2.011519684717071,
+  "sv_any_start": 2.040859174544194,
+  "sv_partial": 2.695915760839845
  },
  {
   "ratio": 1000000.0,
@@ -204,9 +204,9 @@
   "transport": "remap",
   "cfl": "1/16",
   "spectral_radius": 1.000000000000002,
-  "second": 1.0000000000000013,
-  "sv_one_period": 28.954805163191622,
-  "sv_max_powers": 28.954805163191622
+  "sv_max_powers": 28.954805163191622,
+  "sv_any_start": 38.236383731737114,
+  "sv_partial": 38.236383731737114
  },
  {
   "ratio": 1000000.0,
@@ -215,9 +215,9 @@
   "transport": "galerkin",
   "cfl": "1/16",
   "spectral_radius": 1.0000000000000158,
-  "second": 1.000000000000009,
-  "sv_one_period": 2.0110789868831076,
-  "sv_max_powers": 2.0110789868831076
+  "sv_max_powers": 2.0110789868831076,
+  "sv_any_start": 2.011078986883107,
+  "sv_partial": 2.6951094293064175
  },
  {
   "ratio": 1000000.0,
@@ -226,9 +226,9 @@
   "transport": "remap",
   "cfl": "1/16",
   "spectral_radius": 1.000000000000002,
-  "second": 1.000000000000001,
-  "sv_one_period": 13.54804244541356,
-  "sv_max_powers": 13.71547878527353
+  "sv_max_powers": 13.71547878527353,
+  "sv_any_start": 39.19349630273161,
+  "sv_partial": 39.19349630273161
  },
  {
   "ratio": 1000000.0,
@@ -237,9 +237,9 @@
   "transport": "galerkin",
   "cfl": "1/16",
   "spectral_radius": 1.0000000000000122,
-  "second": 1.0000000000000109,
-  "sv_one_period": 2.011052895826244,
-  "sv_max_powers": 2.011052895826244
+  "sv_max_powers": 2.011052895826244,
+  "sv_any_start": 2.0110528958262446,
+  "sv_partial": 2.695182163289698
  },
  {
   "ratio": 1000000.0,
@@ -248,9 +248,9 @@
   "transport": "remap",
   "cfl": "1/16",
   "spectral_radius": 1.0000000000000018,
-  "second": 1.0000000000000013,
-  "sv_one_period": 13.54804038241484,
-  "sv_max_powers": 13.71349307660855
+  "sv_max_powers": 13.71349307660855,
+  "sv_any_start": 39.20169011243273,
+  "sv_partial": 39.20169011243273
  },
  {
   "ratio": 1000000.0,
@@ -259,9 +259,9 @@
   "transport": "galerkin",
   "cfl": "1/16",
   "spectral_radius": 1.0000000000000089,
-  "second": 1.000000000000008,
-  "sv_one_period": 2.0110525907531893,
-  "sv_max_powers": 2.0110525907531893
+  "sv_max_powers": 2.0110525907531893,
+  "sv_any_start": 2.01105259075319,
+  "sv_partial": 2.6951829709594914
  },
  {
   "ratio": 1.0,
@@ -270,9 +270,9 @@
   "transport": "remap",
   "cfl": "1/8",
   "spectral_radius": 0.9999999999999986,
-  "second": 0.9999999999999984,
-  "sv_one_period": 12.063645048849986,
-  "sv_max_powers": 12.063645048849986
+  "sv_max_powers": 12.063645048849986,
+  "sv_any_start": 13.009614248814946,
+  "sv_partial": 13.009614248814946
  },
  {
   "ratio": 1.0,
@@ -281,9 +281,9 @@
   "transport": "galerkin",
   "cfl": "1/8",
   "spectral_radius": 1.000000000000008,
-  "second": 1.0000000000000044,
-  "sv_one_period": 1.7926060126868566,
-  "sv_max_powers": 1.7926060126868566
+  "sv_max_powers": 1.7926060126868566,
+  "sv_any_start": 1.792606012686856,
+  "sv_partial": 2.2768727101015083
  },
  {
   "ratio": 1.0,
@@ -292,9 +292,9 @@
   "transport": "remap",
   "cfl": "1/8",
   "spectral_radius": 0.9999999999999987,
-  "second": 0.9999999999999983,
-  "sv_one_period": 12.144427721995141,
-  "sv_max_powers": 12.144427721995141
+  "sv_max_powers": 12.144427721995141,
+  "sv_any_start": 13.009615236418668,
+  "sv_partial": 13.009615236418668
  },
  {
   "ratio": 1.0,
@@ -303,9 +303,9 @@
   "transport": "galerkin",
   "cfl": "1/8",
   "spectral_radius": 1.0000000000000107,
-  "second": 1.0000000000000022,
-  "sv_one_period": 1.7936876331288638,
-  "sv_max_powers": 1.7936876331288638
+  "sv_max_powers": 1.7936876331288638,
+  "sv_any_start": 1.7936876331288645,
+  "sv_partial": 2.2760614161883748
  },
  {
   "ratio": 1.0,
@@ -314,9 +314,9 @@
   "transport": "remap",
   "cfl": "1/8",
   "spectral_radius": 0.9999999999999989,
-  "second": 0.9999999999999989,
-  "sv_one_period": 12.0636466386022,
-  "sv_max_powers": 12.0636466386022
+  "sv_max_powers": 12.0636466386022,
+  "sv_any_start": 13.00961523461441,
+  "sv_partial": 13.00961523461441
  },
  {
   "ratio": 1.0,
@@ -325,9 +325,9 @@
   "transport": "galerkin",
   "cfl": "1/8",
   "spectral_radius": 1.0000000000000109,
-  "second": 1.000000000000002,
-  "sv_one_period": 1.793598175635097,
-  "sv_max_powers": 1.793598175635097
+  "sv_max_powers": 1.793598175635097,
+  "sv_any_start": 1.793598175635096,
+  "sv_partial": 2.27606268945238
  },
  {
   "ratio": 1.0,
@@ -336,9 +336,9 @@
   "transport": "remap",
   "cfl": "1/8",
   "spectral_radius": 0.9999999999999991,
-  "second": 0.9999999999999983,
-  "sv_one_period": 12.063646638022805,
-  "sv_max_powers": 12.063646638022805
+  "sv_max_powers": 12.063646638022805,
+  "sv_any_start": 13.009615234596431,
+  "sv_partial": 13.009615234596431
  },
  {
   "ratio": 1.0,
@@ -347,9 +347,9 @@
   "transport": "galerkin",
   "cfl": "1/8",
   "spectral_radius": 1.0000000000000124,
-  "second": 1.0000000000000027,
-  "sv_one_period": 1.793597567995461,
-  "sv_max_powers": 1.793597567995461
+  "sv_max_powers": 1.793597567995461,
+  "sv_any_start": 1.7935975679954603,
+  "sv_partial": 2.276062699517714
  },
  {
   "ratio": 1000.0,
@@ -358,9 +358,9 @@
   "transport": "remap",
   "cfl": "1/8",
   "spectral_radius": 0.9999999999999997,
-  "second": 0.9999999999999996,
-  "sv_one_period": 9.734424622139867,
-  "sv_max_powers": 9.734424622139867
+  "sv_max_powers": 9.734424622139867,
+  "sv_any_start": 19.02698424940147,
+  "sv_partial": 19.02698424940147
  },
  {
   "ratio": 1000.0,
@@ -369,9 +369,9 @@
   "transport": "galerkin",
   "cfl": "1/8",
   "spectral_radius": 1.0000000000000047,
-  "second": 1.000000000000002,
-  "sv_one_period": 1.9023697946578886,
-  "sv_max_powers": 1.9023697946578886
+  "sv_max_powers": 1.9023697946578886,
+  "sv_any_start": 1.9023697946578888,
+  "sv_partial": 2.501483778880878
  },
  {
   "ratio": 1000.0,
@@ -380,9 +380,9 @@
   "transport": "remap",
   "cfl": "1/8",
   "spectral_radius": 1.0,
-  "second": 0.9999999999999998,
-  "sv_one_period": 11.277599791408267,
-  "sv_max_powers": 11.277599791408267
+  "sv_max_powers": 11.277599791408267,
+  "sv_any_start": 19.08021220491649,
+  "sv_partial": 19.08021220491649
  },
  {
   "ratio": 1000.0,
@@ -391,9 +391,9 @@
   "transport": "galerkin",
   "cfl": "1/8",
   "spectral_radius": 1.0000000000000027,
-  "second": 1.0000000000000004,
-  "sv_one_period": 1.9032133383545098,
-  "sv_max_powers": 1.9032133383545098
+  "sv_max_powers": 1.9032133383545098,
+  "sv_any_start": 1.9032133383545102,
+  "sv_partial": 2.500819122759959
  },
  {
   "ratio": 1000.0,
@@ -402,9 +402,9 @@
   "transport": "remap",
   "cfl": "1/8",
   "spectral_radius": 1.0000000000000002,
-  "second": 0.9999999999999998,
-  "sv_one_period": 9.734423202584207,
-  "sv_max_powers": 9.734423202584207
+  "sv_max_powers": 9.734423202584207,
+  "sv_any_start": 19.027151393979672,
+  "sv_partial": 19.027151393979672
  },
  {
   "ratio": 1000.0,
@@ -413,9 +413,9 @@
   "transport": "galerkin",
   "cfl": "1/8",
   "spectral_radius": 1.0000000000000049,
-  "second": 1.0000000000000027,
-  "sv_one_period": 1.9033315770556536,
-  "sv_max_powers": 1.9033315770556536
+  "sv_max_powers": 1.9033315770556536,
+  "sv_any_start": 1.9033315770556536,
+  "sv_partial": 2.5008126087015317
  },
  {
   "ratio": 1000.0,
@@ -424,9 +424,9 @@
   "transport": "remap",
   "cfl": "1/8",
   "spectral_radius": 1.0000000000000002,
-  "second": 1.0,
-  "sv_one_period": 9.734425944827885,
-  "sv_max_powers": 9.734425944827885
+  "sv_max_powers": 9.734425944827885,
+  "sv_any_start": 19.02644005115509,
+  "sv_partial": 19.02644005115509
  },
  {
   "ratio": 1000.0,
@@ -435,9 +435,9 @@
   "transport": "galerkin",
   "cfl": "1/8",
   "spectral_radius": 1.0000000000000016,
-  "second": 1.0000000000000007,
-  "sv_one_period": 1.9033296894665972,
-  "sv_max_powers": 1.9033296894665972
+  "sv_max_powers": 1.9033296894665972,
+  "sv_any_start": 1.9033296894665976,
+  "sv_partial": 2.5008124442256485
  },
  {
   "ratio": 1000000.0,
@@ -446,9 +446,9 @@
   "transport": "remap",
   "cfl": "1/8",
   "spectral_radius": 1.0000000000000007,
-  "second": 1.0000000000000002,
-  "sv_one_period": 9.730936062584927,
-  "sv_max_powers": 9.730936062584927
+  "sv_max_powers": 9.730936062584927,
+  "sv_any_start": 19.0681529779716,
+  "sv_partial": 19.0681529779716
  },
  {
   "ratio": 1000000.0,
@@ -457,9 +457,9 @@
   "transport": "galerkin",
   "cfl": "1/8",
   "spectral_radius": 1.0000000000000029,
-  "second": 1.0000000000000018,
-  "sv_one_period": 1.9024354285021061,
-  "sv_max_powers": 1.9024354285021061
+  "sv_max_powers": 1.9024354285021061,
+  "sv_any_start": 1.902435428502105,
+  "sv_partial": 2.5019763217582915
  },
  {
   "ratio": 1000000.0,
@@ -468,9 +468,9 @@
   "transport": "remap",
   "cfl": "1/8",
   "spectral_radius": 1.000000000000001,
-  "second": 1.0000000000000009,
-  "sv_one_period": 11.38012083663862,
-  "sv_max_powers": 11.38012083663862
+  "sv_max_powers": 11.38012083663862,
+  "sv_any_start": 19.118854873783853,
+  "sv_partial": 19.118854873783853
  },
  {
   "ratio": 1000000.0,
@@ -479,9 +479,9 @@
   "transport": "galerkin",
   "cfl": "1/8",
   "spectral_radius": 1.0000000000000036,
-  "second": 0.9999999999999998,
-  "sv_one_period": 1.9032682195578343,
-  "sv_max_powers": 1.9032682195578343
+  "sv_max_powers": 1.9032682195578343,
+  "sv_any_start": 1.9032682195578343,
+  "sv_partial": 2.5013115654388853
  },
  {
   "ratio": 1000000.0,
@@ -490,9 +490,9 @@
   "transport": "remap",
   "cfl": "1/8",
   "spectral_radius": 1.0000000000000004,
-  "second": 0.9999999999999999,
-  "sv_one_period": 9.730935261739202,
-  "sv_max_powers": 9.730935261739202
+  "sv_max_powers": 9.730935261739202,
+  "sv_any_start": 19.068288490256663,
+  "sv_partial": 19.068288490256663
  },
  {
   "ratio": 1000000.0,
@@ -501,9 +501,9 @@
   "transport": "galerkin",
   "cfl": "1/8",
   "spectral_radius": 1.0000000000000024,
-  "second": 1.0000000000000016,
-  "sv_one_period": 1.90339297904464,
-  "sv_max_powers": 1.90339297904464
+  "sv_max_powers": 1.90339297904464,
+  "sv_any_start": 1.9033929790446402,
+  "sv_partial": 2.501305320710484
  },
  {
   "ratio": 1000000.0,
@@ -512,9 +512,9 @@
   "transport": "remap",
   "cfl": "1/8",
   "spectral_radius": 1.0000000000000004,
-  "second": 0.9999999999999998,
-  "sv_one_period": 9.730934903287048,
-  "sv_max_powers": 9.730934903287048
+  "sv_max_powers": 9.730934903287048,
+  "sv_any_start": 19.06760720320053,
+  "sv_partial": 19.06760720320053
  },
  {
   "ratio": 1000000.0,
@@ -523,9 +523,9 @@
   "transport": "galerkin",
   "cfl": "1/8",
   "spectral_radius": 1.000000000000001,
-  "second": 1.0000000000000004,
-  "sv_one_period": 1.903394243548814,
-  "sv_max_powers": 1.903394243548814
+  "sv_max_powers": 1.903394243548814,
+  "sv_any_start": 1.903394243548813,
+  "sv_partial": 2.50130525843909
  },
  {
   "ratio": 1.0,
@@ -534,9 +534,9 @@
   "transport": "remap",
   "cfl": "1/4",
   "spectral_radius": 1.0000000000000007,
-  "second": 1.0000000000000007,
-  "sv_one_period": 6.986377293398182,
-  "sv_max_powers": 6.986377293398182
+  "sv_max_powers": 6.986377293398182,
+  "sv_any_start": 6.986377293398181,
+  "sv_partial": 6.994469837363363
  },
  {
   "ratio": 1.0,
@@ -545,9 +545,9 @@
   "transport": "galerkin",
   "cfl": "1/4",
   "spectral_radius": 1.000000000000003,
-  "second": 1.0000000000000022,
-  "sv_one_period": 1.4330045086271601,
-  "sv_max_powers": 1.4330045086271601
+  "sv_max_powers": 1.4330045086271601,
+  "sv_any_start": 1.4330045086271603,
+  "sv_partial": 1.9709235243538454
  },
  {
   "ratio": 1.0,
@@ -556,9 +556,9 @@
   "transport": "remap",
   "cfl": "1/4",
   "spectral_radius": 1.0000000000000009,
-  "second": 1.0000000000000004,
-  "sv_one_period": 6.986377856464303,
-  "sv_max_powers": 6.986377856464303
+  "sv_max_powers": 6.986377856464303,
+  "sv_any_start": 6.986377856464303,
+  "sv_partial": 6.994469874241438
  },
  {
   "ratio": 1.0,
@@ -567,9 +567,9 @@
   "transport": "galerkin",
   "cfl": "1/4",
   "spectral_radius": 1.000000000000003,
-  "second": 1.0000000000000027,
-  "sv_one_period": 1.4338118892162581,
-  "sv_max_powers": 1.4338118892162581
+  "sv_max_powers": 1.4338118892162581,
+  "sv_any_start": 1.4338118892162588,
+  "sv_partial": 1.9707172553554713
  },
  {
   "ratio": 1.0,
@@ -578,9 +578,9 @@
   "transport": "remap",
   "cfl": "1/4",
   "spectral_radius": 1.0000000000000009,
-  "second": 1.0000000000000007,
-  "sv_one_period": 6.986377695573018,
-  "sv_max_powers": 6.986377695573018
+  "sv_max_powers": 6.986377695573018,
+  "sv_any_start": 6.986377695573018,
+  "sv_partial": 6.994469863005056
  },
  {
   "ratio": 1.0,
@@ -589,9 +589,9 @@
   "transport": "galerkin",
   "cfl": "1/4",
   "spectral_radius": 1.0000000000000033,
-  "second": 1.0000000000000018,
-  "sv_one_period": 1.4338398379970743,
-  "sv_max_powers": 1.4338398379970743
+  "sv_max_powers": 1.4338398379970743,
+  "sv_any_start": 1.4338398379970736,
+  "sv_partial": 1.9707173680007766
  },
  {
   "ratio": 1.0,
@@ -600,9 +600,9 @@
   "transport": "remap",
   "cfl": "1/4",
   "spectral_radius": 1.000000000000001,
-  "second": 1.0000000000000007,
-  "sv_one_period": 6.986377694069939,
-  "sv_max_powers": 6.986377694069939
+  "sv_max_powers": 6.986377694069939,
+  "sv_any_start": 6.9863776940699385,
+  "sv_partial": 6.994469862901192
  },
  {
   "ratio": 1.0,
@@ -611,9 +611,9 @@
   "transport": "galerkin",
   "cfl": "1/4",
   "spectral_radius": 1.000000000000002,
-  "second": 1.000000000000001,
-  "sv_one_period": 1.4338401810521906,
-  "sv_max_powers": 1.4338401810521906
+  "sv_max_powers": 1.4338401810521906,
+  "sv_any_start": 1.4338401810521901,
+  "sv_partial": 1.970717367238428
  },
  {
   "ratio": 1000.0,
@@ -622,9 +622,9 @@
   "transport": "remap",
   "cfl": "1/4",
   "spectral_radius": 1.000000000000001,
-  "second": 1.000000000000001,
-  "sv_one_period": 6.365340027796774,
-  "sv_max_powers": 6.365340027796774
+  "sv_max_powers": 6.365340027796774,
+  "sv_any_start": 6.365340027796775,
+  "sv_partial": 6.367435543107887
  },
  {
   "ratio": 1000.0,
@@ -633,9 +633,9 @@
   "transport": "galerkin",
   "cfl": "1/4",
   "spectral_radius": 1.0000000000000042,
-  "second": 1.0000000000000029,
-  "sv_one_period": 1.5826073906121698,
-  "sv_max_powers": 1.5826073906121698
+  "sv_max_powers": 1.5826073906121698,
+  "sv_any_start": 1.5826073906121703,
+  "sv_partial": 2.2060255097404537
  },
  {
   "ratio": 1000.0,
@@ -644,9 +644,9 @@
   "transport": "remap",
   "cfl": "1/4",
   "spectral_radius": 1.0000000000000004,
-  "second": 1.0000000000000002,
-  "sv_one_period": 6.365339708621001,
-  "sv_max_powers": 6.365339708621001
+  "sv_max_powers": 6.365339708621001,
+  "sv_any_start": 6.365339708621002,
+  "sv_partial": 6.367435562433678
  },
  {
   "ratio": 1000.0,
@@ -655,9 +655,9 @@
   "transport": "galerkin",
   "cfl": "1/4",
   "spectral_radius": 1.0000000000000047,
-  "second": 1.0000000000000042,
-  "sv_one_period": 1.5836633863922305,
-  "sv_max_powers": 1.5836633863922305
+  "sv_max_powers": 1.5836633863922305,
+  "sv_any_start": 1.5836633863922298,
+  "sv_partial": 2.2057929877467104
  },
  {
   "ratio": 1000.0,
@@ -666,9 +666,9 @@
   "transport": "remap",
   "cfl": "1/4",
   "spectral_radius": 1.0000000000000009,
-  "second": 1.0000000000000004,
-  "sv_one_period": 6.365339690057994,
-  "sv_max_powers": 6.365339690057994
+  "sv_max_powers": 6.365339690057994,
+  "sv_any_start": 6.3653396900579935,
+  "sv_partial": 6.367435576105402
  },
  {
   "ratio": 1000.0,
@@ -677,9 +677,9 @@
   "transport": "galerkin",
   "cfl": "1/4",
   "spectral_radius": 1.0000000000000047,
-  "second": 1.0000000000000042,
-  "sv_one_period": 1.58372047715905,
-  "sv_max_powers": 1.58372047715905
+  "sv_max_powers": 1.58372047715905,
+  "sv_any_start": 1.5837204771590503,
+  "sv_partial": 2.205791986443478
  },
  {
   "ratio": 1000.0,
@@ -688,9 +688,9 @@
   "transport": "remap",
   "cfl": "1/4",
   "spectral_radius": 1.000000000000001,
-  "second": 1.0000000000000007,
-  "sv_one_period": 6.36533992875054,
-  "sv_max_powers": 6.36533992875054
+  "sv_max_powers": 6.36533992875054,
+  "sv_any_start": 6.365339928750539,
+  "sv_partial": 6.367435577686586
  },
  {
   "ratio": 1000.0,
@@ -699,9 +699,9 @@
   "transport": "galerkin",
   "cfl": "1/4",
   "spectral_radius": 1.0000000000000053,
-  "second": 1.0000000000000036,
-  "sv_one_period": 1.5837203864232745,
-  "sv_max_powers": 1.5837203864232745
+  "sv_max_powers": 1.5837203864232745,
+  "sv_any_start": 1.583720386423274,
+  "sv_partial": 2.2057919334691625
  },
  {
   "ratio": 1000000.0,
@@ -710,9 +710,9 @@
   "transport": "remap",
   "cfl": "1/4",
   "spectral_radius": 1.0000000000000007,
-  "second": 1.0000000000000004,
-  "sv_one_period": 6.364645763532696,
-  "sv_max_powers": 6.364645763532696
+  "sv_max_powers": 6.364645763532696,
+  "sv_any_start": 6.364645763532695,
+  "sv_partial": 6.366315904450588
  },
  {
   "ratio": 1000000.0,
@@ -721,9 +721,9 @@
   "transport": "galerkin",
   "cfl": "1/4",
   "spectral_radius": 1.0000000000000053,
-  "second": 1.000000000000002,
-  "sv_one_period": 1.5828725697576447,
-  "sv_max_powers": 1.5828725697576447
+  "sv_max_powers": 1.5828725697576447,
+  "sv_any_start": 1.5828725697576445,
+  "sv_partial": 2.206575052552795
  },
  {
   "ratio": 1000000.0,
@@ -732,9 +732,9 @@
   "transport": "remap",
   "cfl": "1/4",
   "spectral_radius": 1.0000000000000009,
-  "second": 1.0000000000000004,
-  "sv_one_period": 6.364645438548786,
-  "sv_max_powers": 6.364645438548786
+  "sv_max_powers": 6.364645438548786,
+  "sv_any_start": 6.364645438548782,
+  "sv_partial": 6.366315921723336
  },
  {
   "ratio": 1000000.0,
@@ -743,9 +743,9 @@
   "transport": "galerkin",
   "cfl": "1/4",
   "spectral_radius": 1.0000000000000038,
-  "second": 1.0000000000000018,
-  "sv_one_period": 1.5839275925463634,
-  "sv_max_powers": 1.5839275925463634
+  "sv_max_powers": 1.5839275925463634,
+  "sv_any_start": 1.5839275925463634,
+  "sv_partial": 2.206342300286859
  },
  {
   "ratio": 1000000.0,
@@ -754,9 +754,9 @@
   "transport": "remap",
   "cfl": "1/4",
   "spectral_radius": 1.0000000000000007,
-  "second": 1.0000000000000004,
-  "sv_one_period": 6.364645439522742,
-  "sv_max_powers": 6.364645439522742
+  "sv_max_powers": 6.364645439522742,
+  "sv_any_start": 6.364645439522743,
+  "sv_partial": 6.366315921887549
  },
  {
   "ratio": 1000000.0,
@@ -765,9 +765,9 @@
   "transport": "galerkin",
   "cfl": "1/4",
   "spectral_radius": 1.000000000000005,
-  "second": 1.0000000000000024,
-  "sv_one_period": 1.5839852373308527,
-  "sv_max_powers": 1.5839852373308527
+  "sv_max_powers": 1.5839852373308527,
+  "sv_any_start": 1.583985237330854,
+  "sv_partial": 2.206341456634486
  },
  {
   "ratio": 1000000.0,
@@ -776,9 +776,9 @@
   "transport": "remap",
   "cfl": "1/4",
   "spectral_radius": 1.0000000000000002,
-  "second": 1.0,
-  "sv_one_period": 6.364645436312432,
-  "sv_max_powers": 6.364645436312432
+  "sv_max_powers": 6.364645436312432,
+  "sv_any_start": 6.364645436312431,
+  "sv_partial": 6.366315930261138
  },
  {
   "ratio": 1000000.0,
@@ -787,9 +787,9 @@
   "transport": "galerkin",
   "cfl": "1/4",
   "spectral_radius": 1.0000000000000049,
-  "second": 1.0000000000000022,
-  "sv_one_period": 1.5839857978461538,
-  "sv_max_powers": 1.5839857978461538
+  "sv_max_powers": 1.5839857978461538,
+  "sv_any_start": 1.583985797846154,
+  "sv_partial": 2.206341448979414
  },
  {
   "ratio": 1.0,
@@ -798,9 +798,9 @@
   "transport": "remap",
   "cfl": "1/3",
   "spectral_radius": 1.0000000000000007,
-  "second": 1.0,
-  "sv_one_period": 4.263726634019335,
-  "sv_max_powers": 4.263726634019335
+  "sv_max_powers": 4.263726634019335,
+  "sv_any_start": 4.298416554308021,
+  "sv_partial": 4.467398563537717
  },
  {
   "ratio": 1.0,
@@ -809,9 +809,9 @@
   "transport": "galerkin",
   "cfl": "1/3",
   "spectral_radius": 1.0000000000000024,
-  "second": 1.000000000000002,
-  "sv_one_period": 1.3621811208081247,
-  "sv_max_powers": 1.3621811208081247
+  "sv_max_powers": 1.3621811208081247,
+  "sv_any_start": 1.3635467489496105,
+  "sv_partial": 1.874401574018759
  },
  {
   "ratio": 1.0,
@@ -820,9 +820,9 @@
   "transport": "remap",
   "cfl": "1/3",
   "spectral_radius": 1.0000000000000002,
-  "second": 0.9999999999999998,
-  "sv_one_period": 4.263729905546742,
-  "sv_max_powers": 4.263729905546742
+  "sv_max_powers": 4.263729905546742,
+  "sv_any_start": 4.263729905546742,
+  "sv_partial": 4.430533844707686
  },
  {
   "ratio": 1.0,
@@ -831,9 +831,9 @@
   "transport": "galerkin",
   "cfl": "1/3",
   "spectral_radius": 1.0000000000000044,
-  "second": 1.0000000000000029,
-  "sv_one_period": 1.3625832641961435,
-  "sv_max_powers": 1.3625832641961435
+  "sv_max_powers": 1.3625832641961435,
+  "sv_any_start": 1.3625832641961433,
+  "sv_partial": 1.874461913855192
  },
  {
   "ratio": 1.0,
@@ -842,9 +842,9 @@
   "transport": "remap",
   "cfl": "1/3",
   "spectral_radius": 1.0000000000000002,
-  "second": 0.9999999999999996,
-  "sv_one_period": 4.263728757614219,
-  "sv_max_powers": 4.263728757614219
+  "sv_max_powers": 4.263728757614219,
+  "sv_any_start": 4.263728757614221,
+  "sv_partial": 4.430533797769723
  },
  {
   "ratio": 1.0,
@@ -853,9 +853,9 @@
   "transport": "galerkin",
   "cfl": "1/3",
   "spectral_radius": 1.0000000000000033,
-  "second": 1.0000000000000029,
-  "sv_one_period": 1.3626170167675185,
-  "sv_max_powers": 1.3626170167675185
+  "sv_max_powers": 1.3626170167675185,
+  "sv_any_start": 1.362617016767518,
+  "sv_partial": 1.8744626556662234
  },
  {
   "ratio": 1.0,
@@ -864,9 +864,9 @@
   "transport": "remap",
   "cfl": "1/3",
   "spectral_radius": 1.0000000000000002,
-  "second": 1.0,
-  "sv_one_period": 4.263728747239391,
-  "sv_max_powers": 4.263728747239391
+  "sv_max_powers": 4.263728747239391,
+  "sv_any_start": 4.263728747239389,
+  "sv_partial": 4.430533797344895
  },
  {
   "ratio": 1.0,
@@ -875,9 +875,9 @@
   "transport": "galerkin",
   "cfl": "1/3",
   "spectral_radius": 1.0000000000000044,
-  "second": 1.000000000000004,
-  "sv_one_period": 1.3626173659346716,
-  "sv_max_powers": 1.3626173659346716
+  "sv_max_powers": 1.3626173659346716,
+  "sv_any_start": 1.3626173659346719,
+  "sv_partial": 1.8744626722112283
  },
  {
   "ratio": 1000.0,
@@ -886,9 +886,9 @@
   "transport": "remap",
   "cfl": "1/3",
   "spectral_radius": 1.0000000000000018,
-  "second": 1.000000000000001,
-  "sv_one_period": 4.081799263624792,
-  "sv_max_powers": 4.081799263624792
+  "sv_max_powers": 4.081799263624792,
+  "sv_any_start": 5.5576840169453146,
+  "sv_partial": 5.667586761000868
  },
  {
   "ratio": 1000.0,
@@ -897,9 +897,9 @@
   "transport": "galerkin",
   "cfl": "1/3",
   "spectral_radius": 1.000000000000004,
-  "second": 1.0000000000000016,
-  "sv_one_period": 1.516371056036903,
-  "sv_max_powers": 1.516371056036903
+  "sv_max_powers": 1.516371056036903,
+  "sv_any_start": 1.5163710560369026,
+  "sv_partial": 2.039013768412375
  },
  {
   "ratio": 1000.0,
@@ -908,9 +908,9 @@
   "transport": "remap",
   "cfl": "1/3",
   "spectral_radius": 1.0000000000000013,
-  "second": 1.0000000000000013,
-  "sv_one_period": 4.081798607050967,
-  "sv_max_powers": 4.081798607050967
+  "sv_max_powers": 4.081798607050967,
+  "sv_any_start": 4.081798607050965,
+  "sv_partial": 4.228820366076156
  },
  {
   "ratio": 1000.0,
@@ -919,9 +919,9 @@
   "transport": "galerkin",
   "cfl": "1/3",
   "spectral_radius": 1.0000000000000033,
-  "second": 1.0000000000000029,
-  "sv_one_period": 1.5169750311017878,
-  "sv_max_powers": 1.5169750311017878
+  "sv_max_powers": 1.5169750311017878,
+  "sv_any_start": 1.5169750311017878,
+  "sv_partial": 2.039098474741408
  },
  {
   "ratio": 1000.0,
@@ -930,9 +930,9 @@
   "transport": "remap",
   "cfl": "1/3",
   "spectral_radius": 1.0000000000000018,
-  "second": 1.0000000000000009,
-  "sv_one_period": 4.08179921830172,
-  "sv_max_powers": 4.08179921830172
+  "sv_max_powers": 4.08179921830172,
+  "sv_any_start": 4.08179921830172,
+  "sv_partial": 4.228820367179219
  },
  {
   "ratio": 1000.0,
@@ -941,9 +941,9 @@
   "transport": "galerkin",
   "cfl": "1/3",
   "spectral_radius": 1.0000000000000029,
-  "second": 1.0000000000000016,
-  "sv_one_period": 1.5170045830557388,
-  "sv_max_powers": 1.5170045830557388
+  "sv_max_powers": 1.5170045830557388,
+  "sv_any_start": 1.5170045830557384,
+  "sv_partial": 2.0391098430933976
  },
  {
   "ratio": 1000.0,
@@ -952,9 +952,9 @@
   "transport": "remap",
   "cfl": "1/3",
   "spectral_radius": 1.0000000000000009,
-  "second": 1.0000000000000009,
-  "sv_one_period": 4.081799244216594,
-  "sv_max_powers": 4.081799244216594
+  "sv_max_powers": 4.081799244216594,
+  "sv_any_start": 4.081799244216595,
+  "sv_partial": 4.228820367340871
  },
  {
   "ratio": 1000.0,
@@ -963,9 +963,9 @@
   "transport": "galerkin",
   "cfl": "1/3",
   "spectral_radius": 1.000000000000004,
-  "second": 1.0000000000000029,
-  "sv_one_period": 1.5170047925076375,
-  "sv_max_powers": 1.5170047925076375
+  "sv_max_powers": 1.5170047925076375,
+  "sv_any_start": 1.5170047925076375,
+  "sv_partial": 2.039109863015122
  },
  {
   "ratio": 1000000.0,
@@ -974,9 +974,9 @@
   "transport": "remap",
   "cfl": "1/3",
   "spectral_radius": 1.0000000000000018,
-  "second": 1.000000000000001,
-  "sv_one_period": 4.0818953200527375,
-  "sv_max_powers": 4.0818953200527375
+  "sv_max_powers": 4.0818953200527375,
+  "sv_any_start": 5.564933510532915,
+  "sv_partial": 5.6743216040515545
  },
  {
   "ratio": 1000000.0,
@@ -985,9 +985,9 @@
   "transport": "galerkin",
   "cfl": "1/3",
   "spectral_radius": 1.0000000000000036,
-  "second": 1.0000000000000016,
-  "sv_one_period": 1.5166560008921313,
-  "sv_max_powers": 1.5166560008921313
+  "sv_max_powers": 1.5166560008921313,
+  "sv_any_start": 1.5166560008921313,
+  "sv_partial": 2.0392969476342566
  },
  {
   "ratio": 1000000.0,
@@ -996,9 +996,9 @@
   "transport": "remap",
   "cfl": "1/3",
   "spectral_radius": 1.0000000000000016,
-  "second": 1.0000000000000009,
-  "sv_one_period": 4.081894545337029,
-  "sv_max_powers": 4.081894545337029
+  "sv_max_powers": 4.081894545337029,
+  "sv_any_start": 4.081894545337031,
+  "sv_partial": 4.2286657595904265
  },
  {
   "ratio": 1000000.0,
@@ -1007,9 +1007,9 @@
   "transport": "galerkin",
   "cfl": "1/3",
   "spectral_radius": 1.0000000000000027,
-  "second": 1.0000000000000027,
-  "sv_one_period": 1.517260783984653,
-  "sv_max_powers": 1.517260783984653
+  "sv_max_powers": 1.517260783984653,
+  "sv_any_start": 1.517260783984653,
+  "sv_partial": 2.0393805805149756
  },
  {
   "ratio": 1000000.0,
@@ -1018,9 +1018,9 @@
   "transport": "remap",
   "cfl": "1/3",
   "spectral_radius": 1.0000000000000013,
-  "second": 1.0000000000000009,
-  "sv_one_period": 4.081894555268279,
-  "sv_max_powers": 4.081894555268279
+  "sv_max_powers": 4.081894555268279,
+  "sv_any_start": 4.0818945552682795,
+  "sv_partial": 4.2286657596072565
  },
  {
   "ratio": 1000000.0,
@@ -1029,9 +1029,9 @@
   "transport": "galerkin",
   "cfl": "1/3",
   "spectral_radius": 1.0000000000000018,
-  "second": 1.0000000000000016,
-  "sv_one_period": 1.517289741474714,
-  "sv_max_powers": 1.517289741474714
+  "sv_max_powers": 1.517289741474714,
+  "sv_any_start": 1.517289741474714,
+  "sv_partial": 2.0393928573811038
  },
  {
   "ratio": 1000000.0,
@@ -1040,9 +1040,9 @@
   "transport": "remap",
   "cfl": "1/3",
   "spectral_radius": 1.000000000000002,
-  "second": 1.0000000000000007,
-  "sv_one_period": 4.081895018863575,
-  "sv_max_powers": 4.081895018863575
+  "sv_max_powers": 4.081895018863575,
+  "sv_any_start": 4.081895018863576,
+  "sv_partial": 4.2286657605004585
  },
  {
   "ratio": 1000000.0,
@@ -1051,9 +1051,9 @@
   "transport": "galerkin",
   "cfl": "1/3",
   "spectral_radius": 1.000000000000004,
-  "second": 1.0000000000000036,
-  "sv_one_period": 1.5172900101406421,
-  "sv_max_powers": 1.5172900101406421
+  "sv_max_powers": 1.5172900101406421,
+  "sv_any_start": 1.517290010140642,
+  "sv_partial": 2.0393929892816627
  },
  {
   "ratio": 1.0,
@@ -1062,9 +1062,9 @@
   "transport": "remap",
   "cfl": "1/2",
   "spectral_radius": 1.0000000000000007,
-  "second": 0.9999999999999997,
-  "sv_one_period": 2.5794806858339796,
-  "sv_max_powers": 2.5794806858339796
+  "sv_max_powers": 2.5794806858339796,
+  "sv_any_start": 2.57948068583398,
+  "sv_partial": 2.580657307771681
  },
  {
   "ratio": 1.0,
@@ -1073,9 +1073,9 @@
   "transport": "galerkin",
   "cfl": "1/2",
   "spectral_radius": 1.000000000000001,
-  "second": 1.0000000000000009,
-  "sv_one_period": 1.2615793372427353,
-  "sv_max_powers": 1.296625515236776
+  "sv_max_powers": 1.296625515236776,
+  "sv_any_start": 1.2615793372427344,
+  "sv_partial": 1.8518812127059945
  },
  {
   "ratio": 1.0,
@@ -1084,9 +1084,9 @@
   "transport": "remap",
   "cfl": "1/2",
   "spectral_radius": 1.0000000000000002,
-  "second": 1.0,
-  "sv_one_period": 2.5794913526470156,
-  "sv_max_powers": 2.5794913526470156
+  "sv_max_powers": 2.5794913526470156,
+  "sv_any_start": 2.5794913526470156,
+  "sv_partial": 2.580657147553917
  },
  {
   "ratio": 1.0,
@@ -1095,9 +1095,9 @@
   "transport": "galerkin",
   "cfl": "1/2",
   "spectral_radius": 1.0000000000000013,
-  "second": 1.0000000000000004,
-  "sv_one_period": 1.2605685481002553,
-  "sv_max_powers": 1.2956879078376489
+  "sv_max_powers": 1.2956879078376489,
+  "sv_any_start": 1.2605685481002553,
+  "sv_partial": 1.8518908463966197
  },
  {
   "ratio": 1.0,
@@ -1106,9 +1106,9 @@
   "transport": "remap",
   "cfl": "1/2",
   "spectral_radius": 0.9999999999999996,
-  "second": 0.9999999999999994,
-  "sv_one_period": 2.5794909871121527,
-  "sv_max_powers": 2.5794909871121527
+  "sv_max_powers": 2.5794909871121527,
+  "sv_any_start": 2.5794909871121514,
+  "sv_partial": 2.5806571495140136
  },
  {
   "ratio": 1.0,
@@ -1117,9 +1117,9 @@
   "transport": "galerkin",
   "cfl": "1/2",
   "spectral_radius": 1.0,
-  "second": 1.0,
-  "sv_one_period": 1.2606039510615699,
-  "sv_max_powers": 1.2957138353168722
+  "sv_max_powers": 1.2957138353168722,
+  "sv_any_start": 1.2606039510615707,
+  "sv_partial": 1.8518923696150265
  },
  {
   "ratio": 1.0,
@@ -1128,9 +1128,9 @@
   "transport": "remap",
   "cfl": "1/2",
   "spectral_radius": 0.9999999999999999,
-  "second": 0.9999999999999993,
-  "sv_one_period": 2.5794909866368614,
-  "sv_max_powers": 2.5794909866368614
+  "sv_max_powers": 2.5794909866368614,
+  "sv_any_start": 2.579490986636861,
+  "sv_partial": 2.580657149538311
  },
  {
   "ratio": 1.0,
@@ -1139,9 +1139,9 @@
   "transport": "galerkin",
   "cfl": "1/2",
   "spectral_radius": 1.000000000000001,
-  "second": 1.0000000000000009,
-  "sv_one_period": 1.260604352907259,
-  "sv_max_powers": 1.2957140790495276
+  "sv_max_powers": 1.2957140790495276,
+  "sv_any_start": 1.260604352907259,
+  "sv_partial": 1.8518923878071245
  },
  {
   "ratio": 1000.0,
@@ -1150,9 +1150,9 @@
   "transport": "remap",
   "cfl": "1/2",
   "spectral_radius": 1.000000000000001,
-  "second": 1.0000000000000002,
-  "sv_one_period": 2.1501587572134944,
-  "sv_max_powers": 2.1501587572134944
+  "sv_max_powers": 2.1501587572134944,
+  "sv_any_start": 2.7557879507503844,
+  "sv_partial": 2.9682238474271228
  },
  {
   "ratio": 1000.0,
@@ -1161,9 +1161,9 @@
   "transport": "galerkin",
   "cfl": "1/2",
   "spectral_radius": 1.000000000000002,
-  "second": 1.0000000000000009,
-  "sv_one_period": 1.3967435320077515,
-  "sv_max_powers": 1.4320179587306667
+  "sv_max_powers": 1.4320179587306667,
+  "sv_any_start": 1.3967435320077513,
+  "sv_partial": 2.0621517843266557
  },
  {
   "ratio": 1000.0,
@@ -1172,9 +1172,9 @@
   "transport": "remap",
   "cfl": "1/2",
   "spectral_radius": 1.0000000000000009,
-  "second": 0.9999999999999999,
-  "sv_one_period": 1.9695333112016933,
-  "sv_max_powers": 2.1251460436367147
+  "sv_max_powers": 2.1251460436367147,
+  "sv_any_start": 2.755828350104838,
+  "sv_partial": 2.9682238844315916
  },
  {
   "ratio": 1000.0,
@@ -1183,9 +1183,9 @@
   "transport": "galerkin",
   "cfl": "1/2",
   "spectral_radius": 1.0000000000000013,
-  "second": 1.0000000000000007,
-  "sv_one_period": 1.3960754321375273,
-  "sv_max_powers": 1.4312191920370088
+  "sv_max_powers": 1.4312191920370088,
+  "sv_any_start": 1.3960754321375277,
+  "sv_partial": 2.06216877323451
  },
  {
   "ratio": 1000.0,
@@ -1194,9 +1194,9 @@
   "transport": "remap",
   "cfl": "1/2",
   "spectral_radius": 1.000000000000001,
-  "second": 1.0000000000000004,
-  "sv_one_period": 3.7826667530385727,
-  "sv_max_powers": 3.7826667530385727
+  "sv_max_powers": 3.7826667530385727,
+  "sv_any_start": 3.7826667530385722,
+  "sv_partial": 3.7826667530385722
  },
  {
   "ratio": 1000.0,
@@ -1205,9 +1205,9 @@
   "transport": "galerkin",
   "cfl": "1/2",
   "spectral_radius": 1.0000000000000022,
-  "second": 1.0000000000000018,
-  "sv_one_period": 1.3960359183152335,
-  "sv_max_powers": 1.4312462865177704
+  "sv_max_powers": 1.4312462865177704,
+  "sv_any_start": 1.3960359183152333,
+  "sv_partial": 2.062171972892399
  },
  {
   "ratio": 1000.0,
@@ -1216,9 +1216,9 @@
   "transport": "remap",
   "cfl": "1/2",
   "spectral_radius": 1.0,
-  "second": 1.0,
-  "sv_one_period": 1.9695378256609044,
-  "sv_max_powers": 2.1178481179214885
+  "sv_max_powers": 2.1178481179214885,
+  "sv_any_start": 2.7558306133468267,
+  "sv_partial": 2.9682238857050387
  },
  {
   "ratio": 1000.0,
@@ -1227,9 +1227,9 @@
   "transport": "galerkin",
   "cfl": "1/2",
   "spectral_radius": 1.000000000000001,
-  "second": 1.0000000000000007,
-  "sv_one_period": 1.3960354971798101,
-  "sv_max_powers": 1.4312463353171783
+  "sv_max_powers": 1.4312463353171783,
+  "sv_any_start": 1.3960354971798103,
+  "sv_partial": 2.062171956182775
  },
  {
   "ratio": 1000000.0,
@@ -1238,9 +1238,9 @@
   "transport": "remap",
   "cfl": "1/2",
   "spectral_radius": 1.0,
-  "second": 1.0,
-  "sv_one_period": 2.150158328007811,
-  "sv_max_powers": 2.150158328007811
+  "sv_max_powers": 2.150158328007811,
+  "sv_any_start": 2.756429084153978,
+  "sv_partial": 2.9692390825009
  },
  {
   "ratio": 1000000.0,
@@ -1249,9 +1249,9 @@
   "transport": "galerkin",
   "cfl": "1/2",
   "spectral_radius": 1.0000000000000027,
-  "second": 1.0000000000000013,
-  "sv_one_period": 1.3970247388695745,
-  "sv_max_powers": 1.4322978115199638
+  "sv_max_powers": 1.4322978115199638,
+  "sv_any_start": 1.3970247388695736,
+  "sv_partial": 2.0626353586188872
  },
  {
   "ratio": 1000000.0,
@@ -1260,9 +1260,9 @@
   "transport": "remap",
   "cfl": "1/2",
   "spectral_radius": 1.0000000000000004,
-  "second": 0.9999999999999997,
-  "sv_one_period": 1.9642687117078896,
-  "sv_max_powers": 2.118573961038014
+  "sv_max_powers": 2.118573961038014,
+  "sv_any_start": 2.7564689149013626,
+  "sv_partial": 2.9692391193574372
  },
  {
   "ratio": 1000000.0,
@@ -1271,9 +1271,9 @@
   "transport": "galerkin",
   "cfl": "1/2",
   "spectral_radius": 1.0000000000000022,
-  "second": 1.000000000000001,
-  "sv_one_period": 1.3963639440145925,
-  "sv_max_powers": 1.431486973921027
+  "sv_max_powers": 1.431486973921027,
+  "sv_any_start": 1.3963639440145934,
+  "sv_partial": 2.0626520946670106
  },
  {
   "ratio": 1000000.0,
@@ -1282,9 +1282,9 @@
   "transport": "remap",
   "cfl": "1/2",
   "spectral_radius": 0.9999999999999997,
-  "second": 0.9999999999999996,
-  "sv_one_period": 1.9642687519830173,
-  "sv_max_powers": 2.1182459145813217
+  "sv_max_powers": 2.1182459145813217,
+  "sv_any_start": 2.7564717967153936,
+  "sv_partial": 2.9692391209539997
  },
  {
   "ratio": 1000000.0,
@@ -1293,9 +1293,9 @@
   "transport": "galerkin",
   "cfl": "1/2",
   "spectral_radius": 1.0000000000000027,
-  "second": 1.000000000000002,
-  "sv_one_period": 1.3963174659109872,
-  "sv_max_powers": 1.4315136001086082
+  "sv_max_powers": 1.4315136001086082,
+  "sv_any_start": 1.3963174659109878,
+  "sv_partial": 2.0626555017376877
  },
  {
   "ratio": 1000000.0,
@@ -1304,9 +1304,9 @@
   "transport": "remap",
   "cfl": "1/2",
   "spectral_radius": 1.0000000000000004,
-  "second": 0.9999999999999999,
-  "sv_one_period": 2.843132447189354,
-  "sv_max_powers": 2.843132447189354
+  "sv_max_powers": 2.843132447189354,
+  "sv_any_start": 2.843132447189355,
+  "sv_partial": 2.969239120970218
  },
  {
   "ratio": 1000000.0,
@@ -1315,9 +1315,9 @@
   "transport": "galerkin",
   "cfl": "1/2",
   "spectral_radius": 1.0000000000000013,
-  "second": 1.0000000000000009,
-  "sv_one_period": 1.3963169793255834,
-  "sv_max_powers": 1.4315138631768072
+  "sv_max_powers": 1.4315138631768072,
+  "sv_any_start": 1.3963169793255825,
+  "sv_partial": 2.062655537349102
  },
  {
   "ratio": 1.0,
@@ -1326,9 +1326,9 @@
   "transport": "remap",
   "cfl": "3/4",
   "spectral_radius": 1.000000000000002,
-  "second": 1.000000000000002,
-  "sv_one_period": 4.564462732864694,
-  "sv_max_powers": 4.564462732864694
+  "sv_max_powers": 4.564462732864694,
+  "sv_any_start": 6.212812302710347,
+  "sv_partial": 6.21428791973581
  },
  {
   "ratio": 1.0,
@@ -1337,9 +1337,9 @@
   "transport": "galerkin",
   "cfl": "3/4",
   "spectral_radius": 1.0000000000000027,
-  "second": 1.000000000000001,
-  "sv_one_period": 1.2521184796732938,
-  "sv_max_powers": 1.2873628552329914
+  "sv_max_powers": 1.2873628552329914,
+  "sv_any_start": 1.4178873081683052,
+  "sv_partial": 2.019781001450936
  },
  {
   "ratio": 1.0,
@@ -1348,9 +1348,9 @@
   "transport": "remap",
   "cfl": "3/4",
   "spectral_radius": 1.000000000000002,
-  "second": 1.000000000000002,
-  "sv_one_period": 4.900931579175121,
-  "sv_max_powers": 4.900931579175121
+  "sv_max_powers": 4.900931579175121,
+  "sv_any_start": 6.212753340760473,
+  "sv_partial": 6.214285906978791
  },
  {
   "ratio": 1.0,
@@ -1359,9 +1359,9 @@
   "transport": "galerkin",
   "cfl": "3/4",
   "spectral_radius": 1.0000000000000029,
-  "second": 1.000000000000001,
-  "sv_one_period": 1.2530771590318748,
-  "sv_max_powers": 1.2858300733098311
+  "sv_max_powers": 1.2858300733098311,
+  "sv_any_start": 1.430449865158599,
+  "sv_partial": 2.0198025564956272
  },
  {
   "ratio": 1.0,
@@ -1370,9 +1370,9 @@
   "transport": "remap",
   "cfl": "3/4",
   "spectral_radius": 1.000000000000002,
-  "second": 1.0000000000000018,
-  "sv_one_period": 4.949241774500844,
-  "sv_max_powers": 4.949241774500844
+  "sv_max_powers": 4.949241774500844,
+  "sv_any_start": 6.212752776827684,
+  "sv_partial": 6.214285901302987
  },
  {
   "ratio": 1.0,
@@ -1381,9 +1381,9 @@
   "transport": "galerkin",
   "cfl": "3/4",
   "spectral_radius": 1.0000000000000036,
-  "second": 1.0000000000000022,
-  "sv_one_period": 1.2531305311904166,
-  "sv_max_powers": 1.2858629766485832
+  "sv_max_powers": 1.2858629766485832,
+  "sv_any_start": 1.4274856010037047,
+  "sv_partial": 2.0198009520662694
  },
  {
   "ratio": 1.0,
@@ -1392,9 +1392,9 @@
   "transport": "remap",
   "cfl": "3/4",
   "spectral_radius": 1.0000000000000024,
-  "second": 1.000000000000002,
-  "sv_one_period": 4.95055791147701,
-  "sv_max_powers": 4.95055791147701
+  "sv_max_powers": 4.95055791147701,
+  "sv_any_start": 6.212752772281184,
+  "sv_partial": 6.214285901308302
  },
  {
   "ratio": 1.0,
@@ -1403,9 +1403,9 @@
   "transport": "galerkin",
   "cfl": "3/4",
   "spectral_radius": 1.0000000000000036,
-  "second": 1.000000000000001,
-  "sv_one_period": 1.253131063177425,
-  "sv_max_powers": 1.2858633754101898
+  "sv_max_powers": 1.2858633754101898,
+  "sv_any_start": 1.4274593201069012,
+  "sv_partial": 2.0198009321748924
  },
  {
   "ratio": 1000.0,
@@ -1414,9 +1414,9 @@
   "transport": "remap",
   "cfl": "3/4",
   "spectral_radius": 1.0000000000000024,
-  "second": 1.0000000000000018,
-  "sv_one_period": 2.2839416532800523,
-  "sv_max_powers": 2.4298805304438624
+  "sv_max_powers": 2.4298805304438624,
+  "sv_any_start": 8.116479118552805,
+  "sv_partial": 8.116479118552805
  },
  {
   "ratio": 1000.0,
@@ -1425,9 +1425,9 @@
   "transport": "galerkin",
   "cfl": "3/4",
   "spectral_radius": 1.0000000000000049,
-  "second": 1.000000000000002,
-  "sv_one_period": 1.3717128229569708,
-  "sv_max_powers": 1.4082871447548333
+  "sv_max_powers": 1.4082871447548333,
+  "sv_any_start": 1.5141406103183785,
+  "sv_partial": 2.0783896606000645
  },
  {
   "ratio": 1000.0,
@@ -1436,9 +1436,9 @@
   "transport": "remap",
   "cfl": "3/4",
   "spectral_radius": 1.0000000000000024,
-  "second": 1.0000000000000018,
-  "sv_one_period": 2.6677251014736747,
-  "sv_max_powers": 2.6677251014736747
+  "sv_max_powers": 2.6677251014736747,
+  "sv_any_start": 8.116403057339811,
+  "sv_partial": 8.116403057339811
  },
  {
   "ratio": 1000.0,
@@ -1447,9 +1447,9 @@
   "transport": "galerkin",
   "cfl": "3/4",
   "spectral_radius": 1.0000000000000036,
-  "second": 1.0000000000000036,
-  "sv_one_period": 1.3724070144875775,
-  "sv_max_powers": 1.4104418909131502
+  "sv_max_powers": 1.4104418909131502,
+  "sv_any_start": 1.5240792848817453,
+  "sv_partial": 2.0935756148431386
  },
  {
   "ratio": 1000.0,
@@ -1458,9 +1458,9 @@
   "transport": "remap",
   "cfl": "3/4",
   "spectral_radius": 1.0000000000000022,
-  "second": 1.0000000000000016,
-  "sv_one_period": 8.221735149116107,
-  "sv_max_powers": 8.221735149116107
+  "sv_max_powers": 8.221735149116107,
+  "sv_any_start": 8.221735149116107,
+  "sv_partial": 8.221735149116107
  },
  {
   "ratio": 1000.0,
@@ -1469,9 +1469,9 @@
   "transport": "galerkin",
   "cfl": "3/4",
   "spectral_radius": 1.0000000000000036,
-  "second": 1.0000000000000027,
-  "sv_one_period": 1.3722518362925944,
-  "sv_max_powers": 1.4104684814446113
+  "sv_max_powers": 1.4104684814446113,
+  "sv_any_start": 1.5146766045585611,
+  "sv_partial": 2.078281156953732
  },
  {
   "ratio": 1000.0,
@@ -1480,9 +1480,9 @@
   "transport": "remap",
   "cfl": "3/4",
   "spectral_radius": 1.0000000000000018,
-  "second": 1.0000000000000013,
-  "sv_one_period": 5.26780767736874,
-  "sv_max_powers": 5.26780767736874
+  "sv_max_powers": 5.26780767736874,
+  "sv_any_start": 8.116402995855728,
+  "sv_partial": 8.116402995855728
  },
  {
   "ratio": 1000.0,
@@ -1491,9 +1491,9 @@
   "transport": "galerkin",
   "cfl": "3/4",
   "spectral_radius": 1.0000000000000038,
-  "second": 1.0000000000000036,
-  "sv_one_period": 1.3722524828812392,
-  "sv_max_powers": 1.410467428168373
+  "sv_max_powers": 1.410467428168373,
+  "sv_any_start": 1.5145837513306428,
+  "sv_partial": 2.0781512958183255
  },
  {
   "ratio": 1000000.0,
@@ -1502,9 +1502,9 @@
   "transport": "remap",
   "cfl": "3/4",
   "spectral_radius": 1.0000000000000024,
-  "second": 1.0000000000000018,
-  "sv_one_period": 2.281195511821473,
-  "sv_max_powers": 2.4300580468203354
+  "sv_max_powers": 2.4300580468203354,
+  "sv_any_start": 8.136102957064518,
+  "sv_partial": 8.136102957064518
  },
  {
   "ratio": 1000000.0,
@@ -1513,9 +1513,9 @@
   "transport": "galerkin",
   "cfl": "3/4",
   "spectral_radius": 1.0000000000000047,
-  "second": 1.0000000000000036,
-  "sv_one_period": 1.3719393748524191,
-  "sv_max_powers": 1.4085367654464835
+  "sv_max_powers": 1.4085367654464835,
+  "sv_any_start": 1.5143148771312112,
+  "sv_partial": 2.0789909241442994
  },
  {
   "ratio": 1000000.0,
@@ -1524,9 +1524,9 @@
   "transport": "remap",
   "cfl": "3/4",
   "spectral_radius": 1.0000000000000027,
-  "second": 1.000000000000001,
-  "sv_one_period": 1.9326125885097867,
-  "sv_max_powers": 2.3548736586617687
+  "sv_max_powers": 2.3548736586617687,
+  "sv_any_start": 8.136026741412936,
+  "sv_partial": 8.136026741412936
  },
  {
   "ratio": 1000000.0,
@@ -1535,9 +1535,9 @@
   "transport": "galerkin",
   "cfl": "3/4",
   "spectral_radius": 1.0000000000000024,
-  "second": 1.0000000000000018,
-  "sv_one_period": 1.3726432550270578,
-  "sv_max_powers": 1.4106939422052738
+  "sv_max_powers": 1.4106939422052738,
+  "sv_any_start": 1.5242722564821323,
+  "sv_partial": 2.0941929485572643
  },
  {
   "ratio": 1000000.0,
@@ -1546,9 +1546,9 @@
   "transport": "remap",
   "cfl": "3/4",
   "spectral_radius": 1.000000000000002,
-  "second": 1.000000000000002,
-  "sv_one_period": 1.9326123462878342,
-  "sv_max_powers": 2.3664320355143684
+  "sv_max_powers": 2.3664320355143684,
+  "sv_any_start": 8.136026684697987,
+  "sv_partial": 8.136026684697987
  },
  {
   "ratio": 1000000.0,
@@ -1557,9 +1557,9 @@
   "transport": "galerkin",
   "cfl": "3/4",
   "spectral_radius": 1.0000000000000036,
-  "second": 1.0000000000000018,
-  "sv_one_period": 1.3724783521004638,
-  "sv_max_powers": 1.41071398179863
+  "sv_max_powers": 1.41071398179863,
+  "sv_any_start": 1.5148517371984933,
+  "sv_partial": 2.078906339780667
  },
  {
   "ratio": 1000000.0,
@@ -1568,9 +1568,9 @@
   "transport": "remap",
   "cfl": "3/4",
   "spectral_radius": 1.0000000000000029,
-  "second": 1.000000000000002,
-  "sv_one_period": 6.160476772977346,
-  "sv_max_powers": 6.160476772977346
+  "sv_max_powers": 6.160476772977346,
+  "sv_any_start": 8.136026684113038,
+  "sv_partial": 8.136026684113038
  },
  {
   "ratio": 1000000.0,
@@ -1579,9 +1579,9 @@
   "transport": "galerkin",
   "cfl": "3/4",
   "spectral_radius": 1.0000000000000053,
-  "second": 1.0000000000000029,
-  "sv_one_period": 1.3724767385966326,
-  "sv_max_powers": 1.410714149187309
+  "sv_max_powers": 1.410714149187309,
+  "sv_any_start": 1.5147558099398926,
+  "sv_partial": 2.078752417767535
  },
  {
   "ratio": 1.0,
@@ -1590,9 +1590,9 @@
   "transport": "remap",
   "cfl": "9/10",
   "spectral_radius": 0.9999999999999987,
-  "second": 0.9999999999999987,
-  "sv_one_period": 8.100057603182274,
-  "sv_max_powers": 8.449215586064696
+  "sv_max_powers": 8.449215586064696,
+  "sv_any_start": 14.897077983502484,
+  "sv_partial": 14.897077983502484
  },
  {
   "ratio": 1.0,
@@ -1601,9 +1601,9 @@
   "transport": "galerkin",
   "cfl": "9/10",
   "spectral_radius": 1.0000000000000142,
-  "second": 1.0000000000000007,
-  "sv_one_period": 1.3024644663215652,
-  "sv_max_powers": 1.3438167041642113
+  "sv_max_powers": 1.3438167041642113,
+  "sv_any_start": 1.9018100741443646,
+  "sv_partial": 2.3581065906416216
  },
  {
   "ratio": 1.0,
@@ -1612,9 +1612,9 @@
   "transport": "remap",
   "cfl": "9/10",
   "spectral_radius": 1.0000000000000007,
-  "second": 0.9999999999999996,
-  "sv_one_period": 13.692869354915494,
-  "sv_max_powers": 13.692869354915494
+  "sv_max_powers": 13.692869354915494,
+  "sv_any_start": 14.89664642312708,
+  "sv_partial": 14.89664642312708
  },
  {
   "ratio": 1.0,
@@ -1623,9 +1623,9 @@
   "transport": "galerkin",
   "cfl": "9/10",
   "spectral_radius": 1.0000000000000013,
-  "second": 1.0000000000000013,
-  "sv_one_period": 1.3048195173395678,
-  "sv_max_powers": 1.3493051642112224
+  "sv_max_powers": 1.3493051642112224,
+  "sv_any_start": 1.9090145175067115,
+  "sv_partial": 2.357933565875817
  },
  {
   "ratio": 1.0,
@@ -1634,9 +1634,9 @@
   "transport": "remap",
   "cfl": "9/10",
   "spectral_radius": 1.0000000000000009,
-  "second": 0.9999999999999993,
-  "sv_one_period": 14.179693174432812,
-  "sv_max_powers": 14.179693174432812
+  "sv_max_powers": 14.179693174432812,
+  "sv_any_start": 14.896646262181925,
+  "sv_partial": 14.896646262181925
  },
  {
   "ratio": 1.0,
@@ -1645,9 +1645,9 @@
   "transport": "galerkin",
   "cfl": "9/10",
   "spectral_radius": 1.0000000000000038,
-  "second": 1.0000000000000033,
-  "sv_one_period": 1.3047901243275677,
-  "sv_max_powers": 1.3493089387010797
+  "sv_max_powers": 1.3493089387010797,
+  "sv_any_start": 1.9089564228559024,
+  "sv_partial": 2.3579284386117427
  },
  {
   "ratio": 1.0,
@@ -1656,9 +1656,9 @@
   "transport": "remap",
   "cfl": "9/10",
   "spectral_radius": 1.0000000000000007,
-  "second": 0.9999999999999994,
-  "sv_one_period": 14.184392796578068,
-  "sv_max_powers": 14.184392796578068
+  "sv_max_powers": 14.184392796578068,
+  "sv_any_start": 14.896646255166612,
+  "sv_partial": 14.896646255166612
  },
  {
   "ratio": 1.0,
@@ -1667,9 +1667,9 @@
   "transport": "galerkin",
   "cfl": "9/10",
   "spectral_radius": 1.0000000000000029,
-  "second": 1.0000000000000029,
-  "sv_one_period": 1.3047903258636857,
-  "sv_max_powers": 1.3493093904168416
+  "sv_max_powers": 1.3493093904168416,
+  "sv_any_start": 1.9089562048493127,
+  "sv_partial": 2.3579284079905465
  },
  {
   "ratio": 1000.0,
@@ -1678,9 +1678,9 @@
   "transport": "remap",
   "cfl": "9/10",
   "spectral_radius": 1.0000000000000062,
-  "second": 1.0000000000000004,
-  "sv_one_period": 4.637931511960678,
-  "sv_max_powers": 4.694106446846402
+  "sv_max_powers": 4.694106446846402,
+  "sv_any_start": 25.03288548592377,
+  "sv_partial": 25.03288548592377
  },
  {
   "ratio": 1000.0,
@@ -1689,9 +1689,9 @@
   "transport": "galerkin",
   "cfl": "9/10",
   "spectral_radius": 1.0000000000000098,
-  "second": 1.000000000000004,
-  "sv_one_period": 1.3479325995962972,
-  "sv_max_powers": 1.395361859177846
+  "sv_max_powers": 1.395361859177846,
+  "sv_any_start": 1.6622817468373592,
+  "sv_partial": 2.368267855981506
  },
  {
   "ratio": 1000.0,
@@ -1700,9 +1700,9 @@
   "transport": "remap",
   "cfl": "9/10",
   "spectral_radius": 1.0000000000000064,
-  "second": 1.0,
-  "sv_one_period": 4.383320264316259,
-  "sv_max_powers": 4.383320264316259
+  "sv_max_powers": 4.383320264316259,
+  "sv_any_start": 25.03219301716049,
+  "sv_partial": 25.03219301716049
  },
  {
   "ratio": 1000.0,
@@ -1711,9 +1711,9 @@
   "transport": "galerkin",
   "cfl": "9/10",
   "spectral_radius": 1.000000000000009,
-  "second": 1.0000000000000033,
-  "sv_one_period": 1.3449165648476977,
-  "sv_max_powers": 1.398373331578213
+  "sv_max_powers": 1.398373331578213,
+  "sv_any_start": 1.6571361219779717,
+  "sv_partial": 2.3445972389540435
  },
  {
   "ratio": 1000.0,
@@ -1722,9 +1722,9 @@
   "transport": "remap",
   "cfl": "9/10",
   "spectral_radius": 1.0000000000000018,
-  "second": 1.0000000000000018,
-  "sv_one_period": 14.173693114368135,
-  "sv_max_powers": 14.173693114368135
+  "sv_max_powers": 14.173693114368135,
+  "sv_any_start": 25.03219255600991,
+  "sv_partial": 25.03219255600991
  },
  {
   "ratio": 1000.0,
@@ -1733,9 +1733,9 @@
   "transport": "galerkin",
   "cfl": "9/10",
   "spectral_radius": 1.000000000000007,
-  "second": 1.000000000000007,
-  "sv_one_period": 1.734852809572204,
-  "sv_max_powers": 1.734852809572204
+  "sv_max_powers": 1.734852809572204,
+  "sv_any_start": 1.7348528095722047,
+  "sv_partial": 2.3679534355520757
  },
  {
   "ratio": 1000.0,
@@ -1744,9 +1744,9 @@
   "transport": "remap",
   "cfl": "9/10",
   "spectral_radius": 1.000000000000004,
-  "second": 0.9999999999999996,
-  "sv_one_period": 12.371189375149292,
-  "sv_max_powers": 12.371189375149292
+  "sv_max_powers": 12.371189375149292,
+  "sv_any_start": 25.032192540932012,
+  "sv_partial": 25.032192540932012
  },
  {
   "ratio": 1000.0,
@@ -1755,9 +1755,9 @@
   "transport": "galerkin",
   "cfl": "9/10",
   "spectral_radius": 1.0000000000000062,
-  "second": 1.0000000000000062,
-  "sv_one_period": 1.3438337137738001,
-  "sv_max_powers": 1.3984720439363536
+  "sv_max_powers": 1.3984720439363536,
+  "sv_any_start": 1.637025503474314,
+  "sv_partial": 2.3679851843950117
  },
  {
   "ratio": 1000000.0,
@@ -1766,9 +1766,9 @@
   "transport": "remap",
   "cfl": "9/10",
   "spectral_radius": 1.0000000000000044,
-  "second": 1.0000000000000007,
-  "sv_one_period": 4.633905760119842,
-  "sv_max_powers": 4.69268378267213
+  "sv_max_powers": 4.69268378267213,
+  "sv_any_start": 25.169280991315407,
+  "sv_partial": 25.169280991315407
  },
  {
   "ratio": 1000000.0,
@@ -1777,9 +1777,9 @@
   "transport": "galerkin",
   "cfl": "9/10",
   "spectral_radius": 1.0000000000000084,
-  "second": 1.0000000000000084,
-  "sv_one_period": 1.3475666908201156,
-  "sv_max_powers": 1.3955714005789517
+  "sv_max_powers": 1.3955714005789517,
+  "sv_any_start": 1.6619007638649843,
+  "sv_partial": 2.369040863161843
  },
  {
   "ratio": 1000000.0,
@@ -1788,9 +1788,9 @@
   "transport": "remap",
   "cfl": "9/10",
   "spectral_radius": 1.0000000000000064,
-  "second": 1.000000000000002,
-  "sv_one_period": 2.256494002812049,
-  "sv_max_powers": 2.692198740091243
+  "sv_max_powers": 2.692198740091243,
+  "sv_any_start": 25.168584931294216,
+  "sv_partial": 25.168584931294216
  },
  {
   "ratio": 1000000.0,
@@ -1799,9 +1799,9 @@
   "transport": "galerkin",
   "cfl": "9/10",
   "spectral_radius": 1.0000000000000084,
-  "second": 1.0000000000000084,
-  "sv_one_period": 1.3444874854231958,
-  "sv_max_powers": 1.3986151172782295
+  "sv_max_powers": 1.3986151172782295,
+  "sv_any_start": 1.6571116641016326,
+  "sv_partial": 2.3453397345542495
  },
  {
   "ratio": 1000000.0,
@@ -1810,9 +1810,9 @@
   "transport": "remap",
   "cfl": "9/10",
   "spectral_radius": 1.0000000000000053,
-  "second": 1.0000000000000009,
-  "sv_one_period": 2.256488523032073,
-  "sv_max_powers": 2.6910878360550727
+  "sv_max_powers": 2.6910878360550727,
+  "sv_any_start": 25.16858446805806,
+  "sv_partial": 25.16858446805806
  },
  {
   "ratio": 1000000.0,
@@ -1821,9 +1821,9 @@
   "transport": "galerkin",
   "cfl": "9/10",
   "spectral_radius": 1.000000000000008,
-  "second": 1.0000000000000067,
-  "sv_one_period": 1.3434144978028417,
-  "sv_max_powers": 1.3986924773840423
+  "sv_max_powers": 1.3986924773840423,
+  "sv_any_start": 1.6368732829515016,
+  "sv_partial": 2.3687502451942777
  },
  {
   "ratio": 1000000.0,
@@ -1832,9 +1832,9 @@
   "transport": "remap",
   "cfl": "9/10",
   "spectral_radius": 1.000000000000003,
-  "second": 1.000000000000003,
-  "sv_one_period": 10.559191663020254,
-  "sv_max_powers": 10.559191663020254
+  "sv_max_powers": 10.559191663020254,
+  "sv_any_start": 25.168584452902028,
+  "sv_partial": 25.168584452902028
  },
  {
   "ratio": 1000000.0,
@@ -1843,8 +1843,8 @@
   "transport": "galerkin",
   "cfl": "9/10",
   "spectral_radius": 1.0000000000000089,
-  "second": 1.0000000000000089,
-  "sv_one_period": 1.3815431393939817,
-  "sv_max_powers": 1.3986933054837232
+  "sv_max_powers": 1.3986933054837232,
+  "sv_any_start": 1.6366613718192704,
+  "sv_partial": 2.3687579717399228
  }
 ]

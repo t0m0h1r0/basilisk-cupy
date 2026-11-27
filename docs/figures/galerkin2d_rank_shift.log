@@ -31,3 +31,6 @@
   3562s recon_jump {'N': 24, 'a': 1, 'b': 1, 'ratio': 1000.0, 'spacing': 0.004} {'max_change': 0.7236987930082242, 'at_offset': 0.484}
   3632s recon_jump {'N': 24, 'a': 1, 'b': 1, 'ratio': 1000.0, 'spacing': 0.002} {'max_change': 0.7236198840740857, 'at_offset': 0.482}
   3632s recon_jump {'N': 32, 'a': 1, 'b': 1, 'ratio': 1.0, 'spacing': 0.004} {'max_change': 0.046042096947072286, 'at_offset': 0.632}
+  5191s recon_jump {'N': 32, 'a': 1, 'b': 1, 'ratio': 1.0, 'spacing': 0.002} {'max_change': 0.02306750309307315, 'at_offset': 0.632}
+  5191s recon_jump {'N': 32, 'a': 1, 'b': 1, 'ratio': 1000.0, 'spacing': 0.004} {'max_change': 0.40624983897918665, 'at_offset': 0.9440000000000001}
+  5200s recon_jump {'N': 32, 'a': 1, 'b': 1, 'ratio': 1000.0, 'spacing': 0.002} {'max_change': 0.20387982257282844, 'at_offset': 0.9440000000000001}

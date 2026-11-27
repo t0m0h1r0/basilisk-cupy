@@ -1291,3 +1291,17 @@ Gram matrix stays below 20.5 and the amplification below 21.3, the reconstructio
 continuous as interfaces cross faces; the optimised end closures of note 95 no longer help. Floquet analysis at CFL
 1/16 to 9/10 shows no growth; Galerkin grows at most 2.0 per period (remap up to 29). As the user's argument predicts,
 no variant keeps the viscous stiffness bounded uniformly in the density ratio: viscosity must be built separately.
+
+Roadmap (`docs/notes/98_roadmap.md`): the user's stock-taking of PRs #1-#108. Operators are far along, but no
+integrated high-order two-phase scheme exists yet; the work now follows the dependencies: one-dimensional PCCD (done,
+note 97), two-phase viscosity and two-dimensional PCCD, variable-density projection, Navier-Stokes with exact
+interfaces, real VOF interfaces, then GPU performance, each with explicit exit criteria. The note lists which
+techniques are adopted, main candidates, on hold or rejected.
+
+Compact-stress viscosity (`docs/notes/99_viscous_stress.md`, the user's proposal): the exact relation between
+neighbouring mass-weighted averages and the stress, with mass-coordinate hat functions psi_f, gives a cyclic
+tridiagonal relation for the face stresses; its row-lumped average H_4 yields K = D^T H_4^{-1} D, which conserves
+momentum, reproduces a constant stress exactly, dissipates energy and keeps the stiffness below 6 nu/h^2 at any
+density ratio and cut fraction (fourth order in one phase). Across density or viscosity jumps it is first to third
+order; rows made exact for quadratic stresses (H_3) restore fourth order for steady flows, but their symmetric part can
+be indefinite across large viscosity jumps and they do not help unsteady flows with density jumps.
