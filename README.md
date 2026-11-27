@@ -1405,3 +1405,19 @@ isometry, so Galerkin and the exact-momentum Remap coincide: local momentum cons
 together. For the normal component they do not: the Remap has a worst one-step energy amplification of 1.3 that did
 not compound over 259 steps (<= 1.13), Galerkin has a normalised local-momentum defect of 0.4. With the usual dual
 cells the Remap blows up (energy x 6052 for a smooth field).
+
+New research policy (`docs/notes/111_new_policy_r0_r4.md`, fixed on 2026-11-27): a fixed-grid conservative
+finite-volume two-phase solver is the base and CCD is used to reduce the errors inside the pure phases; the order is
+R0-P (basic discretisation fixes) -> R0 (baseline solver) -> R1 (error and performance budget) -> R2 (conservative CCD
+advection) -> R3 (only the operators that R1 shows worth it) -> R4 (overall performance). The common-Gram / moving
+phase-aware control volume / commuting MAC-PCCD route (notes 104-110) is frozen and kept as a record.
+
+R0-P1, the first-order time error of the conserving momentum transport (`docs/notes/112_r0p1_time_order.md`): two
+causes were identified. (1) The half-step prediction of the face value lacks the pressure source: an even O(dt^2)
+local error (dt^2/2) u . grad g, which matches the measurement within 1.4-5.8%. (2) In this port the ghost cells of
+the momentum are built from the step-start velocity, so with periodic boundaries they are stale in the second sweep.
+The direction splitting and the frozen dilation term are an odd O(dt^2) error, (dt^2/2)([B, A] + d (A + B)) q as the
+user derived (matched within 0.1-4%), and cancel under the alternating sweep order. With both fixes (the second one
+applied from the test side; the library is unchanged) the conserving form reaches the accuracy of the non-conserving
+one on the single-phase Taylor-Green flow (8.3e-3 / 1.22e-3 / 1.76e-4 at N = 32 / 64 / 128). The explicit feedback
+instability of the source at high density ratios (note 77) is still open.
