@@ -1283,3 +1283,11 @@ closures optimised under quartic exactness), stays fifth order, and grows by at 
 remap and Galerkin. The cut-off jump term makes the remap Floquet-unstable. The phase split jumps when an interface
 crosses a cell face; blending the mixed cell into the majority phase's run (when the minority phase is small in both
 volume and mass, with the minority part's integral replaced exactly) makes it continuous at no loss of order.
+
+Partial-cell mixed cells for the two-phase PCCD (`docs/notes/97_pccd_partial_cell.md`): each phase's part of a mixed
+cell is its neighbour's polynomial extended plus a Hermite correction to a common interface value, which the mixed
+cell's mass-weighted average fixes. Over density ratios 1 to 1e6 and phase-mass ratios 1e-6 to 1e6 the mass-scaled
+Gram matrix stays below 20.5 and the amplification below 21.3, the reconstruction is fifth order, C^1 at the faces and
+continuous as interfaces cross faces; the optimised end closures of note 95 no longer help. Floquet analysis at CFL
+1/16 to 9/10 shows no growth; Galerkin grows at most 2.0 per period (remap up to 29). As the user's argument predicts,
+no variant keeps the viscous stiffness bounded uniformly in the density ratio: viscosity must be built separately.

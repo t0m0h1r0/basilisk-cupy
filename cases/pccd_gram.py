@@ -102,3 +102,20 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
+
+
+def stiffness(N, ratio, c, mode="blend_partial", eps=1e-7):
+    """lambda_max(M^{-1/2} K M^{-1/2}) h^2 with K_ij = int rho phi_i' phi_j' (constant kinematic viscosity; the
+    derivatives by central differences inside the pieces), the interface a in cell N/4 with heavy fraction c
+    (docs/notes/97: the user's impossibility argument predicts growth ~ r at c ~ r^{-1/2})."""
+    from cases.pccd_floquet import _basis
+
+    h = 1.0 / N
+    a = (N // 4 + 1 - c) * h
+    phi = _basis(N, ratio, a, B_, mode)
+    X, W, _, cell = quadrature(N, ratio, a, B_)
+    dB = np.stack([(phi(j, X + eps * h) - phi(j, X - eps * h)) / (2 * eps * h) for j in range(N)], axis=1)
+    K = dB.T @ (W[:, None] * dB)
+    m = np.bincount(cell, weights=W, minlength=N)
+    s = 1.0 / np.sqrt(m)
+    return float(np.linalg.eigvalsh(K * s[:, None] * s[None, :])[-1] * h * h)
