@@ -119,7 +119,7 @@ class face_average:
         return False
 
 
-def solver(n, ratio, mode, f0=None, tolerance=1e-10):
+def solver(n, ratio, mode, f0=None, tolerance=1e-10, mu=(0.0, 0.0)):
     """CenteredNS + TwoPhase(conserving=True) with the half-step acceleration put in as ``mode`` (hooks only)."""
     import warnings
 
@@ -129,9 +129,9 @@ def solver(n, ratio, mode, f0=None, tolerance=1e-10):
     from basilisk_cupy.time.basilisk_centered import CenteredNS
 
     grid = CartesianGrid((n, n))
-    ns = CenteredNS(grid, periodic=(0, 1), tolerance=tolerance)
+    ns = CenteredNS(grid, periodic=(0, 1), tolerance=tolerance, mu=(max(mu) if max(mu) > 0 else None))
     f = CellField.from_interior(grid, np.zeros((n, n)) if f0 is None else f0(grid), _pbc())
-    tp = TwoPhase(ns, f, rho1=1.0, rho2=1.0 / ratio, conserving=True,
+    tp = TwoPhase(ns, f, rho1=1.0, rho2=1.0 / ratio, mu1=mu[0], mu2=mu[1], conserving=True,
                   conserving_source=mode in ("face", "face+m", "face-upwind", "face-massw", "face-band1", "face-band2"))
     st = {}
 
@@ -431,13 +431,13 @@ def single_phase(n, mode, cfl=0.5, t_end=0.5, save=None):
 
 
 # ---------------------------------------------------------------------------- a drop in a vortex, density ratio 1000
-def vortex(mode, n=64, ratio=1000.0, t_end=0.25, cfl=0.5, save=None):
+def vortex(mode, n=64, ratio=1000.0, t_end=0.25, cfl=0.5, save=None, mu=(0.0, 0.0)):
     """A drop (R = 0.15 at (0.5, 0.3)) in the Taylor-Green vortex plus the uniform flow (0.5, 0.2), density ratio
     ``ratio``, no viscosity, no surface tension, periodic. No exact solution: the run is for the stability and the
     budgets (total momentum, mass-weighted kinetic energy, max |u|)."""
     from basilisk_cupy.backend import to_numpy
 
-    grid, ns, tp = solver(n, ratio, mode, f0=lambda g: _drop(g, c=(0.5, 0.3)))
+    grid, ns, tp = solver(n, ratio, mode, f0=lambda g: _drop(g, c=(0.5, 0.3)), mu=mu)
     xp = grid.xp
     ns.cfl = cfl
     x = (np.arange(n) + 0.5) / n

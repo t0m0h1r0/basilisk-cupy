@@ -41,10 +41,13 @@ def identical(n, mode, directory):
             "error_unswitched": ea["max"]}
 
 
-def field(mode, n, cfl, directory):
-    path = os.path.join(directory, "vortex_%s_%d_%g.npy" % (mode, n, cfl))
-    o = vortex(mode, n, 1000.0, 0.25, cfl, save=path)
-    return dict(o, path=path)
+MU = (1e-2, 1e-2 / 55.0)                                         # the viscous variant: mu1, mu2 (water / air ratio)
+
+
+def field(mode, n, cfl, directory, viscous=False):
+    path = os.path.join(directory, "vortex%s_%s_%d_%g.npy" % ("_mu" if viscous else "", mode, n, cfl))
+    o = vortex(mode, n, 1000.0, 0.25, cfl, save=path, mu=MU if viscous else (0.0, 0.0))
+    return dict(o, path=path, viscous=viscous)
 
 
 def _job(a):
