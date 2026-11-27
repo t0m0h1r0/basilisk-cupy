@@ -1305,3 +1305,12 @@ momentum, reproduces a constant stress exactly, dissipates energy and keeps the 
 density ratio and cut fraction (fourth order in one phase). Across density or viscosity jumps it is first to third
 order; rows made exact for quadratic stresses (H_3) restore fourth order for steady flows, but their symmetric part can
 be indefinite across large viscosity jumps and they do not help unsteady flows with density jumps.
+
+Minimum-viscous-energy reconstruction (`docs/notes/100_viscous_minenergy.md`, the user's proposal): among continuous
+velocities with the given mass-weighted averages, the one of least viscous dissipation has a stress linear in each
+cell's mass coordinate, i.e. note 99's stress reconstruction. Its Ritz-Galerkin form G_nu q' = -D^T H^{-1} D q is
+conservative and dissipative by construction and fourth order for unsteady two-layer Stokes flow with density and
+viscosity jumps, where the lumped H_4 is second order; G_nu = M + D^T H^{-1} Q H^{-1} D keeps it compact. Its Gram
+matrix is not bounded uniformly in the density ratio. Using the advection Gram G_A instead, G_A q' = -K_nu q shares
+the advection's energy, keeps fourth-order decay rates and a single-phase-like stiffness for water-air properties.
+Also corrects note 99's exact Stokes rates (a coarse scan had skipped the lowest modes).

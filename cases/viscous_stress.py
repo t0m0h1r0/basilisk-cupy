@@ -170,56 +170,73 @@ def steady_error(N, ratio, kind, a=0.2613, b=0.7137, H="H4"):
     return float(np.abs(sol[:-1] - ub).max() / np.abs(ub).max())        # relative to max |ubar|
 
 
-def stokes_rate(mu_H, mu_L, ratio, a, b, nu_guess=1.0, which=1):
-    """The exact decay rates lambda of the periodic two-layer Stokes problem rho u_t = (mu u_x)_x: transfer matrices
-    [[cos kL, sin kL /(mu k)], [-mu k sin kL, cos kL]], k = sqrt(lambda rho / mu); tr(Phi_L Phi_H) = 2."""
+def stokes_rate(mu_H, mu_L, ratio, a, b, nu_guess=None, which=1):
+    """The exact decay rates lambda of the periodic two-layer Stokes problem rho u_t = (mu u_x)_x, in increasing order:
+    tr(Phi_L Phi_H) = 2 with the transfer matrices [[cos kL, sin kL /(mu k)], [-mu k sin kL, cos kL]],
+    k = sqrt(lambda rho / mu). docs/notes/100 correction (the user's review): the scan is uniform in sqrt(lambda) with
+    a phase step of at most 0.02 rad in either layer (the earlier coarse scan skipped the lowest rates), sign changes
+    and touching zeros (double rates) are both refined; double rates are returned twice."""
     LH = (b - a) % 1.0
     LL = 1.0 - LH
+    cH, cL = math.sqrt(1.0 / mu_H) * LH, math.sqrt(1.0 / ratio / mu_L) * LL     # phase = sqrt(lambda) * c
 
     def f(lam):
         def phi(L, rho, mu):
             k = math.sqrt(lam * rho / mu)
-            return np.array([[math.cos(k * L), math.sin(k * L) / (mu * k)], [-mu * k * math.sin(k * L), math.cos(k * L)]])
-        return np.trace(phi(LL, 1.0 / ratio, mu_L) @ phi(LH, 1.0, mu_H)) - 2.0
-    # scan (tr - 2 touches zero at double roots: use the minima of |tr - 2| too)
-    lams = np.linspace(1e-3, 400.0 * nu_guess * (2 * math.pi) ** 2, 400001)
-    vals = np.array([f(l) for l in lams[::50]])
-    lm = lams[::50]
+            return np.array([[math.cos(k * L), math.sin(k * L) / (mu * k)],
+                             [-mu * k * math.sin(k * L), math.cos(k * L)]])
+        return float(np.trace(phi(LL, 1.0 / ratio, mu_L) @ phi(LH, 1.0, mu_H)) - 2.0)
+    ds = 0.02 / max(cH, cL)
     roots = []
-    for i in range(1, len(vals) - 1):
-        if vals[i] == 0 or vals[i - 1] * vals[i] < 0 or (abs(vals[i]) < abs(vals[i - 1]) and abs(vals[i]) < abs(vals[i + 1])
-                                                       and abs(vals[i]) < 1e-2):
-            lo, hi = lm[i - 1], lm[i + 1]
-            for _ in range(100):                   # golden search on |f|
-                c1, c2 = hi - 0.618 * (hi - lo), lo + 0.618 * (hi - lo)
-                if abs(f(c1)) < abs(f(c2)):
-                    hi = c2
+    sq, fprev, fprev2 = ds, f(ds * ds), None
+    while len(roots) < which:
+        sq2 = sq + ds
+        f2 = f(sq2 * sq2)
+        if fprev * f2 < 0:                                   # a simple root: bisection in sqrt(lambda)
+            lo, hi, flo = sq, sq2, fprev
+            for _ in range(80):
+                mid = 0.5 * (lo + hi)
+                fm = f(mid * mid)
+                if fm * flo > 0:
+                    lo, flo = mid, fm
                 else:
-                    lo = c1
-            r = 0.5 * (lo + hi)
-            if abs(f(r)) < 1e-8 and (not roots or abs(r - roots[-1]) > 1e-6 * r):
-                roots.append(r)
-        if len(roots) >= which + 1:
-            break
-    return roots
+                    hi = mid
+            roots.append((0.5 * (lo + hi)) ** 2)
+        elif fprev2 is not None and abs(fprev) < abs(fprev2) and abs(fprev) <= abs(f2) and abs(fprev) < 1e-3:
+            # a touching zero (a double rate): |f| ~ (lambda - r)^2 fixes r only to sqrt(eps); bisect the derivative
+            g = lambda z: (f((z * (1 + 1e-7)) ** 2) - f((z * (1 - 1e-7)) ** 2))  # noqa: E731
+            lo, hi = sq - ds, sq2
+            if g(lo) * g(hi) < 0:
+                for _ in range(80):
+                    mid = 0.5 * (lo + hi)
+                    if g(mid) * g(lo) > 0:
+                        lo = mid
+                    else:
+                        hi = mid
+                r = (0.5 * (lo + hi)) ** 2
+                if abs(f(r)) < 1e-9:
+                    roots += [r, r]
+        fprev2, fprev, sq = fprev, f2, sq2
+    return roots[:which]
 
 
 def stokes_error(N, ratio, kind, a=0.2613, b=0.7137, nmodes=2, H="H4"):
+    """The nmodes slowest exact rates (with multiplicity) against the nmodes smallest nonzero discrete rates of
+    M u' = -K u (generalised eigenproblem), sorted; for non-symmetric K the imaginary parts are reported."""
     mu_H, mu_L = mus(ratio, kind)
     S = Setup(N, ratio, a, b, mu_H, mu_L)
-    if H != "H4":
-        S.K = S.D.T @ np.linalg.solve({"H": S.H, "H3": S.H3}[H], S.D)
-    ex = stokes_rate(mu_H, mu_L, ratio, a, b, nu_guess=max(mu_H, mu_L * ratio), which=nmodes)
+    K = S.K if H == "H4" else S.D.T @ np.linalg.solve({"H": S.H, "H3": S.H3}[H], S.D)
+    ex = stokes_rate(mu_H, mu_L, ratio, a, b, which=nmodes)
     Mh = 1.0 / np.sqrt(S.m)
-    A = S.K * Mh[:, None] * Mh[None, :]
-    ev = np.sort(np.linalg.eigvalsh(A) if H == "H4" else np.linalg.eigvals(A).real)
-    ev = ev[ev > 1e-9 * ev.max()]
-    out, near = [], []
-    for lam in ex[:nmodes]:
-        k = int(np.argmin(np.abs(ev - lam)))      # the nearest discrete rate (single-phase rates are double)
-        near.append(float(ev[k]))
-        out.append(float(abs(ev[k] - lam) / lam))
-    return {"exact": ex[:nmodes], "discrete": near, "rel_err": out}
+    A = K * Mh[:, None] * Mh[None, :]
+    if H == "H4" or H == "H":
+        ev = np.sort(np.linalg.eigvalsh(A)).astype(complex)
+    else:
+        ev = np.linalg.eigvals(A)
+        ev = ev[np.argsort(ev.real)]
+    ev = ev[np.abs(ev) > 1e-9 * np.abs(ev).max()][:nmodes]
+    return {"exact": ex, "discrete": [float(e.real) for e in ev], "imag": [float(e.imag) for e in ev],
+            "rel_err": [float(abs(e - x) / x) for e, x in zip(ev, ex)]}
 
 
 # --------------------------------------------------------------------------------------------- V1: structure
@@ -237,7 +254,10 @@ def structure(N, ratio, kind, a=0.2613, b=0.7137):
     Mh = 1.0 / np.sqrt(S.m)
     nu = max(mu_H, mu_L * ratio)
     stiff = float(np.linalg.eigvalsh(S.K * Mh[:, None] * Mh[None, :])[-1] * S.h ** 2 / nu)
-    return {"const_stress_residual": float(np.abs(r[:-1]).max()), "momentum": float(np.abs(one @ S.K).max()),
+    K3 = S.D.T @ np.linalg.solve(S.H3, S.D)
+    sym3 = np.linalg.eigvalsh(0.5 * (K3 + K3.T))
+    return {"K3_sym_min_rel": float(sym3[0] / sym3[-1]),
+            "const_stress_residual": float(np.abs(r[:-1]).max()), "momentum": float(np.abs(one @ S.K).max()),
             "K_min_eig_rel": float(ev[0] / ev[-1]), "stiffness_h2_over_nu": stiff,
             "H4_rowsum_vs_H": float(np.abs(S.H4.sum(1) - S.H.sum(1)).max())}
 
