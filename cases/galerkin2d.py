@@ -167,7 +167,7 @@ def _smooth(t):
 
 class Reconstruction2D:
     def __init__(self, N, geom, alpha=0.75, D1=3.5, D2=4.5, m_pw=3, m_s=2, kink=True, window="cell", R=4.5,
-                 switch="fixed", delta=1.0, tau=None, diff=False, workers=1, hinge="exact"):
+                 switch="fixed", delta=1.0, tau=None, diff=False, workers=1, hinge="exact", centre_single=True):
         """docs/notes/88 options: ``window`` "cell" (the (2 m_pw + 1)^2 cells around the cell, note 87) or "interface"
         (the cells within R cells of the cell's foot on the interface, weights (1 - (r/R)^2)^2: both sides of the
         interface always hold data); ``switch`` "fixed" (D1, D2) or "angle" (D1 = d_safe = (m_s + 1/2)(|nx| + |ny|)
@@ -179,6 +179,7 @@ class Reconstruction2D:
         self.kink = kink
         self.window, self.R, self.tau, self.diff = window, R, tau, diff
         self.hinge = hinge  # curved interfaces (docs/notes/89): "exact" signed distance or "tangent" line
+        self.centre_single = centre_single
         self._switch, self._delta = switch, delta
         if switch == "angle" and not hasattr(geom, "frame"):
             D1 = (m_s + 0.5) * (abs(geom.n[0]) + abs(geom.n[1]))
@@ -261,6 +262,10 @@ class Reconstruction2D:
 
     def _fit(self, ix, iy, m, pw, c, s):
         frame = self._frame(c, s)
+        if not pw and self.centre_single:
+            # the single polynomial does not depend on the frame's origin (a full total-degree space): centre it at
+            # the cell (docs/notes/90: about a foot ~20 cells away, xi^4 ~ 2e5 and the fit map rounds to 1e-9)
+            frame = (np.asarray(c, dtype=float),) + tuple(frame[1:3])
         rows, cells, mass, geo = [], [], [], []
         h = self.h
         if pw and self.window == "interface":

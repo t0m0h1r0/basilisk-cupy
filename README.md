@@ -1239,5 +1239,5 @@ Circular interface (`docs/notes/89_circle_hinge.md`, P1-2): a heavy disc transla
 the hinge variable of the interface polynomial. The exact signed distance max(d/h, 0) (by Hadamard's lemma it keeps
 the planar approximation order) and the osculating parabola xi + (h / 2 R0) eta^2 both converge at about fifth order
 with nearly equal errors; the tangent line drops to second-to-third order. At N = 64 Galerkin is 4.5 times more
-accurate than the direct remap. Fixes the window centre for curved hinges; the free-stream rounding grows with the
-size of the fit maps.
+accurate than the direct remap. Fixes the window centre for curved hinges, and centres the single polynomial at the
+cell instead of the interface foot (about 20 cells away the quartic monomials cancelled to 1e-9 free-stream error).
