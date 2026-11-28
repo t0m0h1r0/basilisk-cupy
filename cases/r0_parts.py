@@ -177,9 +177,6 @@ def couette_poiseuille(kind="couette", n=32, rho=RHO, mu=(1.0, 1.0 / 55.0), yi=0
 
 
 # --- Hysing's rising bubble ---------------------------------------------------------------------------------------
-#: Hysing et al. (2009), "Quantitative benchmark computations of two-dimensional bubble dynamics", the reference
-#: groups' values (TP2D) at the finest grid, as recalled here: NOT checked against the paper in this session (see
-#: docs/notes/124): rise velocity maximum (and its time), centroid at t = 3.
 # Hysing et al., MOX Report 23/2008 (the preprint of IJNMF 2009), group 1 (TP2D): case 1 table V, case 2 table XVI.
 # Checked against the preprint by the audit (PR #197); the published version's tables not seen. Case 2's groups
 # disagree (y_c(3): TP2D 1.1380, FreeLIFE 1.1249, MooNMD 1.1376): record the difference (design/168).
