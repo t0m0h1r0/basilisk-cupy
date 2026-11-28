@@ -337,3 +337,36 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
+
+
+def plot() -> None:
+    """docs/figures/r0_shear.png: (a) L2 error of the tangential velocity at T against N (the library, before the R0
+    changes); (b) the gap between the face flux and the cells' velocity in time (N = 64)."""
+    import matplotlib
+
+    matplotlib.use("Agg")
+    import matplotlib.pyplot as plt
+
+    R = json.load(open(os.path.join("docs", "figures", "r0_shear.json")))["baseline"]
+    fig, ax = plt.subplots(1, 2, figsize=(11, 4.2))
+    for n, b in CASES:
+        rows = sorted((d for d in R if tuple(d["n"]) == n and d["boost"] == b and d.get("exact_uf", True)),
+                      key=lambda d: d["N"])
+        lab = "n = %s%s" % (n, ", boost" if b else "")
+        ax[0].loglog([d["N"] for d in rows], [d["rows"][-1]["all"]["L2"] for d in rows], "o-" if b else "s--",
+                     ms=4, label=lab)
+        d64 = next(d for d in rows if d["N"] == 64)
+        g = np.array(d64["gap_samples"])
+        ax[1].semilogy(g[:, 0] / d64["T"], np.maximum(g[:, 1], 1e-16), "-" if b else "--", label=lab)
+    Ns = np.array(GRIDS)
+    ax[0].loglog(Ns, 0.4 / Ns, ":", color="0.5", label="1st order")
+    ax[0].set_xlabel("N")
+    ax[0].set_ylabel("L2 error of w (cell averages) at T")
+    ax[0].set_title("(a) the library before R0 (density ratio 1000)")
+    ax[0].legend(fontsize=7)
+    ax[1].set_xlabel("t / T")
+    ax[1].set_ylabel("max |u_f - interp(u)|")
+    ax[1].set_title("(b) face flux vs cell velocity, N = 64")
+    ax[1].legend(fontsize=7)
+    fig.tight_layout()
+    fig.savefig(os.path.join("docs", "figures", "r0_shear.png"), dpi=130)
