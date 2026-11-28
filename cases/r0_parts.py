@@ -180,9 +180,12 @@ def couette_poiseuille(kind="couette", n=32, rho=RHO, mu=(1.0, 1.0 / 55.0), yi=0
 #: Hysing et al. (2009), "Quantitative benchmark computations of two-dimensional bubble dynamics", the reference
 #: groups' values (TP2D) at the finest grid, as recalled here: NOT checked against the paper in this session (see
 #: docs/notes/124): rise velocity maximum (and its time), centroid at t = 3.
-HYSING = {1: {"v_max": 0.2417, "t_v_max": 0.9213, "yc_t3": 1.0813, "checked": False},
-          2: {"v_max": 0.2502, "t_v_max": 0.7317, "v_max2": 0.2393, "t_v_max2": 2.0708, "yc_t3": 1.1380,
-              "checked": False}}
+# Hysing et al., MOX Report 23/2008 (the preprint of IJNMF 2009), group 1 (TP2D): case 1 table V, case 2 table XVI.
+# Checked against the preprint by the audit (PR #197); the published version's tables not seen. Case 2's groups
+# disagree (y_c(3): TP2D 1.1380, FreeLIFE 1.1249, MooNMD 1.1376): record the difference (design/168).
+HYSING = {1: {"v_max": 0.2417, "t_v_max": 0.9213, "yc_t3": 1.0813, "source": "TP2D, table V", "checked": True},
+          2: {"v_max": 0.2524, "t_v_max": 0.7332, "v_max2": 0.2434, "t_v_max2": 2.0705, "yc_t3": 1.1380,
+              "source": "TP2D, table XVI", "checked": True}}
 
 
 def bubble(case=2, n=32, T=3.0, conf=None, every=0.01):
@@ -245,7 +248,9 @@ def capwave_reference(t_end=4.1, dt=0.004, path=None, out=None, procs=16):
     """The exact linear initial-value solution of the capillary wave of cases/r0_combined_tension.capillary_wave
     (two layers of depth 1/2, slip walls, rho 1 / 1e-3, mu 1e-2 / (1e-2 / 55), sigma 1, a0 = 0.01, k = 2 pi) from the
     audit's ``audit/pr177/capwave_exact.py`` (Laplace transform; inverted with Talbot's method here: the audit's de Hoog of degree 24 fails beyond t ~ 3), evaluated to t_end
-    (10 periods = 4.03). ``path``: that file (env CAPWAVE_EXACT). Writes docs/figures/capwave_exact_10periods.json."""
+    (10 periods = 4.03). ``path``: that file (env CAPWAVE_EXACT; it is on the audit's branch, not on main).
+    The table it writes, docs/figures/capwave_exact_10periods.json, is the reference to use (checked by the audit
+    against de Hoog of degree 48 to 2.3e-13, PR #197); this function only regenerates it."""
     import importlib.util
     import multiprocessing as mp
 

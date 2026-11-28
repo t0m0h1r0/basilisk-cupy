@@ -1277,7 +1277,8 @@
    "v_max": 0.2417,
    "t_v_max": 0.9213,
    "yc_t3": 1.0813,
-   "checked": false
+   "source": "TP2D, table V",
+   "checked": true
   },
   "kind": "bubble",
   "job": "[\"bubble\", {\"case\": 1, \"conf\": {}, \"n\": 32}]"
@@ -1797,12 +1798,13 @@
    ]
   ],
   "reference": {
-   "v_max": 0.2502,
-   "t_v_max": 0.7317,
-   "v_max2": 0.2393,
-   "t_v_max2": 2.0708,
+   "v_max": 0.2524,
+   "t_v_max": 0.7332,
+   "v_max2": 0.2434,
+   "t_v_max2": 2.0705,
    "yc_t3": 1.138,
-   "checked": false
+   "source": "TP2D, table XVI",
+   "checked": true
   },
   "kind": "bubble",
   "job": "[\"bubble\", {\"case\": 2, \"conf\": {}, \"n\": 32}]"
@@ -3125,7 +3127,8 @@
    "v_max": 0.2417,
    "t_v_max": 0.9213,
    "yc_t3": 1.0813,
-   "checked": false
+   "source": "TP2D, table V",
+   "checked": true
   },
   "kind": "bubble",
   "job": "[\"bubble\", {\"case\": 1, \"conf\": {\"fixes\": true}, \"n\": 32}]"
@@ -3647,12 +3650,13 @@
    ]
   ],
   "reference": {
-   "v_max": 0.2502,
-   "t_v_max": 0.7317,
-   "v_max2": 0.2393,
-   "t_v_max2": 2.0708,
+   "v_max": 0.2524,
+   "t_v_max": 0.7332,
+   "v_max2": 0.2434,
+   "t_v_max2": 2.0705,
    "yc_t3": 1.138,
-   "checked": false
+   "source": "TP2D, table XVI",
+   "checked": true
   },
   "kind": "bubble",
   "job": "[\"bubble\", {\"case\": 2, \"conf\": {\"fixes\": true}, \"n\": 32}]"
