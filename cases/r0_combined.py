@@ -350,3 +350,61 @@ def shear_inviscid(conf, N=64, cfl=0.5, T=None, U=(0.0, 1.0), amp=0.5, steps_max
     return {"conf": conf, "N": N, "cfl": cfl, "t": float(ns.clock.t), "failed": failed, "L1": float(e.mean()),
             "L2": float(np.sqrt((e * e).mean())), "Linf": float(e.max()), "cut": m.COUNT[0], "partial": m.COUNT[1],
             "f_L1": float(np.abs(to_numpy(tp.f.interior) - np.tile(frac(ns.clock.t), (N, 1))).mean())}
+
+
+def plot() -> None:
+    """docs/figures/r0_combined.png: (a) condition 6, the error of D1 + D2 limited over D1 only where D2 cuts (the
+    inviscid aligned shear flow); (b) the viscous two-phase runs with and without E3."""
+    import matplotlib
+
+    matplotlib.use("Agg")
+    import matplotlib.pyplot as plt
+
+    c6 = json.load(open(os.path.join("docs", "figures", "r0_combined_c6.json")))
+    R = json.load(open(os.path.join("docs", "figures", "r0_combined.json")))["runs"]
+    T = {(r["conf"], r["N"], r["cfl"]): r for r in c6}
+    NS = sorted({r["N"] for r in c6 if r["conf"] == "d1+d2lim"})
+    fig, ax = plt.subplots(1, 2, figsize=(11, 4.2))
+    for cfl, ls in ((0.5, "-"), (0.45, "--")):
+        for m, mk in (("L1", "o"), ("L2", "s"), ("Linf", "^")):
+            ax[0].semilogx(NS, [T[("d1+d2lim", n, cfl)][m] / T[("d1", n, cfl)][m] for n in NS], ls, marker=mk, ms=4,
+                           label="%s, CFL %g" % (m, cfl))
+    ax[0].axhline(1.2, color="tab:red", lw=1)
+    ax[0].set_xlabel("N")
+    ax[0].set_ylabel("error ratio: D1 + D2 limited / D1")
+    ax[0].set_title("(a) condition 6: where D2 limited cuts")
+    ax[0].legend(fontsize=7)
+    labels, vals, cols = [], [], []
+    for r in R:
+        if r["kind"] == "free" and tuple(r["args"].get("mu", (0, 0)))[0] > 0:
+            labels.append("%s\n%s" % (r["args"]["name"], r["conf"]))
+            vals.append(max(r["max_err"], 1e-16))
+            cols.append({"full": "tab:red", "full-noE3": "tab:blue", "d1+d2lim": "0.5"}[r["conf"]])
+    o = np.argsort(labels)
+    ax[1].bar(range(len(o)), [vals[k] for k in o], color=[cols[k] for k in o])
+    ax[1].set_yscale("log")
+    ax[1].set_xticks(range(len(o)))
+    ax[1].set_xticklabels([labels[k] for k in o], fontsize=6, rotation=90)
+    ax[1].set_ylabel("max |u - U| (viscous free stream, ratio 1000)")
+    ax[1].set_title("(b) E3 (red: with, blue: without)")
+    fig.tight_layout()
+    fig.savefig(os.path.join("docs", "figures", "r0_combined.png"), dpi=130)
+
+
+def _c6_job(a):
+    os.environ.setdefault("OMP_NUM_THREADS", "1")
+    return shear_inviscid(a[0], N=a[1], cfl=a[2])
+
+
+def c6() -> None:
+    """Condition 6 where D2 limited cuts: docs/figures/r0_combined_c6.json (``python -c "from cases.r0_combined
+    import c6; c6()"``, 20 processes, a few minutes)."""
+    import multiprocessing as mp
+
+    J = [(c, N, cfl) for c in ("base", "d1", "d1+d2lim", "full-noE3") for N in (32, 48, 64, 96, 128)
+         for cfl in (0.5, 0.45)]
+    J += [(c, N, cfl) for c in ("d1", "d1+d2lim") for N in (192, 256) for cfl in (0.5, 0.45)]
+    with mp.get_context("spawn").Pool(int(os.environ.get("NP", "20"))) as pool:
+        R = pool.map(_c6_job, J)
+    with open(os.path.join("docs", "figures", "r0_combined_c6.json"), "w") as fh:
+        json.dump(R, fh, indent=1)

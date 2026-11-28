@@ -1505,3 +1505,12 @@ R0's required test, the oblique two-layer shear flow with a Galilean boost (`doc
 density ratio 1000), with mass and momentum kept to round-off once the first face velocity is divergence-free (the
 library's start interpolates the cell averages without a projection, which moves 1e-4 of the mass in the first
 step for the slope 1:2).
+
+All R0-P modifications at once (`docs/notes/122_r0_combined.md`, hooks): note 113's Crank-Nicolson (E3) does not work
+in two phases. Its explicit half added as an acceleration breaks the total momentum (0.3-0.6), and with or without
+that fix the viscous free stream grows (to 20-30); only backward Euler keeps it. Without E3 the combination keeps
+the free stream, the total momentum (6e-13), the hydrostatic balance (42 cases, 2.5e-10) and the local budgets.
+Where the limited D2 fix does cut (an inviscid aligned shear flow moved at the CFL bound) its L1 error grows to
+1.22 x that of D1 alone at N = 256. A verifier of the local mass and momentum budgets that takes only flux arrays
+(`cases/r0_local_budget.py`) finds every library budget at round-off and detects #156's c = 1/2 rule and the D1
+defect (faces moving volume with a zero momentum flux); D2 is not a flux inconsistency and is not seen there.
