@@ -131,4 +131,24 @@ if __name__ == "__main__":
             ("c", "n", "new"), ("a/E1", "ab2", "new"), ("a/E1+avg", "ab2", "avg"), ("d0", "fe", "new"),
             ("d1", "fe", "avg"), ("b1", "se", "mid"), ("b2", "se", "avg")))
         print("N = %-3d z = %.2e  %s   (w^2 dt/4 = %.3f)" % (n, zz, row, w * w * dt / 4))
+
+    # 物理の減衰（v' = -2 gamma v を、力の後に後退 Euler で掛ける）を入れたとき、E1 + 力の平均が安定になる下限
+    def damped(c, fo, gd):
+        s, nxt = scheme(c, fo)
+        nxt = list(nxt)
+        nxt[1] = nxt[1] / (1 + 2 * gd)
+        return sp.Matrix([[sp.diff(sp.expand(e), x) for x in s] for e in nxt])
+
+    print("\nE1 + 力の平均が安定になる gamma*dt の下限（予測：z^2/8）")
+    for zz in (0.1, 0.5, 1.0, 2.0):
+        lo, hi = 0.0, 5.0
+        for _ in range(50):
+            mid = (lo + hi) / 2
+            lo, hi = (mid, hi) if radius(damped("ab2", "avg", mid), zz) > 1 else (lo, mid)
+        print("  z = %-4g gamma*dt >= %.4f   (z^2/8 = %.4f)" % (zz, hi, zz * zz / 8))
+        assert abs(hi - zz * zz / 8) < 0.25 * zz * zz / 8 + 1e-4
+    for name, c, fo in (("c", "n", "new"), ("d1", "fe", "avg"), ("b1", "se", "mid"), ("b2", "se", "avg")):
+        worst = max(radius(damped(c, fo, gd), zz) for gd in (0.0, 0.01, 0.1, 1.0, 10.0) for zz in np.linspace(0.01, 3.99, 200))
+        assert worst <= 1 + 1e-9, (name, worst)
+    print("  c・d1・b1・b2 は、gamma*dt = 0〜10、z < 4 の全てでスペクトル半径 <= 1")
     print("ok")
