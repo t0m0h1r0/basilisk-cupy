@@ -20,6 +20,8 @@ one. A cell the heavy phase has just left has m^n / m^{n+1} up to the density ra
                    "face+m"  the same, and (K) taken back from every cell after the transport;
                    "force"   M += dt/2 rho^n g before the transport, M -= dt/2 rho^n g after (the old mass);
                    "accel"   u += dt/2 g before the transport, u -= dt/2 g after (the new mass);
+                   "face-band1", "face-band2"  the library's source, switched off in the interfacial cells and the
+                             cells within 1 / 2 cells of one (docs/notes/117);
                    "trapezoid"  u += dt/2 G before the transport and nothing taken back: the projection then
                              supplies only the other half, dt g~ = dt/2 G^{n+1} (G = 2 g~; a first look only).
   single_phase() the accuracy of "face" and "accel" on the steady Taylor-Green flow (docs/notes/112).
@@ -117,7 +119,7 @@ class face_average:
         return False
 
 
-def solver(n, ratio, mode, f0=None, tolerance=1e-10):
+def solver(n, ratio, mode, f0=None, tolerance=1e-10, mu=(0.0, 0.0)):
     """CenteredNS + TwoPhase(conserving=True) with the half-step acceleration put in as ``mode`` (hooks only)."""
     import warnings
 
@@ -127,16 +129,35 @@ def solver(n, ratio, mode, f0=None, tolerance=1e-10):
     from basilisk_cupy.time.basilisk_centered import CenteredNS
 
     grid = CartesianGrid((n, n))
-    ns = CenteredNS(grid, periodic=(0, 1), tolerance=tolerance)
+    ns = CenteredNS(grid, periodic=(0, 1), tolerance=tolerance, mu=(max(mu) if max(mu) > 0 else None))
     f = CellField.from_interior(grid, np.zeros((n, n)) if f0 is None else f0(grid), _pbc())
-    tp = TwoPhase(ns, f, rho1=1.0, rho2=1.0 / ratio, conserving=True,
-                  conserving_source=mode in ("face", "face+m", "face-upwind", "face-massw"))
+    tp = TwoPhase(ns, f, rho1=1.0, rho2=1.0 / ratio, mu1=mu[0], mu2=mu[1], conserving=True,
+                  conserving_source=mode in ("face", "face+m", "face-upwind", "face-massw", "face-band1", "face-band2"))
     st = {}
+
+    def band_mask(width):
+        """1 away from the interface, 0 in the interfacial cells (0 < f < 1) and in the cells within ``width``
+        cells of one (a (2 width + 1)^2 block; periodic)."""
+        xp = grid.xp
+        fi = tp.f.interior
+        m = ((fi > 1e-12) & (fi < 1.0 - 1e-12)).astype(float)
+        out = xp.zeros_like(m)
+        for i in range(-width, width + 1):
+            for j in range(-width, width + 1):
+                out = xp.maximum(out, xp.roll(xp.roll(m, i, axis=0), j, axis=1))
+        return 1.0 - out
 
     def before(s):                                               # "vof", before TwoPhase's hook
         dt = s.clock.dt
         st["rho"] = tp.rho(tp.f.interior).copy()
         st["g"] = [g.interior.copy() for g in s.g.components]
+        if mode in ("face-band1", "face-band2"):
+            # docs/notes/117: the face value's source switched off near the interface (the source the library
+            # averages to the faces is zero in the band; the flux form, hence the conservation, is kept)
+            w = band_mask(int(mode[-1]))
+            for g in s.g.components:
+                g.interior = g.interior * w
+            s.g.fill_ghosts()
         if mode in ("force", "accel"):
             for u, g in zip(s.u.components, st["g"]):
                 u.interior = u.interior + 0.5 * dt * g
@@ -160,6 +181,10 @@ def solver(n, ratio, mode, f0=None, tolerance=1e-10):
 
     def after(s):                                                # "tracer_advection": just after the transport
         dt = s.clock.dt
+        if mode in ("face-band1", "face-band2"):
+            for g, g0 in zip(s.g.components, st["g"]):
+                g.interior = g0
+            s.g.fill_ghosts()
         rho = tp.rho(tp.f.interior)
         w = {"force": -st["rho"] / rho, "accel": -1.0, "face+m": st["rho"] / rho - 1.0}.get(mode)
         if w is not None:
@@ -380,7 +405,7 @@ def one_step_gain(ratio, n=32, cfl=0.5, steps=(4, 8, 12, 16, 20, 24), mode="face
 
 
 # -------------------------------------------------------------------------------------------- single-phase accuracy
-def single_phase(n, mode, cfl=0.5, t_end=0.5):
+def single_phase(n, mode, cfl=0.5, t_end=0.5, save=None):
     """The steady inviscid Taylor-Green flow (docs/notes/112, section 4): max |u - u0| at t_end."""
     from basilisk_cupy.backend import to_numpy
 
@@ -400,17 +425,19 @@ def single_phase(n, mode, cfl=0.5, t_end=0.5):
     e = np.hypot(to_numpy(ns.u[0].interior) - u0, to_numpy(ns.u[1].interior) - v0)
     # the flow is steady: the projection's g~ of consecutive steps should agree (a 2 dt oscillation shows here)
     osc = float(np.abs(gs[-1] - gs[-2]).max() / np.abs(gs[-1]).max())
+    if save:
+        np.save(save, np.stack([to_numpy(ns.u[0].interior), to_numpy(ns.u[1].interior)]))
     return {"n": n, "mode": mode, "cfl": cfl, "max": float(e.max()), "g_step_to_step": osc}
 
 
 # ---------------------------------------------------------------------------- a drop in a vortex, density ratio 1000
-def vortex(mode, n=64, ratio=1000.0, t_end=0.25, cfl=0.5):
+def vortex(mode, n=64, ratio=1000.0, t_end=0.25, cfl=0.5, save=None, mu=(0.0, 0.0)):
     """A drop (R = 0.15 at (0.5, 0.3)) in the Taylor-Green vortex plus the uniform flow (0.5, 0.2), density ratio
     ``ratio``, no viscosity, no surface tension, periodic. No exact solution: the run is for the stability and the
     budgets (total momentum, mass-weighted kinetic energy, max |u|)."""
     from basilisk_cupy.backend import to_numpy
 
-    grid, ns, tp = solver(n, ratio, mode, f0=lambda g: _drop(g, c=(0.5, 0.3)))
+    grid, ns, tp = solver(n, ratio, mode, f0=lambda g: _drop(g, c=(0.5, 0.3)), mu=mu)
     xp = grid.xp
     ns.cfl = cfl
     x = (np.arange(n) + 0.5) / n
@@ -437,7 +464,9 @@ def vortex(mode, n=64, ratio=1000.0, t_end=0.25, cfl=0.5):
     except Exception as exc:  # noqa: BLE001
         failed = repr(exc)
     b1 = budgets()
-    return {"mode": mode, "n": n, "ratio": ratio, "steps": ns.clock.i, "t": ns.clock.t, "failed": failed,
+    if save:                                                     # the fields at t_end, for differences of fields
+        np.save(save, np.stack([to_numpy(ns.u[0].interior), to_numpy(ns.u[1].interior), to_numpy(tp.f.interior)]))
+    return {"mode": mode, "n": n, "ratio": ratio, "cfl": cfl, "steps": ns.clock.i, "t": ns.clock.t, "failed": failed,
             "umax": umax, "momentum0": b0[:2], "momentum1": b1[:2], "energy0": b0[2], "energy1": b1[2],
             "momentum_change": float(math.hypot(b1[0] - b0[0], b1[1] - b0[1]) / math.hypot(b0[0], b0[1]))}
 
