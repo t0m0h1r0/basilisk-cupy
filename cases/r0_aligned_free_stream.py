@@ -45,22 +45,33 @@ import textwrap
 import numpy as np
 
 SCHEMES = {"base": (False, False), "d1": (True, False), "d2": (False, True), "d1+d2": (True, True),
-           "d1-absent": ("absent", False), "d1-lin": ("lin", False)}
+           "d1-absent": ("absent", False), "d1-lin": ("lin", False),
+           "d1+d2lim": (True, "limited"), "d1+geo": (True, "geometric")}
 MAIN = ("base", "d1", "d2", "d1+d2")
 
 # --- the hooks ---------------------------------------------------------------------------------------------------
 _SWEEP_EDITS = [
     ("        else:\n            g = _concentration_gradient(xp, cp, tp, axis, tr.inverse, tr.gradient)\n",
      "        else:\n            g = _concentration_gradient(xp, cp, tp, axis, tr.inverse, tr.gradient)\n"
-     "        if getattr(tr, '_d2', False):  # D2 fix: no slope where the phase fills the cell only in part\n"
+     "        if getattr(tr, '_d2', False) in (True, 'full'):  # D2 fix: no slope where the phase fills the cell only in part\n"
      "            ck = (1.0 - c.interior) if tr.inverse else c.interior\n"
      "            g = xp.where(ck >= 1.0, g, 0.0)\n"),
-    ("        ff = ti / xp.where(ci > 1e-10, ci, 1.0) + s * xp.minimum(1.0, 1.0 - s * un) * gi / 2.0\n",
-     "        ff = ti / xp.where(ci > 1e-10, ci, 1.0) + s * xp.minimum(1.0, 1.0 - s * un) * gi / 2.0\n"
-     "        absent = getattr(tr, '_absent', None)\n"
-     "        if absent is not None:  # D1 fix: the mixture's value where the phase is absent\n"
-     "            ff = xp.where(ci > 1e-10, ff, upwind(_pad(absent(), periodic, xp)))\n"),
+    ("        ti, gi = upwind(tp), upwind(gf)\n",
+     "        ti, gi = upwind(tp), upwind(gf)\n"
+     "        if getattr(tr, '_d2', False) == 'limited':  # D2, limited: no slope where (D2)'s gain would exceed 1\n"
+     "            rk, ro = tr._rhos\n"
+     "            a_ = xp.abs(un)\n"
+     "            out_ = xp.minimum(cf1 * a_, xp.maximum(ci, 0.0))\n"
+     "            rem_ = rk * xp.maximum(ci - out_, 0.0) + ro * xp.maximum(1.0 - ci, 0.0)\n"
+     "            gain_ = rk * out_ * (1.0 - a_) / 2.0\n"
+     "            cut_ = (gain_ > rem_) & (gi != 0.0)\n"
+     "            _COUNT[0] += int(cut_.sum())\n"
+     "            _COUNT[1] += int(((ci > 1e-10) & (ci < 1.0 - 1e-10) & (a_ > 0.0)).sum())\n"
+     "            gi = xp.where(gain_ > rem_, 0.0, gi)\n"),
     ("        tfluxes.append(xp.where(ci > 1e-10, ff * cf1 * u, 0.0))\n",
+     "        absent = getattr(tr, '_absent', None)\n"
+     "        if absent is not None:  # D1 fix: the mixture's value where the phase is absent (after every term)\n"
+     "            ff = xp.where(ci > 1e-10, ff, upwind(_pad(absent(), periodic, xp)))\n"
      "        tfluxes.append(ff * cf1 * u if absent is not None else xp.where(ci > 1e-10, ff * cf1 * u, 0.0))\n"),
 ]
 _VOF_EDITS = [
@@ -72,8 +83,10 @@ _VOF_EDITS = [
      "            if _D[0] in (True, 'absent'):\n"
      "                for tr, r in zip(tracers[-2:], (self.rho1, self.rho2)):\n"
      "                    tr._absent = (lambda q1=q1, q2=q2, r=r: r * (q1.interior + q2.interior) / _rho_lin(self))\n"
-     "            for tr in tracers[-2:]:\n"
-     "                tr._d2 = _D[1]\n"
+     "            for tr, rr in zip(tracers[-2:], ((self.rho1, self.rho2), (self.rho2, self.rho1))):\n"
+     "                tr._d2, tr._rhos = _D[1], rr\n"
+     "                if _D[1] == 'geometric':\n"
+     "                    tr.geometric = True  # docs/notes/77's centroid form of the slope terms\n"
      "            qs.append((q1, q2))\n"),
     ("        rho = self.rho(self.f.interior)\n        for u, (q1, q2) in zip(ns.u.components, qs):\n",
      "        rho = _rho_lin(self) if _D[0] in (True, 'lin') else self.rho(self.f.interior)\n"
@@ -88,6 +101,7 @@ _GHOST_EDITS = [
      "        fc = self._f.data if _D[0] in (True, 'lin') else xp.minimum(xp.maximum(self._f.data, 0.0), 1.0)\n"),
 ]
 _D = [False, False]
+COUNT = [0, 0]  # "limited": faces whose slope was dropped, faces with a partial donor (both phases, all sweeps)
 
 
 def _rho_lin(tp, f=None):  # the absent-phase value uses it in every D1 variant
@@ -122,7 +136,7 @@ def scheme(d1: bool, d2: bool):
     library's code unchanged in behaviour)."""
     from basilisk_cupy.interface import two_phase, vof
 
-    extra = {"_D": _D, "_rho_lin": _rho_lin, "_rho_lin_f": _rho_lin_f}
+    extra = {"_D": _D, "_rho_lin": _rho_lin, "_rho_lin_f": _rho_lin_f, "_COUNT": COUNT}
     saved = (vof._sweep, two_phase.TwoPhase._vof, two_phase._MomentumField.fill_ghosts)
     sweep = _patched(saved[0], _SWEEP_EDITS, extra)
     tvof = _patched(saved[1], _VOF_EDITS, extra)
@@ -267,8 +281,10 @@ def _sweep_once(f0, u0, ratio, un, d1=False, d2=False, ax=0):
         q1.current(q1, q2, tp.rho, sc)
         q2.current(q1, q2, tp.rho, sc)
         t1, t2 = vof.VOFTracer(q1), vof.VOFTracer(q2, inverse=True)
-        for tr, r in ((t1, rho1), (t2, rho2)):
-            tr._d2 = d2
+        for tr, r, rr in ((t1, rho1, (rho1, rho2)), (t2, rho2, (rho2, rho1))):
+            tr._d2, tr._rhos = d2, rr
+            if d2 == "geometric":
+                tr.geometric = True
             if d1:
                 tr._absent = (lambda r=r: r * (q1.interior + q2.interior) / _rho_lin(tp))
         uf = FaceField(grid, [np.ones((n + 1, 2)), np.zeros((n, 3))], "uf")
@@ -305,7 +321,7 @@ def kick_d2(ratio=1e3, cfl=(0.45, 0.49, 0.499, 0.4999), c=(0.5, 0.5001, 0.501, 0
             u0[iT + 6:] += g * 5
             u0[:iT] = 1.0                              # the light phase upstream: uniform (u_T)
             out = {}
-            for sch in ("base", "d2", "d1+d2"):
+            for sch in ("base", "d2", "d1+d2", "d1+d2lim", "d1+geo"):
                 _, u1 = _sweep_once(f0, u0, ratio, C, *SCHEMES[sch])
                 out[sch] = float(u1[iT] - u0[iT])
             delta = max(cT - C, 0.0)

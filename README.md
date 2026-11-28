@@ -1474,7 +1474,12 @@ the GFM coefficient for the cells (3e-2 ... 0.3) or with the non-conserving tran
 box with the gravity along the normal of an oblique plane interface stay at rest to round-off when the gravity is
 reduced.h's interfacial potential (63 of 72 cases; the nine failures, three positions times the three face
 densities, have the interface reaching a wall within one cell of a corner), and do not when it is a plain acceleration on the faces (velocities of 0.05-0.2, not decreasing
-with the grid). No new pressure correction was needed for these two conditions.
+with the grid). No new pressure correction was needed for these two conditions. The unbalanced cases come from two limits of the height
+functions (`docs/notes/120_r0p2_corner.md`, corrected after the audit of PR #165): the slip walls mirror f, which
+bends an oblique plane meeting the wall (not only near corners), and round-off slivers of f (1e-22) change the
+height functions' exact 0 / 1 tests, which moves the position of real interfacial cells by up to half the band's
+period even in a periodic band far from any wall. A plane at rest meeting a wall at any angle is an exact static
+solution without surface tension: this is a limit of the discretisation, not of the test.
 
 Audit #162, a free stream carrying an interface on grid faces (`docs/notes/118_aligned_free_stream.md`): the
 conserving transport (and Basilisk's conserving.h) lets such a band or square grow to 3e-2 ... 0.3 at density ratios
@@ -1490,6 +1495,14 @@ absent; no slope in partial cells) every configuration of the audit and every sh
 below 1.2e-9, proportional to the pressure tolerance; without an interface the fields are bit-identical. D2 changes
 the two-phase solution (a first-order face value at the interface); its effect on the order is not measured yet.
 Hooks only (`cases/r0_aligned_free_stream.py`).
+
+The form of the D2 fix (`docs/notes/119_d2_forms.md`, A-1 of issue #145): dropping the slope in every partial cell
+triples the error of a passive drop in an exact Taylor-Green flow (3.5 x), and the centroid form of note 77 costs
+1.4-1.6 x. Dropping it only on the faces where (D2)'s gain rho_k out (1 - C) / 2 over the mass the donor keeps would
+exceed 1 keeps every free-stream case of the audit below 1.3e-9, conserves the momentum to 8e-13 and is identical to
+the base scheme wherever it does not cut: it provably never cuts at the density ratio 1, and it did not cut once in
+a drop in a vortex at the ratio 1000 (4 % of the partial faces in a band on faces at the CFL bound). Hooks only
+(`cases/r0_d2_forms.py`).
 
 R0's required test, the oblique two-layer shear flow with a Galilean boost (`docs/notes/121_r0_shear.md`,
 `cases/r0_shear.py`): the exact solution as closed-form eigenmodes (transfer matrices) with exact cell averages
