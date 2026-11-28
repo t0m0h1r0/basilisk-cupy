@@ -1437,6 +1437,17 @@ A cell with c exactly 1/2 (audit #156): under vof.h's rule neither phase's momen
 h; the defect of `docs/notes/77_pure_advection.md`). The conserving form now gives that cell to the second phase
 (`VOFTracer(complementary=True)`), which keeps a uniform velocity to round-off; `conserving_vof_half=True` keeps
 vof.h's rule. The non-conserving path and `VOFTracer`'s own default are unchanged.
+
+Library options for the defects of an interface on grid faces (audit #162; `docs/notes/118`-`123`, issue #166), off by
+default (conserving.h): `TwoPhase(conserving=True, conserving_consistent=True)` builds the momentum from the
+transported (unclamped) f, recovers the velocity with rho_lin(f) (floor min(rho)/2, counted in `rho_floor_hits` and
+warned about) and gives a phase absent from the donor cell the mixture's face value instead of a zero momentum flux
+(D1); `conserving_slope_limit=3.0` drops a phase's slope term where its momentum would stay behind with less than a
+third of that mass (D2 limited, threshold 3). With both, a band on grid faces carried at the CFL bound keeps a
+uniform velocity below 1e-8 at density ratios 1e3 and 1e6, where conserving.h grows to 0.1; without an interface the
+fields are bit-identical. `CenteredNS.project_start = True` projects the first face velocity (Basilisk's init does
+not; an unprojected one moves 1e-4 of the mass in the first VOF step of an oblique band, `docs/notes/121`).
+`tests/test_conserving_r0_fixes.py`.
 R0-P1 continued, unsteady and viscous single-phase flows (`docs/notes/113_r0p1_unsteady_viscous.md`): with the two
 fixes of note 112 the conserving form is still first order in time once the flow is unsteady (a Taylor-Green flow
 with a Galilean boost, exact for any viscosity: slopes 0.90-0.98 over 13 grids at a fixed CFL number). Three more

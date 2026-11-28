@@ -47,6 +47,12 @@ class VOFTracer:
     #                              and a constant concentration is not preserved (docs/notes/77)
     fresh_dilation: bool = False  # the second sweep's dilation term with the concentration after the first sweep
     #                               (vof.h: the step's start in both, docs/notes/77)
+    absent: object = None  # D1 (docs/notes/118): a callable -> cell array, the face value where the phase is absent
+    #                        (c <= 1e-10 in the donor); the momentum flux is then this value times the same volume
+    #                        flux (vof.h sets that flux to zero while the volume still moves)
+    limit: object = None  # D2 limited (docs/notes/119, 123): (rho_k, rho_other, theta): no slope term on a face where
+    #                       rho_k out (1 - |C|) / 2 > theta (rho_k (c_k - out) + rho_other (1 - c_k)), out the phase's
+    #                       leaving volume
     geometric: bool = False  # the slope terms (along and across the sweep) at the centroids of the phase's part of
     #                          the swept strip and of the cell (from the PLIC line) instead of vof.h's full-cell
     #                          (1 - C)/2 along the sweep only (docs/notes/77, P1)
@@ -202,6 +208,12 @@ def _sweep(interface: VOFInterface, uf: FaceField, dt: float, axis: int, cc, tcs
         ci = 1.0 - cu if tr.inverse else cu
         cf1 = 1.0 - cf if tr.inverse else cf
         ti, gi = upwind(tp), upwind(gf)
+        if tr.limit is not None:  # D2 limited: the slope's momentum would stay with too small a mass
+            rk, ro, th = tr.limit
+            a_ = xp.abs(un)
+            out_ = xp.minimum(cf1 * a_, xp.maximum(ci, 0.0))
+            rem_ = rk * xp.maximum(ci - out_, 0.0) + ro * xp.maximum(1.0 - ci, 0.0)
+            gi = xp.where(rk * out_ * (1.0 - a_) / 2.0 > th * rem_, 0.0, gi)
         ff = ti / xp.where(ci > 1e-10, ci, 1.0) + s * xp.minimum(1.0, 1.0 - s * un) * gi / 2.0
         if tr.geometric:
             if g2f is not None:
@@ -232,6 +244,10 @@ def _sweep(interface: VOFInterface, uf: FaceField, dt: float, axis: int, cc, tcs
         if g2f is not None:  # the swept mean of the mean-preserving parabola: (1 - |C|)(1 - 2|C|)/12 f'' h^2
             a = xp.minimum(1.0, s * un)
             ff = ff + (1.0 - a) * (1.0 - 2.0 * a) / 12.0 * upwind(g2f)
+        if tr.absent is not None:  # D1: the mixture's value where the phase is absent, never a zero flux
+            ff = xp.where(ci > 1e-10, ff, upwind(_pad(tr.absent(), periodic, xp)))
+            tfluxes.append(ff * cf1 * u)
+            continue
         tfluxes.append(xp.where(ci > 1e-10, ff * cf1 * u, 0.0))
     n = grid.n[axis]
     lo, hi = (slice(0, n), slice(1, n + 1))

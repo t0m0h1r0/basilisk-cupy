@@ -44,6 +44,10 @@ Hook = Callable[["CenteredNS"], None]
 class CenteredNS:
     #: Reproduce Basilisk's first step (init's ``dtnext`` without event times, see ``start``).
     basilisk_init_dt = True
+    #: Project the first face velocity (the interpolated cell velocity is not divergence-free in general: with it the
+    #: first VOF step changes the phase mass, by 1e-4 for an oblique band of slope 1:2 at N = 32, docs/notes/121).
+    #: Basilisk's init does not project (False keeps that).
+    project_start = False
 
     def __init__(self, grid: CartesianGrid, *, periodic: tuple[int, ...] = (),
                  normal: dict | None = None, tangential: dict | None = None,
@@ -197,6 +201,10 @@ class CenteredNS:
         self.u.fill_ghosts()
         self.uf = self.face_velocity()
         self._run_hooks("properties")
+        if self.project_start:  # a divergence-free first face velocity (the pressure field is not touched)
+            self.mgp_start = project(self.uf, self.p.copy(), self.alpha, 1.0, ops=self.ops, nrelax=4,
+                                     tolerance=self.tolerance)
+            self._apply_uf_bc(self.uf)
         self.dtmax = self.DT
         self._run_hooks("stability")  # Basilisk's init calls event ("stability")
         # Basilisk's init runs dtnext() before any event time is known (tnext = HUGE): the step is
