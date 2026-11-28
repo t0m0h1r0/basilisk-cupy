@@ -1458,3 +1458,18 @@ source differently does not help. Adding dt/2 g to the cells before the transpor
 up to the ratio 1e6 but changes the total momentum (1.5e-3 for a drop in a vortex); adding it and taking nothing
 back (the projection supplies the other half: a trapezoidal pressure) is stable and conserving, but the pressure
 then oscillates at 2 dt. Hooks only (`cases/r0p1_source_feedback.py`); no choice has been made.
+
+Audit #162, a free stream carrying an interface on grid faces (`docs/notes/118_aligned_free_stream.md`): the
+conserving transport (and Basilisk's conserving.h) lets such a band or square grow to 3e-2 ... 0.3 at density ratios
+1e3 and 1e6, from round-off. Two independent defects of the momentum transport leave a cell with a momentum that does
+not match its mass, which u = q / rho then divides by a light cell's mass; the projection feeds the result back
+(without it nothing grows). D1: where a phase is absent (c <= 1e-10, or slightly negative) its volume moves but its
+momentum flux is zero, and the momentum is built from clamp(f) while f is transported unclamped. D2: the slope term of
+the face value in a cell the phase fills only in part; when nearly all of the phase leaves in one sweep the slope's
+momentum stays with the small mass left, u_T' - u_T = -rho1 (c - delta)(1 - C) g / 2 / (rho1 delta + rho2 (1 - delta))
+(exact to round-off for one sweep, a gain up to ratio / 8), which an aligned interface at a CFL number just below 1/2
+meets every other step. With both fixed (hooks: the unclamped f and density, the mixture's value where a phase is
+absent; no slope in partial cells) every configuration of the audit and every shape of its stability test stays
+below 1.2e-9, proportional to the pressure tolerance; without an interface the fields are bit-identical. D2 changes
+the two-phase solution (a first-order face value at the interface); its effect on the order is not measured yet.
+Hooks only (`cases/r0_aligned_free_stream.py`).
