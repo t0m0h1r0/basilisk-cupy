@@ -322,3 +322,41 @@ def test_interface_on_a_wall_free_stream_and_momentum_through_both_sweeps(walls)
     m1 = float((to_numpy(tp.rho(tp.f.interior)) * to_numpy(ns.u[0].interior)).sum())
     assert abs(m1 - m0) < 1e-11 * n ** 2
     assert np.isfinite(to_numpy(ns.u[0].interior)).all() and float(np.abs(to_numpy(ns.u[0].interior)).max()) < 3.0
+
+
+# ------------------------------------------------- audit #156: a cell with c exactly 1/2 and the free stream
+@pytest.mark.parametrize("rho", [(1e-3, 1.0), (1.0, 1.0), (1.0, 1e-3)])
+@pytest.mark.parametrize("frac", [0.5, 0.5 + 1e-9, 0.3])
+def test_free_stream_with_a_cell_at_exactly_one_half(rho, frac):
+    """A band parallel to the grid whose interfaces cut the cells at ``frac`` (0.5: c = 1/2 exactly), a uniform
+    momentum carried by a non-uniform divergence-free face velocity, ten steps. With vof.h's dilation rule neither
+    phase dilates in the c = 1/2 cells and the uniform velocity is lost (the auditor's table: 1.04e-2 / 2.40e-3 /
+    1.19e-5 at N = 32 for the three density pairs); the default keeps it to round-off."""
+    n, U = 32, (1.0, 0.37)
+
+    def run(vof_half):
+        grid = CartesianGrid((n, n))
+        ns = CenteredNS(grid, periodic=(0, 1))
+        i = np.arange(n)
+        a, b = n // 4 + frac, 3 * n // 4 + frac
+        col = np.clip(np.minimum(i + 1, b) - np.maximum(i, a), 0.0, 1.0)
+        f = CellField.from_interior(grid, np.repeat(col[:, None], n, axis=1), _fbc((0, 1)))
+        tp = TwoPhase(ns, f, rho1=rho[0], rho2=rho[1], conserving=True, conserving_vof_half=vof_half)
+        ufx, ufy = _stream_faces(n, lambda x, y: np.sin(TWO_PI * x) * np.sin(TWO_PI * y) / TWO_PI
+                                 + np.cos(TWO_PI * x) * np.sin(TWO_PI * y) / (2 * TWO_PI))
+        for ax in range(2):
+            ns.u[ax].interior = U[ax] + 0.0 * ns.u[ax].interior
+        ns.u.fill_ghosts()
+        dt = 0.4 / n / max(np.abs(ufx).max(), np.abs(ufy).max())
+        worst = 0.0
+        for k in range(10):
+            _vof(ns, tp, dt, k, ufx, ufy)
+            worst = max(worst, max(float(np.abs(to_numpy(ns.u[ax].interior) - U[ax]).max()) for ax in range(2)))
+        return worst
+
+    assert run(False) < 1e-11                                    # round-off (ten steps, density ratio 1000)
+    old = run(True)
+    if frac == 0.5:
+        assert old > 5e-6                                        # vof.h's rule: recorded, not fixed
+    else:
+        assert old < 1e-11
