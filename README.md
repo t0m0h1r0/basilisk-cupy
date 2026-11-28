@@ -1474,7 +1474,12 @@ the GFM coefficient for the cells (3e-2 ... 0.3) or with the non-conserving tran
 box with the gravity along the normal of an oblique plane interface stay at rest to round-off when the gravity is
 reduced.h's interfacial potential (63 of 72 cases; the nine failures, three positions times the three face
 densities, have the interface reaching a wall within one cell of a corner), and do not when it is a plain acceleration on the faces (velocities of 0.05-0.2, not decreasing
-with the grid). No new pressure correction was needed for these two conditions.
+with the grid). No new pressure correction was needed for these two conditions. The unbalanced cases come from the height
+functions' ghost cells (`docs/notes/120_r0p2_corner.md`): the slip walls mirror f, which assumes a 90 degree contact
+angle, while the oblique plane meets the wall at 90 - theta; near a corner the height column used crosses the wall
+and picks up the folded mirror image, so the interface potential is not zero there (in all 24 geometries the
+unbalanced ones are exactly those with a nonzero potential at t = 0). With the plane itself in the ghost cells the
+layers stay at rest to 6e-14 up to t = 20.
 
 Audit #162, a free stream carrying an interface on grid faces (`docs/notes/118_aligned_free_stream.md`): the
 conserving transport (and Basilisk's conserving.h) lets such a band or square grow to 3e-2 ... 0.3 at density ratios
