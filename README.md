@@ -1432,6 +1432,11 @@ periodic image of q itself), which makes a periodic two-phase transport step ind
 the flow to round-off; `conserving_stale_ghosts=True` keeps conserving.h's definition for comparisons with the C
 build (`tests/test_momentum_ghosts.py`). The pressure source in the face value stays off by default.
 
+A cell with c exactly 1/2 (audit #156): under vof.h's rule neither phase's momentum dilates there, and
+`TwoPhase(conserving=True)` then loses a uniform velocity (1.0e-2 at N = 32 for rho1 / rho2 = 1e-3, second order in
+h; the defect of `docs/notes/77_pure_advection.md`). The conserving form now gives that cell to the second phase
+(`VOFTracer(complementary=True)`), which keeps a uniform velocity to round-off; `conserving_vof_half=True` keeps
+vof.h's rule. The non-conserving path and `VOFTracer`'s own default are unchanged.
 R0-P1 continued, unsteady and viscous single-phase flows (`docs/notes/113_r0p1_unsteady_viscous.md`): with the two
 fixes of note 112 the conserving form is still first order in time once the flow is unsteady (a Taylor-Green flow
 with a Galilean boost, exact for any viscosity: slopes 0.90-0.98 over 13 grids at a fixed CFL number). Three more
