@@ -1533,3 +1533,10 @@ Where the limited D2 fix does cut (an inviscid aligned shear flow moved at the C
 1.22 x that of D1 alone at N = 256. A verifier of the local mass and momentum budgets that takes only flux arrays
 (`cases/r0_local_budget.py`) finds every library budget at round-off and detects #156's c = 1/2 rule and the D1
 defect (faces moving volume with a zero momentum flux); D2 is not a flux inconsistency and is not seen there.
+
+The bounded trials of issue #166 (`docs/notes/123_r0_trials.md`): Crank-Nicolson away from the interface band with
+backward Euler on the band's faces keeps the momentum and the single-phase result of note 113 but grows once the
+light phase's kappa_L = mu dt / (rho h^2) reaches 10; evaluating the interfacial force at the carrying velocity's
+time removes E1's extra damping of a gravity wave but leaves the capillary damping slightly above the base scheme's.
+The error jump at nearly coincident output events comes from the face-value pressure source, not from E1. The
+limited D2 fix with the threshold 3 costs at most 7 % in L1 where it cuts.
