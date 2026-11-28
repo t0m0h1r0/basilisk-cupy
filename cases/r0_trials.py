@@ -531,3 +531,90 @@ def plot() -> None:
     ax[1].legend(fontsize=7)
     fig.tight_layout()
     fig.savefig(os.path.join("docs", "figures", "r0_trials.png"), dpi=130)
+
+
+# --- #166 (B's decision 2026-11-28): the library configuration D1 + D2 limited (theta = 3), nothing time-centred --
+def lib_jobs():
+    J = []
+    for kind, kw in item3_jobs():
+        if kind in ("free", "vortex"):
+            kw = dict(kw, conf="noE")
+        elif kind == "drop_st":
+            kw = dict(kw, conf=("d1+d2lim" if kw["conf"] != "base" else "base"))
+        J.append((kind, kw))
+    for c in ("base-lib", "noE"):
+        for n in (32, 64):
+            J.append(("capwave", dict(cname=c, n=n)))
+        for case in ("tg", "drop"):
+            for gap in (None, 1e-7):
+                J.append(("events", dict(cname=c, case=case, gap=gap)))
+    return J
+
+
+def _job_lib(a):
+    from cases import r0_aligned_free_stream as m
+
+    m.THETA[0] = 3.0
+    kind, kw = a
+    if kind == "hydro":
+        from cases.r0_combined import configuration
+        from cases.r0p2_pressure_momentum import hydrostatic
+
+        m.FLOOR[0] = 0
+        with configuration("d1+d2lim"):
+            r = hydrostatic(**kw)
+        r["kind"], r["floor_hits"] = kind, m.FLOOR[0]
+        return r
+    if kind == "budget":
+        from cases.r0_combined import configuration
+        from cases.r0_local_budget import capture, summarise
+        from cases.r0_aligned_free_stream import shape
+        from basilisk_cupy import BoundaryConditions, CartesianGrid, CellField
+        from basilisk_cupy.interface.two_phase import TwoPhase
+        from basilisk_cupy.time.basilisk_centered import CenteredNS
+
+        r = {"kind": kind}
+        for name in ("drop", "column", "half"):
+            with configuration("d1+d2lim"), capture() as cap:
+                n = 32
+                grid = CartesianGrid((n, n))
+                ns = CenteredNS(grid, periodic=(0, 1), tolerance=1e-10)
+                TwoPhase(ns, CellField.from_interior(grid, shape(name, grid), BoundaryConditions.periodic(2)),
+                         rho1=1.0, rho2=1e-3, conserving=True)
+                x = (np.arange(n) + 0.5) / n
+                X, Y = np.meshgrid(x, x, indexing="ij")
+                ns.u[0].interior = 0.5 + np.sin(2 * np.pi * X) * np.cos(2 * np.pi * Y)
+                ns.u[1].interior = 0.2 - np.cos(2 * np.pi * X) * np.sin(2 * np.pi * Y)
+                ns.start()
+                for _ in range(6):
+                    ns.step()
+            r[name] = summarise(cap, scale_q=2.5)
+        return r
+    if kind in ("capwave", "events"):
+        return _job(a)
+    return _job3(a)
+
+
+def main_lib() -> None:
+    """docs/figures/r0_trials_lib.json."""
+    import multiprocessing as mp
+
+    out = os.path.join("docs", "figures", "r0_trials_lib.json")
+    part = out + ".jsonl"
+    done = {}
+    if os.path.exists(part):
+        for line in open(part):
+            d = json.loads(line)
+            done[d["job"]] = d
+    J = [a for a in lib_jobs() if _key(a) not in done]
+    cost = {"hydro": 9, "drop_st": 5, "capwave": 6, "vortex": 2}
+    J.sort(key=lambda a: -cost.get(a[0], 1))
+    with mp.get_context("spawn").Pool(int(os.environ.get("NP", "20")), maxtasksperchild=1) as pool:
+        for a, r in zip(J, pool.imap(_job_lib, [(k, dict(v)) for k, v in J], chunksize=1)):
+            r["job"] = _key(a)
+            with open(part, "a") as fh:
+                fh.write(json.dumps(r, default=float) + "\n")
+            done[r["job"]] = r
+    with open(out, "w") as fh:
+        json.dump(list(done.values()), fh, indent=1, default=float)
+    print("wrote", out)
