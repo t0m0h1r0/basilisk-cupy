@@ -1,0 +1,61 @@
+free film15   N=64  light-in cfl=0.5 mu=0    : max|u-U| 1.8e-12  mass 3.5e-15  f over 2.2e-16  (step 128/128)
+free film05   N=64  heavy-in cfl=0.5 mu=0    : max|u-U| 8.0e-12  mass 8.5e-16  f over 1.1e-16  (step 128/128)
+free twodrops N=64  heavy-in cfl=0.5 mu=0    : max|u-U| 5.1e-12  mass 0.0e+00  f over 6.7e-16  (step 128/128)
+free film05   N=64  light-in cfl=0.5 mu=0    : max|u-U| 1.6e-13  mass 4.2e-16  f over 8.3e-17  (step 128/128)
+free film15   N=64  heavy-in cfl=0.5 mu=0    : max|u-U| 4.9e-09  mass 5.9e-15  f over 2.2e-16  (step 128/128)
+free twodrops N=64  light-in cfl=0.5 mu=0    : max|u-U| 1.8e-11  mass 5.5e-15  f over 4.4e-16  (step 128/128)
+free tiny     N=64  heavy-in cfl=0.5 mu=0    : max|u-U| 3.4e-13  mass 1.2e-15  f over 2.4e-17  (step 128/128)
+free film05   N=64  light-in cfl=0.5 mu=0.01 : max|u-U| 1.1e-13  mass 4.2e-16  f over 1.7e-16  (step 128/128)
+free film15   N=64  light-in cfl=0.5 mu=0.01 : max|u-U| 6.3e-13  mass 1.4e-16  f over 2.2e-16  (step 128/128)
+free tiny     N=64  light-in cfl=0.5 mu=0    : max|u-U| 7.1e-13  mass 7.4e-14  f over 1.1e-17  (step 128/128)
+free film15   N=64  heavy-in cfl=0.5 mu=0.01 : max|u-U| 3.0e-11  mass 1.4e-16  f over 4.4e-16  (step 128/128)
+free twodrops N=64  heavy-in cfl=0.5 mu=0.01 : max|u-U| 1.1e-12  mass 0.0e+00  f over 6.7e-16  (step 128/128)
+free film05   N=64  heavy-in cfl=0.1 mu=0    : max|u-U| 3.0e-13  mass 4.2e-16  f over 3.5e-17  (step 640/640)
+free film15   N=64  heavy-in cfl=0.1 mu=0    : max|u-U| 5.9e-11  mass 2.0e-15  f over 2.2e-16  (step 640/640)
+free film05   N=64  light-in cfl=0.1 mu=0    : max|u-U| 1.7e-12  mass 0.0e+00  f over 1.1e-15  (step 640/640)
+free film15   N=64  light-in cfl=0.1 mu=0    : max|u-U| 4.2e-09  mass 2.0e-13  f over 1.2e-17  (step 640/640)
+free tiny     N=64  heavy-in cfl=0.5 mu=0.01 : max|u-U| 6.2e-13  mass 1.7e-16  f over 1.2e-17  (step 128/128)
+free film05   N=64  heavy-in cfl=0.5 mu=0.01 : max|u-U| 1.9e-12  mass 2.1e-16  f over 2.2e-16  (step 128/128)
+free twodrops N=64  heavy-in cfl=0.1 mu=0    : max|u-U| 3.6e-08  mass 1.5e-14  f over 2.2e-16  (step 640/640)
+free walldrop N=64  heavy-in cfl=0.5 mu=0    : max|u-U| 8.5e-12  mass 1.2e-15  f over 8.9e-16  (step 128/128)
+free twodrops N=64  light-in cfl=0.5 mu=0.01 : max|u-U| 2.5e-12  mass 3.9e-16  f over 4.4e-16  (step 128/128)
+free tiny     N=64  light-in cfl=0.5 mu=0.01 : max|u-U| 1.7e-13  mass 1.7e-15  f over 7.1e-18  (step 128/128)
+free walldrop N=64  light-in cfl=0.5 mu=0    : max|u-U| 1.6e-11  mass 9.7e-15  f over 8.9e-16  (step 128/128)
+free wallfilm N=64  heavy-in cfl=0.5 mu=0    : max|u-U| 1.6e-11  mass 4.8e-15  f over 6.7e-16  (step 128/128)
+free tiny     N=64  heavy-in cfl=0.1 mu=0    : max|u-U| 1.3e-13  mass 3.3e-16  f over 2.9e-18  (step 640/640)
+free wallfilm N=64  light-in cfl=0.5 mu=0    : max|u-U| 2.7e-11  mass 7.3e-15  f over 6.7e-16  (step 128/128)
+free twodrops N=64  light-in cfl=0.1 mu=0    : max|u-U| 8.0e-11  mass 2.6e-15  f over 6.7e-16  (step 640/640)
+free tiny     N=64  light-in cfl=0.1 mu=0    : max|u-U| 3.3e-13  mass 1.5e-15  f over 9.7e-18  (step 640/640)
+free wallfilm N=64  heavy-in cfl=0.5 mu=0.01 : max|u-U| 1.6e-12  mass 0.0e+00  f over 8.9e-16  (step 128/128)
+free walldrop N=64  heavy-in cfl=0.5 mu=0.01 : max|u-U| 2.9e-12  mass 0.0e+00  f over 4.4e-16  (step 128/128)
+free walldrop N=64  heavy-in cfl=0.1 mu=0    : max|u-U| 7.1e-11  mass 0.0e+00  f over 2.2e-16  (step 640/640)
+free walldrop N=64  light-in cfl=0.1 mu=0    : max|u-U| 8.3e-11  mass 5.9e-15  f over 2.2e-16  (step 640/640)
+free wallfilm N=64  heavy-in cfl=0.1 mu=0    : max|u-U| 6.8e-11  mass 4.0e-16  f over 6.7e-16  (step 640/640)
+free walldrop N=64  light-in cfl=0.5 mu=0.01 : max|u-U| 1.6e-11  mass 1.5e-15  f over 6.7e-16  (step 128/128)
+free wallfilm N=64  light-in cfl=0.5 mu=0.01 : max|u-U| 1.4e-11  mass 2.0e-16  f over 6.7e-16  (step 128/128)
+free wallfilm N=64  light-in cfl=0.1 mu=0    : max|u-U| 1.1e-08  mass 3.8e-15  f over 8.9e-16  (step 640/640)
+mom  drop     N=32  heavy-in noslip lid=1 sigma=0: P0 9.0186e-02  dP -6.4964e-04  wall -5.2856e-04  cumulative residual -1.2e-04 (rel 1.3e-03)  worst step 1.2e-04
+mom  drop     N=32  heavy-in slip lid=0 sigma=0.1: P0 9.0186e-02  dP -4.5921e-05  wall 0.0000e+00  cumulative residual -4.6e-05 (rel 5.1e-04)  worst step 1.1e-04
+mom  wallfilm N=64  heavy-in slip lid=0 sigma=0: P0 1.0681e-02  dP 1.6534e-06  wall 0.0000e+00  cumulative residual 1.7e-06 (rel 1.5e-04)  worst step 1.7e-06
+mom  wallfilm N=64  heavy-in noslip lid=1 sigma=0: P0 1.0681e-02  dP -7.9039e-03  wall -7.9055e-03  cumulative residual 1.7e-06 (rel 1.5e-04)  worst step 1.7e-06
+mom  drop     N=64  light-in noslip lid=1 sigma=0: P0 5.4710e-01  dP 4.9444e-02  wall 4.9384e-02  cumulative residual 6.0e-05 (rel 1.1e-04)  worst step 6.0e-05
+mom  drop     N=64  light-in slip lid=0 sigma=0: P0 5.4710e-01  dP 6.0376e-05  wall 0.0000e+00  cumulative residual 6.0e-05 (rel 1.1e-04)  worst step 6.0e-05
+mom  drop     N=64  heavy-in slip lid=0 sigma=0: P0 9.0222e-02  dP -6.0376e-05  wall 0.0000e+00  cumulative residual -6.0e-05 (rel 6.7e-04)  worst step 6.0e-05
+mom  walldrop N=64  heavy-in slip lid=0 sigma=0: P0 2.5259e-02  dP -8.2832e-06  wall 0.0000e+00  cumulative residual -8.3e-06 (rel 3.3e-04)  worst step 8.3e-06
+mom  walldrop N=64  light-in noslip lid=1 sigma=0: P0 6.1206e-01  dP 5.3760e-02  wall 5.3752e-02  cumulative residual 8.3e-06 (rel 1.4e-05)  worst step 8.3e-06
+mom  drop     N=64  heavy-in noslip lid=1 sigma=0: P0 9.0222e-02  dP -5.0484e-04  wall -4.4446e-04  cumulative residual -6.0e-05 (rel 6.7e-04)  worst step 6.0e-05
+mom  walldrop N=64  heavy-in noslip lid=1 sigma=0: P0 2.5259e-02  dP -5.5175e-03  wall -5.5093e-03  cumulative residual -8.3e-06 (rel 3.3e-04)  worst step 8.3e-06
+mom  walldrop N=64  light-in slip lid=0 sigma=0: P0 6.1206e-01  dP 8.2832e-06  wall 0.0000e+00  cumulative residual 8.3e-06 (rel 1.4e-05)  worst step 8.3e-06
+mom  wallfilm N=64  light-in noslip lid=1 sigma=0: P0 6.2664e-01  dP 6.0150e-02  wall 6.0152e-02  cumulative residual -1.7e-06 (rel 2.6e-06)  worst step 1.7e-06
+dam  N=64  cfl=0.5 slip: steps 383  max|u| 3.54  mass 2.4e-08 | t=0.4 front 0.453 height 0.518; t=0.8 front 0.797 height 0.376; t=1.2 front 1.000 height 0.257; t=1.6 front 1.000 height 0.174; t=2.0 front 1.000 height 0.122
+mom  drop     N=64  heavy-in slip lid=0 sigma=0.1: P0 9.0222e-02  dP 3.9104e-06  wall 0.0000e+00  cumulative residual 3.9e-06 (rel 4.3e-05)  worst step 3.8e-05
+dam  N=64  cfl=0.5 noslip: steps 407  max|u| 4.03  mass 8.6e-09 | t=0.4 front 0.453 height 0.524; t=0.8 front 0.766 height 0.403; t=1.2 front 0.984 height 0.301; t=1.6 front 1.000 height 0.221; t=2.0 front 1.000 height 0.157
+dam  N=64  cfl=0.1 slip: steps 1863  max|u| 4.46  mass 2.5e-08 | t=0.4 front 0.453 height 0.517; t=0.8 front 0.797 height 0.376; t=1.2 front 1.000 height 0.258; t=1.6 front 1.000 height 0.174; t=2.0 front 1.000 height 0.141
+mom  wallfilm N=64  light-in slip lid=0 sigma=0: P0 6.2664e-01  dP -1.6534e-06  wall 0.0000e+00  cumulative residual -1.7e-06 (rel 2.6e-06)  worst step 1.7e-06
+dam  N=64  cfl=0.1 noslip: steps 1682  max|u| 3.81  mass 2.1e-08 | t=0.4 front 0.453 height 0.524; t=0.8 front 0.766 height 0.403; t=1.2 front 0.984 height 0.301; t=1.6 front 1.000 height 0.221; t=2.0 front 1.000 height 0.157
+dam  N=128 cfl=0.5 slip: steps 808  max|u| 3.93  mass 3.0e-08 | t=0.4 front 0.461 height 0.516; t=0.8 front 0.805 height 0.376; t=1.2 front 1.000 height 0.258; t=1.6 front 1.000 height 0.174; t=2.0 front 1.000 height 0.132
+dam  N=128 cfl=0.5 noslip: steps 621  max|u| 4.10  mass 2.9e-08 | t=0.4 front 0.445 height 0.536; t=0.8 front 0.766 height 0.444; t=1.2 front 1.000 height 0.347; t=1.6 front 1.000 height 0.252; t=2.0 front 1.000 height 0.171
+mom  drop     N=128 heavy-in slip lid=0 sigma=0.1: P0 9.0231e-02  dP 1.2325e-05  wall 0.0000e+00  cumulative residual 1.2e-05 (rel 1.4e-04)  worst step 1.3e-05
+mom  drop     N=128 heavy-in noslip lid=1 sigma=0: P0 9.0231e-02  dP -4.5522e-04  wall -4.2521e-04  cumulative residual -3.0e-05 (rel 3.3e-04)  worst step 3.0e-05
+dam  N=128 cfl=0.1 noslip: steps 2835  max|u| 3.35  mass 3.4e-08 | t=0.4 front 0.445 height 0.535; t=0.8 front 0.773 height 0.444; t=1.2 front 1.000 height 0.346; t=1.6 front 1.000 height 0.251; t=2.0 front 1.000 height 0.170
+dam  N=128 cfl=0.1 slip: steps 3959  max|u| 4.60  mass 1.4e-08 | t=0.4 front 0.461 height 0.517; t=0.8 front 0.805 height 0.376; t=1.2 front 1.000 height 0.258; t=1.6 front 1.000 height 0.174; t=2.0 front 1.000 height 0.147
