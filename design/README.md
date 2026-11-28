@@ -6,4 +6,4 @@
 
 | 文書 | Issue | 内容 |
 | --- | --- | --- |
-| [179_time_integration.md](179_time_integration.md) | #179 | 時間積分の分岐：運ぶ速度の時刻と界面の力の時刻の組（速度 Verlet 型 d1、位置 Verlet 型 b1）、外挿 + 力の平均の不安定の予測、判定の試験 T1〜T5、研究目的への影響 |
+| [179_time_integration.md](179_time_integration.md) | #179 | 時間積分の分岐：運ぶ速度の時刻と界面の力の時刻の組。第一候補 d1（速度 Verlet 型）、次に b2、c。セルと面の 2 つの速度の模型、判定の試験 T1〜T5、研究目的への影響 |

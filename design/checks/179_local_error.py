@@ -55,7 +55,8 @@ ROWS = [
     ("d1/b + BE（純相の内部）", step(sp.Rational(1, 2), 1, "BE"), E3),
     ("d1 + BE、予測に粘性なし", step(sp.Rational(1, 2), 1, "BE", c1 - c1v), E3 + Ec),
     ("d1/b + BE、帯の中", step(sp.Rational(1, 2), 0, "BE"), E2 + E3),
-    ("d1/b + CN（単相：ノート113 の cons/pred+visc+cn）", step(sp.Rational(1, 2), 1, "CN"), 0),
+    ("b + CN、d1 + CN で予測に粘性の加速度あり（単相）", step(sp.Rational(1, 2), 1, "CN"), 0),
+    ("d1 + CN、予測に粘性なし（監修の指摘 1：1 次が残る）", step(sp.Rational(1, 2), 1, "CN", c1 - c1v), Ec),
     ("輸送の後に 2 次の粘性の流れ（L2、Lie の分割）", step(sp.Rational(1, 2), 1, "L2"), V * c0 * A / 2),
 ]
 
