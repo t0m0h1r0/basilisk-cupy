@@ -1,0 +1,86 @@
+[
+ {
+  "conf": "base",
+  "n": 32,
+  "period": 0.40741483973132275,
+  "damping": 0.7391079975144362,
+  "failed": null
+ },
+ {
+  "conf": "base",
+  "n": 64,
+  "period": 0.4038635370551142,
+  "damping": 0.7291029036537349,
+  "failed": null
+ },
+ {
+  "conf": "e1 only",
+  "n": 32,
+  "period": 0.4075504559917772,
+  "damping": 0.8599419392213772,
+  "failed": null
+ },
+ {
+  "conf": "e1 only",
+  "n": 64,
+  "period": 0.4039137024596025,
+  "damping": 0.7696118822279983,
+  "failed": null
+ },
+ {
+  "conf": "e2 only (band source)",
+  "n": 32,
+  "period": 0.40741430505221554,
+  "damping": 0.7392323154403001,
+  "failed": null
+ },
+ {
+  "conf": "e2 only (band source)",
+  "n": 64,
+  "period": 0.40386315226044545,
+  "damping": 0.7291158239030862,
+  "failed": null
+ },
+ {
+  "conf": "band source only",
+  "n": 32,
+  "period": 0.40741398799332573,
+  "damping": 0.7392255318397931,
+  "failed": null
+ },
+ {
+  "conf": "band source only",
+  "n": 64,
+  "period": 0.4038629777211086,
+  "damping": 0.7291135241728793,
+  "failed": null
+ },
+ {
+  "conf": "e1+e2+band (no E3)",
+  "n": 32,
+  "period": 0.40754984650929965,
+  "damping": 0.86005067678252,
+  "failed": null
+ },
+ {
+  "conf": "e1+e2+band (no E3)",
+  "n": 64,
+  "period": 0.4039133197080411,
+  "damping": 0.769624059688486,
+  "failed": null
+ },
+ {
+  "conf": "e2+band (no E1, E3)",
+  "n": 32,
+  "period": 0.40741430505221554,
+  "damping": 0.7392323154403001,
+  "failed": null
+ },
+ {
+  "conf": "e2+band (no E1, E3)",
+  "n": 64,
+  "period": 0.40386315226044545,
+  "damping": 0.7291158239030862,
+  "failed": null
+ }
+]

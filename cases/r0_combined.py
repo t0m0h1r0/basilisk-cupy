@@ -32,13 +32,13 @@ import numpy as np
 BAND = 1
 
 
-def _setup(ns, tp, e1=True, e2=True, e3=True, band=BAND, record=None, e3_form="velocity", theta=0.5):
+def _setup(ns, tp, e1=True, e2=True, e3=True, band=BAND, record=None, e3_form="velocity", theta=0.5, source=True):
     """The E1-E3 and band hooks on a built solver (TwoPhase(conserving=True))."""
     from basilisk_cupy.linear.viscosity import ViscosityProblem, viscosity
 
     grid = tp.f.grid
     xp = grid.xp
-    tp.conserving_source = True                                  # the face value's half-step source (note 112)
+    tp.conserving_source = source                                # the face value's half-step source (note 112)
     viscous = ns.mu is not None and (tp.mu1 or tp.mu2)
     st = {"uf_prev": None, "dt_prev": None}
 

@@ -23,6 +23,9 @@ import os
 import numpy as np
 
 RHO = (1.0, 1e-3)
+# the exact linear reference of the capillary wave in this configuration (audit C-2 on PR #177,
+# audit/pr177/capwave_exact.py, copied to docs/figures/capwave_exact_audit.json), read the same way:
+EXACT_PERIOD, EXACT_DAMPING = 0.4025716727004185, 0.7146625675736967
 MU = (1e-2, 1e-2 / 55.0)
 
 

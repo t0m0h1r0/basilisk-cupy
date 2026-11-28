@@ -41,3 +41,16 @@ def test_inviscid_free_stream_with_everything():
     for name, kw in (("column", {}), ("column", {"dt": 0.4999 / 32}), ("square", {"U": (1.0, 0.37)})):
         with combined():
             assert free_stream(name, "d1+d2lim", 1e3, **kw)["max_err"] < 1e-8
+
+
+def test_e1_alone_degrades_the_capillary_damping():
+    """Condition 9 (corrected after the audit of PR #177): E1 alone moves the damping away from the exact linear
+    reference (0.7147, audit/pr177/capwave_exact.py); the other fixes leave it at the base scheme's value."""
+    from cases.r0_aligned_free_stream import scheme
+    from cases.r0_combined_tension import capillary_wave
+
+    base = capillary_wave("base", 32)["damping"]
+    with scheme(True, "limited"), combined(e1=False, e3=False):
+        assert abs(capillary_wave("base", 32)["damping"] - base) < 1e-3
+    with scheme(True, "limited"), combined(e2=False, e3=False, band=None, source=False):
+        assert capillary_wave("base", 32)["damping"] - 0.7147 > 4 * (base - 0.7147)
