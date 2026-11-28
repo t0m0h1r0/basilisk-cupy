@@ -148,6 +148,8 @@ N = 64 / 128 で CFL 数を変えた（`--cfl`）：
 
 **c = 1/2 ちょうどのセル**（ユーザーの指摘）：vof.h の膨張の項は、濃度 t₁ に c > 1/2、逆相の t₂ に c < 1/2 のセルを使うので、c = 1/2 ちょうどではどちらの相も膨張しない（c 自身は `cc = c > 1/2` = 0、つまり相 2 側）。一定の濃度（t₁ = c、t₂ = 1 − c）を発散のない一様でない速度で 1 ステップ運ぶと、平らな界面がセルの中心を通る場合、t₂/(1 − c) が **1.7e-2** ずれる（c = 1/2 ± 1e-9 なら丸め誤差）。**C 版の vof.h も同じ条件**（移植は忠実）。逆相で c ≤ 1/2 を使う選択肢 `VOFTracer(complementary=True)` で丸め誤差になる（既定は Basilisk のまま）。
 
+**追記（2026-11-27、監修 #156、B の決定）**：この欠陥は、運動量保存形（`TwoPhase(conserving=True)`）の速度にも出て、一様な速度を保たない（監修の測定：格子に平行な帯の界面がセルの中心を通るとき、一様でない発散 0 の面の速度で運ぶと、max\|u − U\| は N = 32 / 64 / 128 で、ρ₁/ρ₂ = 1e-3 のとき 1.04e-2 / 2.46e-3 / 5.82e-4、密度の差なしで 2.40e-3 / 5.18e-4 / 1.19e-4、ρ₁/ρ₂ = 1e3 で 1.19e-5 / 2.88e-6 / 7.00e-7）。自由流の厳密な保存は必須の要件（ノート111 の 1 節）なので、**運動量保存形の既定を `complementary=True`（c = 1/2 のセルは第 2 の相が膨張する）に変えた**。vof.h の規則は `TwoPhase(conserving_vof_half=True)` で残した（C 版との比較用）。`VOFTracer` そのものの既定と、非保存形の経路は変えていない。回帰試験：`tests/test_momentum_ghosts.py` の `test_free_stream_with_a_cell_at_exactly_one_half`（3 つの密度の組 × 界面の位置 3 通り、10 ステップで丸めの水準）。
+
 ![pure_advection](../figures/pure_advection.png)
 
 （`python -m cases.pure_advection --plot`、数値は `docs/figures/pure_advection*.json`。）

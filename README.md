@@ -1432,6 +1432,38 @@ periodic image of q itself), which makes a periodic two-phase transport step ind
 the flow to round-off; `conserving_stale_ghosts=True` keeps conserving.h's definition for comparisons with the C
 build (`tests/test_momentum_ghosts.py`). The pressure source in the face value stays off by default.
 
+A cell with c exactly 1/2 (audit #156): under vof.h's rule neither phase's momentum dilates there, and
+`TwoPhase(conserving=True)` then loses a uniform velocity (1.0e-2 at N = 32 for rho1 / rho2 = 1e-3, second order in
+h; the defect of `docs/notes/77_pure_advection.md`). The conserving form now gives that cell to the second phase
+(`VOFTracer(complementary=True)`), which keeps a uniform velocity to round-off; `conserving_vof_half=True` keeps
+vof.h's rule. The non-conserving path and `VOFTracer`'s own default are unchanged.
+R0-P1 continued, unsteady and viscous single-phase flows (`docs/notes/113_r0p1_unsteady_viscous.md`): with the two
+fixes of note 112 the conserving form is still first order in time once the flow is unsteady (a Taylor-Green flow
+with a Galilean boost, exact for any viscosity: slopes 0.90-0.98 over 13 grids at a fixed CFL number). Three more
+terms, each with its predicted local error: E1 the face velocity that carries the momentum is the one of time t^n;
+E2 the half-step source in the face value has no viscous acceleration; E3 the viscous step is backward Euler. The
+global coefficients of E2 and E3 match the predictions (-/+ lambda/2 for a shift of the pattern, lambda^2/2 for
+the amplitude) to three digits, their shifts cancel, and fixing one of them alone makes the error larger. Without
+the boost E1 and E2 are gradients and do not show at all. With the face velocity extrapolated to t^{n+1/2} (no
+projection), the viscous (or the lagged total) acceleration in the face value and Crank-Nicolson with the explicit
+half on u^n, the scheme is second order at a fixed CFL number (slopes 2.01-2.32, N >= 96, max and RMS, three times),
+as with the exact face velocity. The non-conserving BCG form is first order in time with viscosity too. On a fixed
+grid the error of every second-order variant grows when the time step is reduced (a space error h^2 f(CFL)), so the
+time order cannot be read there. All of this is done from hooks (`cases/r0p1_unsteady_viscous.py`); the library is
+unchanged and nothing is two-phase yet.
+
+R0-P1, the feedback instability of that source at high density ratios (`docs/notes/114_r0p1_source_feedback.md`):
+the fluxes carry the leaving mass with the velocity u + dt/2 g, so a cell loses the half impulse of the mass that
+left while its velocity is then formed with the new mass: u* - U = (dt/2) [m_in g_in - m_out g_out] / m' (exact to
+round-off for one sweep, also with a random g). In a cell the heavy phase has just left m_out / m' is of the order
+of the density ratio; the spectral radius of the one-step map g^n -> g^{n+1} is proportional to the largest mass
+ratio m^n / m^{n+1} of the step (0.105-0.107 times it for one geometry, density ratios 100 ... 1e4), which gives
+the threshold between the ratios 100 and 300 and the dependence on the grid and on the CFL number. Averaging the
+source differently does not help. Adding dt/2 g to the cells before the transport and subtracting it after is stable
+up to the ratio 1e6 but changes the total momentum (1.5e-3 for a drop in a vortex); adding it and taking nothing
+back (the projection supplies the other half: a trapezoidal pressure) is stable and conserving, but the pressure
+then oscillates at 2 dt. Hooks only (`cases/r0p1_source_feedback.py`); no choice has been made.
+
 R0-P2, the momentum with the pressure included and the hydrostatic balance of the cell-centred solver as it is
 (`docs/notes/115_r0p2_pressure_momentum.md`): with the conserving transport the total momentum of a periodic
 two-phase flow (a drop in a vortex, density ratio 1000, to t = 1) is conserved to 1e-12 with two-phase.h's face

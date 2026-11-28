@@ -84,7 +84,8 @@ class TwoPhase:
                  conserving_gradient=None, conserving_ccd_cmin: float | None = None,
                  conserving_geometric: bool = False, conserving_predict: bool = False,
                  conserving_source: bool = False, conserving_transverse: bool = False,
-                 conserving_fresh_dilation: bool = False, conserving_stale_ghosts: bool = False) -> None:
+                 conserving_fresh_dilation: bool = False, conserving_stale_ghosts: bool = False,
+                 conserving_vof_half: bool = False) -> None:
         """``conserving_gradient``: the gradient of the advected momentum concentrations (Basilisk: the velocity's,
         centred by default); ``"ccd"``: CCD along each phase's runs of cells (docs/notes/72); ``"ccd2"``: with the
         swept mean of the mean-preserving parabola from the same CCD solve (docs/notes/75). ``conserving_ccd_cmin``: the
@@ -101,7 +102,11 @@ class TwoPhase:
         first sweep (``VOFTracer(fresh_dilation=True)``, docs/notes/77). ``conserving_stale_ghosts``: the momentum's
         ghost cells from the step-start velocity in both sweeps, as conserving.h's ``boundary_q1_x`` (first order in
         time at every boundary, docs/notes/112; kept to compare with the C build). The default takes them from the
-        momentum's current velocity."""
+        momentum's current velocity. ``conserving_vof_half``: vof.h's rule for the dilation term of the two
+        phases' momenta, under which NEITHER phase dilates in a cell with c exactly 1/2 (a uniform velocity is then
+        not kept there: 1e-2 at N = 32 for a density ratio 1000, docs/notes/77 and audit #156; kept to compare with
+        the C build). The default gives that cell to the second phase (``VOFTracer(complementary=True)``), which
+        keeps a uniform velocity to round-off."""
         if f.grid.ndim != 2:
             raise NotImplementedError("two-phase flows are implemented in 2-D")
         self.ns, self.f = ns, f
@@ -119,6 +124,7 @@ class TwoPhase:
         self.conserving_transverse = conserving_transverse
         self.conserving_fresh_dilation = conserving_fresh_dilation
         self.conserving_stale_ghosts = conserving_stale_ghosts
+        self.conserving_vof_half = conserving_vof_half
         if conserving:
             if vof_first:
                 raise NotImplementedError("conserving.h advects the momentum in the vof event")
@@ -192,8 +198,9 @@ class TwoPhase:
             s1 = s2 = None
             if self.conserving_source:
                 s1, s2 = self.rho1 * ns.g[ax].interior, self.rho2 * ns.g[ax].interior
-            tracers += [VOFTracer(q1, gradient=g, source=s1, **kw), VOFTracer(q2, inverse=True, gradient=g, source=s2,
-                                                                                **kw)]
+            tracers += [VOFTracer(q1, gradient=g, source=s1, **kw),
+                        VOFTracer(q2, inverse=True, gradient=g, source=s2, complementary=not self.conserving_vof_half,
+                                  **kw)]
             qs.append((q1, q2))
         uf = ns.uf
         if self.conserving_predict:
