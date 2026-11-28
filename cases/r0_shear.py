@@ -297,6 +297,47 @@ def run(n=(1, 1), boost=True, N=64, cfl=0.5, samples=(0.25, 0.5, 1.0), tolerance
     return out
 
 
+def harmonic_viscosity(ns, tp):
+    """Hook (audit on PR #176): the face viscosity as the harmonic mean 1 / (c / mu1 + (1 - c) / mu2) of the face's
+    volume fraction c (two-phase.h's default is the arithmetic mean mu(c))."""
+    from basilisk_cupy.interface.heights import pad_bc
+
+    def props(s):
+        sf = tp.smoothed()
+        sp = pad_bc(sf, tp.f.bc, 1)
+        n = sf.shape
+        for ax in range(2):
+            lo = [slice(1, 1 + n[0]), slice(1, 1 + n[1])]
+            lo[ax] = slice(0, n[ax] + 1)
+            hi = list(lo)
+            hi[ax] = slice(1, n[ax] + 2)
+            c = s.grid.xp.minimum(s.grid.xp.maximum((sp[tuple(hi)] + sp[tuple(lo)]) / 2.0, 0.0), 1.0)
+            s.mu[ax] = 1.0 / (c / tp.mu1 + (1 - c) / tp.mu2)
+
+    ns.on("properties", props, after=True)
+
+
+def _vm_job(a):
+    os.environ.setdefault("OMP_NUM_THREADS", "1")
+    n, boost, N, cfl, mean = a
+    r = run(n=n, boost=boost, N=N, cfl=cfl, samples=(1.0,), setup=harmonic_viscosity if mean == "harmonic" else None)
+    return {"n": list(n), "boost": boost, "N": N, "cfl": cfl, "mean": mean, "failed": r["failed"],
+            "L2": r["rows"][-1]["all"]["L2"] if r["rows"] else None}
+
+
+def viscosity_mean() -> None:
+    """The audit's check on PR #176: the error does not change with the CFL number (space, not time), and the
+    harmonic face viscosity removes most of it. docs/figures/r0_shear_viscosity_mean.json (20 processes, ~15 min)."""
+    import multiprocessing as mp
+
+    J = [(n, b, N, cfl, m) for n, b in (((0, 1), False), ((0, 1), True), ((1, 1), True)) for N in (32, 64, 128)
+         for cfl in (0.5, 0.1) for m in ("arithmetic", "harmonic")]
+    with mp.get_context("spawn").Pool(int(os.environ.get("NP", "20"))) as pool:
+        R = pool.map(_vm_job, J)
+    with open(os.path.join("docs", "figures", "r0_shear_viscosity_mean.json"), "w") as fh:
+        json.dump(R, fh, indent=1)
+
+
 GRIDS = (32, 48, 64, 96, 128)
 CASES = [((0, 1), True), ((0, 1), False), ((1, 1), True), ((1, 1), False), ((1, 2), True), ((1, 2), False)]
 
