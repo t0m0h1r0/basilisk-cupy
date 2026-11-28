@@ -97,7 +97,7 @@ def accuracy(sch, n, second_order=True, drop=True, T=0.25):
 
 
 @in_scheme
-def vortex_budget(sch, n=64, ratio=1000.0, t_end=0.5, cfl=0.5):
+def vortex_budget(sch, n=64, ratio=1000.0, t_end=0.5, cfl=0.5, mu=(0.0, 0.0)):
     """c: docs/notes/114's drop in the Taylor-Green vortex + (0.5, 0.2), filtered=False: the total momentum (the
     transported density, i.e. rho_lin for the D1 forms, and the clamped one), the phase mass sum f, the overshoot of
     f, the margin of rho_lin's floor, and max |rho_lin - rho_clamped| / rho2 (the D1 checks)."""
@@ -108,10 +108,10 @@ def vortex_budget(sch, n=64, ratio=1000.0, t_end=0.5, cfl=0.5):
     from basilisk_cupy.time.basilisk_centered import CenteredNS
 
     grid = CartesianGrid((n, n))
-    ns = CenteredNS(grid, periodic=(0, 1), tolerance=1e-10)
+    ns = CenteredNS(grid, periodic=(0, 1), tolerance=1e-10, mu=(max(mu) if max(mu) > 0 else None))
     f0 = to_numpy(fraction(grid, lambda x, y: 0.15 ** 2 - (x - 0.5) ** 2 - (y - 0.3) ** 2, refine=8))
     tp = TwoPhase(ns, CellField.from_interior(grid, f0, BoundaryConditions.periodic(2)), rho1=1.0, rho2=1.0 / ratio,
-                  conserving=True)
+                  mu1=mu[0], mu2=mu[1], conserving=True)
     ns.cfl = cfl
     x = (np.arange(n) + 0.5) / n
     X, Y = np.meshgrid(x, x, indexing="ij")
