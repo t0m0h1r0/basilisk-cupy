@@ -32,8 +32,18 @@ import numpy as np
 BAND = 1
 
 
-def _setup(ns, tp, e1=True, e2=True, e3=True, band=BAND, record=None, e3_form="velocity", theta=0.5, source=True):
-    """The E1-E3 and band hooks on a built solver (TwoPhase(conserving=True))."""
+def _setup(ns, tp, e1=True, e2=True, e3=True, band=BAND, record=None, e3_form="velocity", theta=0.5, source=True,
+           e1_force="end", e1_coef=None, e3_band=1):
+    """The E1-E3 and band hooks on a built solver (TwoPhase(conserving=True)).
+
+    The trials of #166 (docs/notes/123):
+      e1_force "mid"   the interfacial potentials (surface tension, reduced gravity) as the mean of the last step's
+                       and this step's, (phi(f^n) + phi(f^{n+1})) / 2: the force at the time of the carrying velocity
+      e1_coef  "cap"   the extrapolation factor dt / (2 dt_prev) capped at 0.55 (the CFL ramp's largest, 1.1 / 2)
+               "skip"  no extrapolation when dt > 1.1001 dt_prev (the step after one shortened by an event)
+      e3_form  "band"  the viscous step's explicit half only on faces away from the interface band (``e3_band``
+                       cells, before and after the transport); backward Euler on the band's faces; the explicit part
+                       as a momentum divided by the present density (flux form)."""
     from basilisk_cupy.linear.viscosity import ViscosityProblem, viscosity
 
     grid = tp.f.grid
@@ -72,10 +82,19 @@ def _setup(ns, tp, e1=True, e2=True, e3=True, band=BAND, record=None, e3_form="v
     def before(solver):                                          # "vof": before TwoPhase's transport
         dt = solver.clock.dt
         st["Lun"] = lu(solver, dt) if (viscous and (e2 or e3)) else None
+        if viscous and e3 and e3_form == "band":
+            st["u_n"] = solver.u.copy() if hasattr(solver.u, "copy") else solver.u
+            st["Lraw"] = _lraw(solver.u, solver.mu, xp.ones_like(solver.rho), dt)
         if e1:
             cur = [c.copy() for c in solver.uf.components]
             if st["uf_prev"] is not None:
                 r = 0.5 * dt / st["dt_prev"]
+                if e1_coef == "cap":
+                    r = min(r, 0.55)
+                elif e1_coef == "skip" and dt > 1.1001 * st["dt_prev"]:
+                    r = 0.0
+                if record is not None:
+                    record["coef_max"] = max(record.get("coef_max", 0.0), r)
                 for c, a, b in zip(solver.uf.components, cur, st["uf_prev"]):
                     c[...] = a + r * (a - b)
                 if record is not None:                           # the effective CFL number of the carrying velocity
@@ -85,6 +104,7 @@ def _setup(ns, tp, e1=True, e2=True, e3=True, band=BAND, record=None, e3_form="v
             st["uf_prev"] = cur
         st["dt_prev"] = dt
         st["rho_n"] = solver.rho.copy() if hasattr(solver.rho, "copy") else solver.rho
+        st["f_n"] = tp.f.interior.copy()
         st["g"] = [c.interior.copy() for c in solver.g.components]
         w = mask() if band is not None else 1.0
         for k, c in enumerate(solver.g.components):
@@ -103,6 +123,8 @@ def _setup(ns, tp, e1=True, e2=True, e3=True, band=BAND, record=None, e3_form="v
         present density rho^{n+1} (diagnosis of note 121)."""
 
         def solve(self, u, mu, rho, dt, tolerance=1e-3):
+            if e3_form == "band":
+                return self.solve_band(u, mu, rho, dt, tolerance)
             w = (1.0 - theta) * dt
             fac = (st["rho_n"] / rho) if e3_form == "momentum" else 1.0
             for c, a in zip(u.components, st["Lun"]):
@@ -110,10 +132,93 @@ def _setup(ns, tp, e1=True, e2=True, e3=True, band=BAND, record=None, e3_form="v
             u.fill_ghosts()
             return viscosity(u, mu, rho, theta * dt, tolerance=tolerance)
 
+        def solve_band(self, u, mu, rho, dt, tolerance):
+            """Faces touching the band (old or new interface, ``e3_band`` cells): backward Euler; elsewhere Crank-
+            Nicolson. Implicit: mu x 2 theta_f with dt / 2 (theta_f = 1 / 2 gives mu exactly: single phase is note
+            113's CN to the bit). Explicit: dt / 2 (L_mu - L_{mu on band faces}) u^n as momentum, / rho^{n+1}."""
+            from basilisk_cupy.fields import FaceField
+
+            w_old, w_new = _band_cells(st["f_n"], tp, e3_band), _band_cells(tp.f.interior, tp, e3_band)
+            cells = xp.maximum(w_old, w_new)                     # 1 in the band (either time)
+            per = tp.f.bc.periodic_axes(2)
+            fb = []
+            for ax in range(2):
+                pad = [(0, 0), (0, 0)]
+                pad[ax] = (1, 1)
+                cp = xp.pad(cells, pad, mode="wrap" if per[ax] else "edge")
+                lo = [slice(None)] * 2
+                hi = [slice(None)] * 2
+                lo[ax], hi[ax] = slice(0, -1), slice(1, None)
+                fb.append(xp.maximum(cp[tuple(lo)], cp[tuple(hi)]))   # a face touching a band cell
+            mu_band = FaceField(grid, [mu[ax] * fb[ax] for ax in range(2)], "mu_band")
+            mu_impl = FaceField(grid, [mu[ax] * (1.0 + fb[ax]) for ax in range(2)], "mu_impl")   # 2 theta_f mu
+            ones = xp.ones_like(st["rho_n"])
+            u0 = st["u_n"]
+            acc_full = st["Lraw"]
+            acc_band = _lraw(u0, mu_band, ones, dt)
+            for c, a, b in zip(u.components, acc_full, acc_band):
+                c.interior = c.interior + 0.5 * dt * (a - b) / rho
+            u.fill_ghosts()
+            if record is not None:
+                record["e3_band_faces"] = record.get("e3_band_faces", 0) + int(sum(float(x.sum()) for x in fb))
+            return viscosity(u, mu_impl, rho, 0.5 * dt, tolerance=tolerance)
+
+    def _lraw(uc, muf, rhoc, dt):
+        """L_h u with a unit density (the momentum's viscous rate) for the velocity field ``uc``."""
+        uc.fill_ghosts()
+        prob = ViscosityProblem.reuse(uc, muf, rhoc, dt)
+        res = [xp.zeros(grid.n) for _ in range(2)]
+        prob.residual(list(uc), [xp.zeros(grid.n) for _ in range(2)], res)
+        return [(r_ + c.interior) / dt for r_, c in zip(res, uc.components)]
+
     if viscous and e3:
         ns.viscous = CrankNicolson()
+
+    if e1_force == "mid":
+        from basilisk_cupy.interface.heights import NODATA
+
+        def wrap(solver):                                        # "acceleration", before TwoPhase's force
+            for k, p in enumerate(tp.potentials):
+                if getattr(p, "_mid", False):
+                    continue
+                memo = {}
+
+                def mid(t, p=p, memo=memo):
+                    cur = p(t)
+                    prev = memo.get("prev")
+                    memo["prev"] = cur
+                    if prev is None:
+                        return cur
+                    ok = (cur < NODATA / 2) & (prev < NODATA / 2)
+                    return xp.where(ok, 0.5 * (prev + cur), cur)
+
+                mid._mid = True
+                tp.potentials[k] = mid
+
+        ns.on("acceleration", wrap)
     ns.on("vof", before)
     ns.on("tracer_advection", after)
+
+
+def _band_cells(f, tp, width):
+    """1 in the interfacial cells (0 < f < 1) and within ``width`` cells of one (no wrap-around at walls)."""
+    xp = tp.f.grid.xp
+    m = ((f > 1e-12) & (f < 1.0 - 1e-12)).astype(float)
+    out = xp.zeros_like(m)
+    per = tp.f.bc.periodic_axes(2)
+    for i in range(-width, width + 1):
+        for j in range(-width, width + 1):
+            sh = m
+            if i:
+                sh = xp.roll(sh, i, axis=0)
+                if not per[0]:
+                    sh[(slice(0, i) if i > 0 else slice(i, None)), :] = 0.0
+            if j:
+                sh = xp.roll(sh, j, axis=1)
+                if not per[1]:
+                    sh[:, (slice(0, j) if j > 0 else slice(j, None))] = 0.0
+            out = xp.maximum(out, sh)
+    return out
 
 
 @contextlib.contextmanager
@@ -146,7 +251,7 @@ def full(**kw):
 
 # --- the checks -----------------------------------------------------------------------------------------------------
 MU = (1e-2, 1e-2 / 55.0)
-EKW = {"full-noE3": {"e3": False}}   # added after the first runs: E3 (Crank-Nicolson) fails in two phases (note 121)
+EKW = {"full-noE3": {"e3": False}, "noE1E3": {"e1": False, "e3": False}}   # added after the first runs: E3 (Crank-Nicolson) fails in two phases (note 121)
 
 
 @contextlib.contextmanager
@@ -156,9 +261,9 @@ def configuration(conf, record=None):
     from cases.r0_aligned_free_stream import scheme
 
     d2 = {"base": None, "base-hooked": False, "d1": False, "d1+d2lim": "limited", "d1+E": False, "full": "limited",
-          "full-noE3": "limited"}[conf]
+          "full-noE3": "limited", "noE1E3": "limited"}[conf]
     with (scheme(conf != "base-hooked", d2) if d2 is not None else contextlib.nullcontext()), \
-            (combined(record=record, **EKW.get(conf, {})) if conf in ("d1+E", "full", "full-noE3")
+            (combined(record=record, **EKW.get(conf, {})) if conf in ("d1+E", "full", "full-noE3", "noE1E3")
              else contextlib.nullcontext()):
         yield
 

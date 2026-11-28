@@ -64,10 +64,10 @@ _SWEEP_EDITS = [
      "            out_ = xp.minimum(cf1 * a_, xp.maximum(ci, 0.0))\n"
      "            rem_ = rk * xp.maximum(ci - out_, 0.0) + ro * xp.maximum(1.0 - ci, 0.0)\n"
      "            gain_ = rk * out_ * (1.0 - a_) / 2.0\n"
-     "            cut_ = (gain_ > rem_) & (gi != 0.0)\n"
+     "            cut_ = (gain_ > _THETA[0] * rem_) & (gi != 0.0)\n"
      "            _COUNT[0] += int(cut_.sum())\n"
      "            _COUNT[1] += int(((ci > 1e-10) & (ci < 1.0 - 1e-10) & (a_ > 0.0)).sum())\n"
-     "            gi = xp.where(gain_ > rem_, 0.0, gi)\n"),
+     "            gi = xp.where(gain_ > _THETA[0] * rem_, 0.0, gi)\n"),
     ("        tfluxes.append(xp.where(ci > 1e-10, ff * cf1 * u, 0.0))\n",
      "        absent = getattr(tr, '_absent', None)\n"
      "        if absent is not None:  # D1 fix: the mixture's value where the phase is absent (after every term)\n"
@@ -92,6 +92,7 @@ _SWEEP_EDITS += [  # A-8 (docs/notes/122): capture the sweep's fluxes for the lo
      "        _CAP[0][-1]['t1'] = [tr.field.interior.copy() for tr in interface.tracers]\n"
      "    return cfl\n"),
 ]
+THETA = [1.0]  # D2 limited: drop the slope where (D2)'s gain exceeds THETA (docs/notes/119: 1; #166's trial: 3)
 CAPTURE = [None]  # a list to append the sweeps to (cases/r0_local_budget.py), None: off
 _VOF_EDITS = [
     ("        fc = xp.minimum(xp.maximum(self.f.interior, 0.0), 1.0)\n        tracers = []\n",
@@ -161,7 +162,8 @@ def scheme(d1: bool, d2: bool):
     library's code unchanged in behaviour)."""
     from basilisk_cupy.interface import two_phase, vof
 
-    extra = {"_D": _D, "_rho_lin": _rho_lin, "_rho_lin_f": _rho_lin_f, "_COUNT": COUNT, "_CAP": CAPTURE}
+    extra = {"_D": _D, "_rho_lin": _rho_lin, "_rho_lin_f": _rho_lin_f, "_COUNT": COUNT, "_CAP": CAPTURE,
+             "_THETA": THETA}
     saved = (vof._sweep, two_phase.TwoPhase._vof, two_phase._MomentumField.fill_ghosts)
     sweep = _patched(saved[0], _SWEEP_EDITS, extra)
     tvof = _patched(saved[1], _VOF_EDITS, extra)
