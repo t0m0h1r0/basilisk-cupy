@@ -1463,3 +1463,15 @@ source differently does not help. Adding dt/2 g to the cells before the transpor
 up to the ratio 1e6 but changes the total momentum (1.5e-3 for a drop in a vortex); adding it and taking nothing
 back (the projection supplies the other half: a trapezoidal pressure) is stable and conserving, but the pressure
 then oscillates at 2 dt. Hooks only (`cases/r0p1_source_feedback.py`); no choice has been made.
+
+R0-P2, the momentum with the pressure included and the hydrostatic balance of the cell-centred solver as it is
+(`docs/notes/115_r0p2_pressure_momentum.md`): with the conserving transport the total momentum of a periodic
+two-phase flow (a drop in a vortex, density ratio 1000, to t = 1) is conserved to 1e-12 with two-phase.h's face
+density (without FILTERED: with `filtered=True` the face densities come from the smoothed f and the total momentum
+changes by 1.4e-2 ... 2.3e-2) and to 2e-11 with `TwoPhaseVOFJump(cell_coefficient="mean")` (GFM for the face velocity, the arithmetic mean
+for the cells' correction), as the identity dP/dt = -sum [(rho_L + rho_R) / (2 rho_f)] dp requires; it is not with
+the GFM coefficient for the cells (3e-2 ... 0.3) or with the non-conserving transport. Two layers at rest in a closed
+box with the gravity along the normal of an oblique plane interface stay at rest to round-off when the gravity is
+reduced.h's interfacial potential (63 of 72 cases; the nine failures, three positions times the three face
+densities, have the interface reaching a wall within one cell of a corner), and do not when it is a plain acceleration on the faces (velocities of 0.05-0.2, not decreasing
+with the grid). No new pressure correction was needed for these two conditions.
