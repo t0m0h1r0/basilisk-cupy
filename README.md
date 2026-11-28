@@ -1490,3 +1490,11 @@ absent; no slope in partial cells) every configuration of the audit and every sh
 below 1.2e-9, proportional to the pressure tolerance; without an interface the fields are bit-identical. D2 changes
 the two-phase solution (a first-order face value at the interface); its effect on the order is not measured yet.
 Hooks only (`cases/r0_aligned_free_stream.py`).
+
+R0's required test, the oblique two-layer shear flow with a Galilean boost (`docs/notes/121_r0_shear.md`,
+`cases/r0_shear.py`): the exact solution as closed-form eigenmodes (transfer matrices) with exact cell averages
+(second differences of the second antiderivative), equal to the audit's independent spectral-element reference to
+5e-11. Before the R0 changes the library's velocity error is first order in every orientation (L2 slopes 0.99-1.03,
+density ratio 1000), with mass and momentum kept to round-off once the first face velocity is divergence-free (the
+library's start interpolates the cell averages without a projection, which moves 1e-4 of the mass in the first
+step for the slope 1:2).
