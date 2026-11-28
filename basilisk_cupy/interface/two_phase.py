@@ -46,6 +46,7 @@ class _MomentumField(CellField):
     of ``q`` itself (the two phases of an interfacial cell do not share one velocity after the first sweep)."""
 
     _current = None
+    _linear = False  # D1: the momentum of the unclamped f (TwoPhase(conserving_consistent=True))
 
     def bind(self, f, u, rho: float, inverse: bool):
         self._f, self._u, self._rho, self._inverse = f, u, rho, inverse
@@ -65,12 +66,16 @@ class _MomentumField(CellField):
             q1, q2, density, u = self._current
             f = self._f.interior
             c = xp.minimum(xp.maximum(f, 0.0), 1.0)
+            if self._linear:
+                c = f
             c = (1.0 - c) if self._inverse else c
             there = c > 1e-10                                    # vof.h's threshold for a concentration
             u.interior = xp.where(there, self.interior / (xp.where(there, c, 1.0) * self._rho),
                                   (q1.interior + q2.interior) / density(f))
         u.fill_ghosts()
         fc = xp.minimum(xp.maximum(self._f.data, 0.0), 1.0)
+        if self._linear:
+            fc = self._f.data
         full = ((1.0 - fc) if self._inverse else fc) * self._rho * u.data
         inner = self.interior.copy()
         self.data[...] = full
@@ -85,7 +90,8 @@ class TwoPhase:
                  conserving_geometric: bool = False, conserving_predict: bool = False,
                  conserving_source: bool = False, conserving_transverse: bool = False,
                  conserving_fresh_dilation: bool = False, conserving_stale_ghosts: bool = False,
-                 conserving_vof_half: bool = False) -> None:
+                 conserving_vof_half: bool = False, conserving_consistent: bool = False,
+                 conserving_slope_limit: float | None = None) -> None:
         """``conserving_gradient``: the gradient of the advected momentum concentrations (Basilisk: the velocity's,
         centred by default); ``"ccd"``: CCD along each phase's runs of cells (docs/notes/72); ``"ccd2"``: with the
         swept mean of the mean-preserving parabola from the same CCD solve (docs/notes/75). ``conserving_ccd_cmin``: the
@@ -106,7 +112,16 @@ class TwoPhase:
         phases' momenta, under which NEITHER phase dilates in a cell with c exactly 1/2 (a uniform velocity is then
         not kept there: 1e-2 at N = 32 for a density ratio 1000, docs/notes/77 and audit #156; kept to compare with
         the C build). The default gives that cell to the second phase (``VOFTracer(complementary=True)``), which
-        keeps a uniform velocity to round-off."""
+        keeps a uniform velocity to round-off.
+
+        ``conserving_consistent`` (D1, docs/notes/118, audit #162): the momentum is built from the transported
+        (unclamped) f and the velocity recovered with rho_lin(f) = f rho1 + (1 - f) rho2, bounded below by half the
+        smaller density (each cell that reaches the bound is counted in ``rho_floor_hits`` and warned about); where a
+        phase is absent in the donor cell its face value is the mixture's (vof.h moves the volume but sets the momentum
+        flux to zero). A uniform velocity is then kept whatever f does. ``conserving_slope_limit`` (D2 limited,
+        docs/notes/119 and 123, theta = 3 chosen there): the slope term of a phase's face value is dropped where the
+        slope's momentum would stay behind with a mass smaller than 1 / theta of it (an interface moved at the CFL
+        bound on grid faces otherwise grows at density ratios of 1e3). Both default to off (conserving.h)."""
         if f.grid.ndim != 2:
             raise NotImplementedError("two-phase flows are implemented in 2-D")
         self.ns, self.f = ns, f
@@ -125,6 +140,9 @@ class TwoPhase:
         self.conserving_fresh_dilation = conserving_fresh_dilation
         self.conserving_stale_ghosts = conserving_stale_ghosts
         self.conserving_vof_half = conserving_vof_half
+        self.conserving_consistent = conserving_consistent
+        self.conserving_slope_limit = conserving_slope_limit
+        self.rho_floor_hits = 0
         if conserving:
             if vof_first:
                 raise NotImplementedError("conserving.h advects the momentum in the vof event")
@@ -177,6 +195,8 @@ class TwoPhase:
         xp = self.f.grid.xp
         fc = xp.minimum(xp.maximum(self.f.interior, 0.0), 1.0)
         tracers = []
+        if self.conserving_consistent:
+            fc = self.f.interior
         qs = []
         for ax, u in enumerate(ns.u.components):
             q1 = _MomentumField(self.f.grid, bc=u.bc, name="q1").bind(self.f, u, self.rho1, False)
@@ -185,8 +205,11 @@ class TwoPhase:
             q2.interior = (1.0 - fc) * self.rho2 * u.interior
             if not self.conserving_stale_ghosts:
                 scratch = CellField(self.f.grid, bc=u.bc, name="uq")
-                q1.current(q1, q2, self.rho, scratch)
-                q2.current(q1, q2, self.rho, scratch)
+                density = ((lambda ff: self._rho_linear(ff, count=False)) if self.conserving_consistent
+                           else self.rho)
+                q1.current(q1, q2, density, scratch)
+                q2.current(q1, q2, density, scratch)
+            q1._linear = q2._linear = self.conserving_consistent
             g = self.conserving_gradient  # u's gradient: centred (Basilisk's default), or "ccd"
             kw = {} if self.conserving_ccd_cmin is None else {"ccd_cmin": float(self.conserving_ccd_cmin)}
             if self.conserving_geometric:
@@ -201,6 +224,14 @@ class TwoPhase:
             tracers += [VOFTracer(q1, gradient=g, source=s1, **kw),
                         VOFTracer(q2, inverse=True, gradient=g, source=s2, complementary=not self.conserving_vof_half,
                                   **kw)]
+            new = tracers[-2:]
+            if self.conserving_consistent:
+                for tr, r in zip(new, (self.rho1, self.rho2)):
+                    tr.absent = (lambda q1=q1, q2=q2, r=r: r * (q1.interior + q2.interior)
+                                 / self._rho_linear(self.f.interior, count=False))
+            if self.conserving_slope_limit is not None:
+                new[0].limit = (self.rho1, self.rho2, float(self.conserving_slope_limit))
+                new[1].limit = (self.rho2, self.rho1, float(self.conserving_slope_limit))
             qs.append((q1, q2))
         uf = ns.uf
         if self.conserving_predict:
@@ -222,7 +253,26 @@ class TwoPhase:
         rho = self.rho(self.f.interior)
         for u, (q1, q2) in zip(ns.u.components, qs):
             u.interior = (q1.interior + q2.interior) / rho
+        if self.conserving_consistent:  # D1: the density of the transported f (the line above is conserving.h's)
+            rho = self._rho_linear(self.f.interior)
+            for u, (q1, q2) in zip(ns.u.components, qs):
+                u.interior = (q1.interior + q2.interior) / rho
         ns.u.fill_ghosts()
+
+    def _rho_linear(self, f, count=True):
+        """f rho1 + (1 - f) rho2 of the unclamped f, bounded below by half the smaller density (D1)."""
+        xp = self.f.grid.xp
+        r = f * (self.rho1 - self.rho2) + self.rho2
+        lo = 0.5 * min(self.rho1, self.rho2)
+        if count:
+            hits = int((r < lo).sum())
+            if hits:
+                import warnings  # noqa: PLC0415
+
+                self.rho_floor_hits += hits
+                warnings.warn("TwoPhase(conserving_consistent=True): rho_lin reached its floor in %d cells "
+                              "(f far outside [0, 1])" % hits, RuntimeWarning, stacklevel=2)
+        return xp.maximum(r, lo)
 
     def _cfl_dtmax(self, ns) -> None:
         """conserving.h's ``event stability``: ``dtmax = timestep (uf, dtmax)``."""
