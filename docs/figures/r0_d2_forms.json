@@ -1,0 +1,3306 @@
+{
+ "accuracy": [
+  {
+   "kind": "accuracy",
+   "scheme": "base",
+   "n": 256,
+   "second_order": true,
+   "drop": true,
+   "max": 0.010298652496336758,
+   "L2": 0.00043530541257253357,
+   "L1": 9.887365717239411e-05,
+   "job": "{\"kind\": \"accuracy\", \"n\": 256, \"sch\": \"base\", \"second_order\": true}"
+  },
+  {
+   "kind": "accuracy",
+   "scheme": "base",
+   "n": 256,
+   "second_order": false,
+   "drop": true,
+   "max": 0.010511756719902298,
+   "L2": 0.0025486474606994554,
+   "L1": 0.002341064507966555,
+   "job": "{\"kind\": \"accuracy\", \"n\": 256, \"sch\": \"base\", \"second_order\": false}"
+  },
+  {
+   "kind": "accuracy",
+   "scheme": "d1",
+   "n": 256,
+   "second_order": true,
+   "drop": true,
+   "max": 0.010298652496337012,
+   "L2": 0.00043530541257230144,
+   "L1": 9.887365717225796e-05,
+   "job": "{\"kind\": \"accuracy\", \"n\": 256, \"sch\": \"d1\", \"second_order\": true}"
+  },
+  {
+   "kind": "accuracy",
+   "scheme": "d1",
+   "n": 256,
+   "second_order": false,
+   "drop": true,
+   "max": 0.010511756719903733,
+   "L2": 0.0025486474606992797,
+   "L1": 0.002341064507966507,
+   "job": "{\"kind\": \"accuracy\", \"n\": 256, \"sch\": \"d1\", \"second_order\": false}"
+  },
+  {
+   "kind": "accuracy",
+   "scheme": "d1+d2",
+   "n": 256,
+   "second_order": true,
+   "drop": true,
+   "max": 0.02953437704342321,
+   "L2": 0.0015282483782371747,
+   "L1": 0.00034993145845899526,
+   "job": "{\"kind\": \"accuracy\", \"n\": 256, \"sch\": \"d1+d2\", \"second_order\": true}"
+  },
+  {
+   "kind": "accuracy",
+   "scheme": "d1+d2",
+   "n": 256,
+   "second_order": false,
+   "drop": true,
+   "max": 0.030684221723907713,
+   "L2": 0.00297144889918936,
+   "L1": 0.002510312364893814,
+   "job": "{\"kind\": \"accuracy\", \"n\": 256, \"sch\": \"d1+d2\", \"second_order\": false}"
+  },
+  {
+   "kind": "accuracy",
+   "scheme": "d1+d2lim",
+   "n": 256,
+   "second_order": true,
+   "drop": true,
+   "max": 0.010298652496337012,
+   "L2": 0.00043530541257230144,
+   "L1": 9.887365717225796e-05,
+   "job": "{\"kind\": \"accuracy\", \"n\": 256, \"sch\": \"d1+d2lim\", \"second_order\": true}"
+  },
+  {
+   "kind": "accuracy",
+   "scheme": "d1+d2lim",
+   "n": 256,
+   "second_order": false,
+   "drop": true,
+   "max": 0.010511756719903733,
+   "L2": 0.0025486474606992797,
+   "L1": 0.002341064507966507,
+   "job": "{\"kind\": \"accuracy\", \"n\": 256, \"sch\": \"d1+d2lim\", \"second_order\": false}"
+  },
+  {
+   "kind": "accuracy",
+   "scheme": "d1+geo",
+   "n": 256,
+   "second_order": true,
+   "drop": true,
+   "max": 0.014231664035256034,
+   "L2": 0.0006843838909856119,
+   "L1": 0.00014217219808911754,
+   "job": "{\"kind\": \"accuracy\", \"n\": 256, \"sch\": \"d1+geo\", \"second_order\": true}"
+  },
+  {
+   "kind": "accuracy",
+   "scheme": "d1+geo",
+   "n": 256,
+   "second_order": false,
+   "drop": true,
+   "max": 0.014472176731747886,
+   "L2": 0.002602552835730565,
+   "L1": 0.0023693597755405056,
+   "job": "{\"kind\": \"accuracy\", \"n\": 256, \"sch\": \"d1+geo\", \"second_order\": false}"
+  },
+  {
+   "kind": "accuracy",
+   "scheme": "base",
+   "n": 192,
+   "second_order": true,
+   "drop": true,
+   "max": 0.012641300480496252,
+   "L2": 0.00063159646522195,
+   "L1": 0.0001642399356037421,
+   "job": "{\"kind\": \"accuracy\", \"n\": 192, \"sch\": \"base\", \"second_order\": true}"
+  },
+  {
+   "kind": "accuracy",
+   "scheme": "base",
+   "n": 192,
+   "second_order": false,
+   "drop": true,
+   "max": 0.013257436313238691,
+   "L2": 0.003382183274156948,
+   "L1": 0.003104926613041787,
+   "job": "{\"kind\": \"accuracy\", \"n\": 192, \"sch\": \"base\", \"second_order\": false}"
+  },
+  {
+   "kind": "accuracy",
+   "scheme": "d1",
+   "n": 192,
+   "second_order": true,
+   "drop": true,
+   "max": 0.01264130048049719,
+   "L2": 0.0006315964652219459,
+   "L1": 0.00016423993560372259,
+   "job": "{\"kind\": \"accuracy\", \"n\": 192, \"sch\": \"d1\", \"second_order\": true}"
+  },
+  {
+   "kind": "accuracy",
+   "scheme": "d1",
+   "n": 192,
+   "second_order": false,
+   "drop": true,
+   "max": 0.013257436314339116,
+   "L2": 0.0033821832741593003,
+   "L1": 0.0031049266130429897,
+   "job": "{\"kind\": \"accuracy\", \"n\": 192, \"sch\": \"d1\", \"second_order\": false}"
+  },
+  {
+   "kind": "accuracy",
+   "scheme": "d1+d2",
+   "n": 192,
+   "second_order": true,
+   "drop": true,
+   "max": 0.03758446329730222,
+   "L2": 0.00216670358447402,
+   "L1": 0.0005635201862283247,
+   "job": "{\"kind\": \"accuracy\", \"n\": 192, \"sch\": \"d1+d2\", \"second_order\": true}"
+  },
+  {
+   "kind": "accuracy",
+   "scheme": "d1+d2",
+   "n": 192,
+   "second_order": false,
+   "drop": true,
+   "max": 0.03968783056821567,
+   "L2": 0.004018389004184099,
+   "L1": 0.0033720656288099655,
+   "job": "{\"kind\": \"accuracy\", \"n\": 192, \"sch\": \"d1+d2\", \"second_order\": false}"
+  },
+  {
+   "kind": "accuracy",
+   "scheme": "d1+d2lim",
+   "n": 192,
+   "second_order": true,
+   "drop": true,
+   "max": 0.01264130048049719,
+   "L2": 0.0006315964652219459,
+   "L1": 0.00016423993560372259,
+   "job": "{\"kind\": \"accuracy\", \"n\": 192, \"sch\": \"d1+d2lim\", \"second_order\": true}"
+  },
+  {
+   "kind": "accuracy",
+   "scheme": "d1+d2lim",
+   "n": 192,
+   "second_order": false,
+   "drop": true,
+   "max": 0.013257436314339116,
+   "L2": 0.0033821832741593003,
+   "L1": 0.0031049266130429897,
+   "job": "{\"kind\": \"accuracy\", \"n\": 192, \"sch\": \"d1+d2lim\", \"second_order\": false}"
+  },
+  {
+   "kind": "accuracy",
+   "scheme": "d1+geo",
+   "n": 192,
+   "second_order": true,
+   "drop": true,
+   "max": 0.017786159275037666,
+   "L2": 0.0009695244333087049,
+   "L1": 0.00023065368327808365,
+   "job": "{\"kind\": \"accuracy\", \"n\": 192, \"sch\": \"d1+geo\", \"second_order\": true}"
+  },
+  {
+   "kind": "accuracy",
+   "scheme": "d1+geo",
+   "n": 192,
+   "second_order": false,
+   "drop": true,
+   "max": 0.018209235033610383,
+   "L2": 0.003460865026115819,
+   "L1": 0.0031474726211015457,
+   "job": "{\"kind\": \"accuracy\", \"n\": 192, \"sch\": \"d1+geo\", \"second_order\": false}"
+  },
+  {
+   "kind": "accuracy",
+   "scheme": "base",
+   "n": 128,
+   "second_order": true,
+   "drop": true,
+   "max": 0.016027085780385725,
+   "L2": 0.00102840339594169,
+   "L1": 0.00032557054266412063,
+   "job": "{\"kind\": \"accuracy\", \"n\": 128, \"sch\": \"base\", \"second_order\": true}"
+  },
+  {
+   "kind": "accuracy",
+   "scheme": "base",
+   "n": 128,
+   "second_order": false,
+   "drop": true,
+   "max": 0.018149730881593933,
+   "L2": 0.005018196499812981,
+   "L1": 0.00460223288363816,
+   "job": "{\"kind\": \"accuracy\", \"n\": 128, \"sch\": \"base\", \"second_order\": false}"
+  },
+  {
+   "kind": "accuracy",
+   "scheme": "d1",
+   "n": 128,
+   "second_order": true,
+   "drop": true,
+   "max": 0.016027085780386512,
+   "L2": 0.0010284033959416967,
+   "L1": 0.0003255705426641294,
+   "job": "{\"kind\": \"accuracy\", \"n\": 128, \"sch\": \"d1\", \"second_order\": true}"
+  },
+  {
+   "kind": "accuracy",
+   "scheme": "d1",
+   "n": 128,
+   "second_order": false,
+   "drop": true,
+   "max": 0.018149730881594363,
+   "L2": 0.005018196499812893,
+   "L1": 0.004602232883638093,
+   "job": "{\"kind\": \"accuracy\", \"n\": 128, \"sch\": \"d1\", \"second_order\": false}"
+  },
+  {
+   "kind": "accuracy",
+   "scheme": "d1+d2",
+   "n": 128,
+   "second_order": true,
+   "drop": true,
+   "max": 0.053419459889488104,
+   "L2": 0.00349789957363443,
+   "L1": 0.001093698488124237,
+   "job": "{\"kind\": \"accuracy\", \"n\": 128, \"sch\": \"d1+d2\", \"second_order\": true}"
+  },
+  {
+   "kind": "accuracy",
+   "scheme": "d1+d2",
+   "n": 128,
+   "second_order": false,
+   "drop": true,
+   "max": 0.05322094490579022,
+   "L2": 0.006148636449680928,
+   "L1": 0.005113811167584257,
+   "job": "{\"kind\": \"accuracy\", \"n\": 128, \"sch\": \"d1+d2\", \"second_order\": false}"
+  },
+  {
+   "kind": "accuracy",
+   "scheme": "d1+d2lim",
+   "n": 128,
+   "second_order": true,
+   "drop": true,
+   "max": 0.016027085780386512,
+   "L2": 0.0010284033959416967,
+   "L1": 0.0003255705426641294,
+   "job": "{\"kind\": \"accuracy\", \"n\": 128, \"sch\": \"d1+d2lim\", \"second_order\": true}"
+  },
+  {
+   "kind": "accuracy",
+   "scheme": "d1+d2lim",
+   "n": 128,
+   "second_order": false,
+   "drop": true,
+   "max": 0.018149730881594363,
+   "L2": 0.005018196499812893,
+   "L1": 0.004602232883638093,
+   "job": "{\"kind\": \"accuracy\", \"n\": 128, \"sch\": \"d1+d2lim\", \"second_order\": false}"
+  },
+  {
+   "kind": "accuracy",
+   "scheme": "d1+geo",
+   "n": 128,
+   "second_order": true,
+   "drop": true,
+   "max": 0.023292606162668233,
+   "L2": 0.0015571913615714376,
+   "L1": 0.0004454825096863541,
+   "job": "{\"kind\": \"accuracy\", \"n\": 128, \"sch\": \"d1+geo\", \"second_order\": true}"
+  },
+  {
+   "kind": "accuracy",
+   "scheme": "d1+geo",
+   "n": 128,
+   "second_order": false,
+   "drop": true,
+   "max": 0.024039096293837513,
+   "L2": 0.005152546269614484,
+   "L1": 0.004676426989371233,
+   "job": "{\"kind\": \"accuracy\", \"n\": 128, \"sch\": \"d1+geo\", \"second_order\": false}"
+  },
+  {
+   "kind": "accuracy",
+   "scheme": "base",
+   "n": 96,
+   "second_order": true,
+   "drop": true,
+   "max": 0.020420769662309813,
+   "L2": 0.0015121835959969454,
+   "L1": 0.0005593886251211416,
+   "job": "{\"kind\": \"accuracy\", \"n\": 96, \"sch\": \"base\", \"second_order\": true}"
+  },
+  {
+   "kind": "accuracy",
+   "scheme": "base",
+   "n": 96,
+   "second_order": false,
+   "drop": true,
+   "max": 0.0218408027862869,
+   "L2": 0.006639009826685231,
+   "L1": 0.0060844734405376445,
+   "job": "{\"kind\": \"accuracy\", \"n\": 96, \"sch\": \"base\", \"second_order\": false}"
+  },
+  {
+   "kind": "accuracy",
+   "scheme": "d1",
+   "n": 96,
+   "second_order": true,
+   "drop": true,
+   "max": 0.020420769662308942,
+   "L2": 0.0015121835959970545,
+   "L1": 0.000559388625121412,
+   "job": "{\"kind\": \"accuracy\", \"n\": 96, \"sch\": \"d1\", \"second_order\": true}"
+  },
+  {
+   "kind": "accuracy",
+   "scheme": "d1",
+   "n": 96,
+   "second_order": false,
+   "drop": true,
+   "max": 0.021840802786287156,
+   "L2": 0.006639009826685225,
+   "L1": 0.006084473440537638,
+   "job": "{\"kind\": \"accuracy\", \"n\": 96, \"sch\": \"d1\", \"second_order\": false}"
+  },
+  {
+   "kind": "accuracy",
+   "scheme": "d1+d2",
+   "n": 96,
+   "second_order": true,
+   "drop": true,
+   "max": 0.06109037074965921,
+   "L2": 0.00494942248419637,
+   "L1": 0.0017615160161138742,
+   "job": "{\"kind\": \"accuracy\", \"n\": 96, \"sch\": \"d1+d2\", \"second_order\": true}"
+  },
+  {
+   "kind": "accuracy",
+   "scheme": "d1+d2",
+   "n": 96,
+   "second_order": false,
+   "drop": true,
+   "max": 0.06471324877852892,
+   "L2": 0.008367305115493606,
+   "L1": 0.006896807225699604,
+   "job": "{\"kind\": \"accuracy\", \"n\": 96, \"sch\": \"d1+d2\", \"second_order\": false}"
+  },
+  {
+   "kind": "accuracy",
+   "scheme": "d1+d2lim",
+   "n": 96,
+   "second_order": true,
+   "drop": true,
+   "max": 0.020420769662308942,
+   "L2": 0.0015121835959970545,
+   "L1": 0.000559388625121412,
+   "job": "{\"kind\": \"accuracy\", \"n\": 96, \"sch\": \"d1+d2lim\", \"second_order\": true}"
+  },
+  {
+   "kind": "accuracy",
+   "scheme": "d1+d2lim",
+   "n": 96,
+   "second_order": false,
+   "drop": true,
+   "max": 0.021840802786287156,
+   "L2": 0.006639009826685225,
+   "L1": 0.006084473440537638,
+   "job": "{\"kind\": \"accuracy\", \"n\": 96, \"sch\": \"d1+d2lim\", \"second_order\": false}"
+  },
+  {
+   "kind": "accuracy",
+   "scheme": "d1+geo",
+   "n": 96,
+   "second_order": true,
+   "drop": true,
+   "max": 0.027642261670801402,
+   "L2": 0.0022175785406279044,
+   "L1": 0.0007367665914527479,
+   "job": "{\"kind\": \"accuracy\", \"n\": 96, \"sch\": \"d1+geo\", \"second_order\": true}"
+  },
+  {
+   "kind": "accuracy",
+   "scheme": "d1+geo",
+   "n": 96,
+   "second_order": false,
+   "drop": true,
+   "max": 0.02963137737666744,
+   "L2": 0.006833899609009632,
+   "L1": 0.006193146720893171,
+   "job": "{\"kind\": \"accuracy\", \"n\": 96, \"sch\": \"d1+geo\", \"second_order\": false}"
+  },
+  {
+   "kind": "accuracy",
+   "scheme": "base",
+   "n": 64,
+   "second_order": true,
+   "drop": true,
+   "max": 0.029355117462925878,
+   "L2": 0.0025719728413862654,
+   "L1": 0.0011630343837422902,
+   "job": "{\"kind\": \"accuracy\", \"n\": 64, \"sch\": \"base\", \"second_order\": true}"
+  },
+  {
+   "kind": "accuracy",
+   "scheme": "base",
+   "n": 64,
+   "second_order": false,
+   "drop": true,
+   "max": 0.03398503601809699,
+   "L2": 0.009788011450630196,
+   "L1": 0.008948218220123436,
+   "job": "{\"kind\": \"accuracy\", \"n\": 64, \"sch\": \"base\", \"second_order\": false}"
+  },
+  {
+   "kind": "accuracy",
+   "scheme": "d1",
+   "n": 64,
+   "second_order": true,
+   "drop": true,
+   "max": 0.02935511746293006,
+   "L2": 0.002571972841386302,
+   "L1": 0.0011630343837422917,
+   "job": "{\"kind\": \"accuracy\", \"n\": 64, \"sch\": \"d1\", \"second_order\": true}"
+  },
+  {
+   "kind": "accuracy",
+   "scheme": "d1",
+   "n": 64,
+   "second_order": false,
+   "drop": true,
+   "max": 0.03398503601809685,
+   "L2": 0.009788011450630203,
+   "L1": 0.008948218220123445,
+   "job": "{\"kind\": \"accuracy\", \"n\": 64, \"sch\": \"d1\", \"second_order\": false}"
+  },
+  {
+   "kind": "accuracy",
+   "scheme": "d1+d2",
+   "n": 64,
+   "second_order": true,
+   "drop": true,
+   "max": 0.08678432097103891,
+   "L2": 0.008139612298709848,
+   "L1": 0.0034513241483029025,
+   "job": "{\"kind\": \"accuracy\", \"n\": 64, \"sch\": \"d1+d2\", \"second_order\": true}"
+  },
+  {
+   "kind": "accuracy",
+   "scheme": "d1+d2",
+   "n": 64,
+   "second_order": false,
+   "drop": true,
+   "max": 0.08435254007717338,
+   "L2": 0.012858047355969278,
+   "L1": 0.010494151801369115,
+   "job": "{\"kind\": \"accuracy\", \"n\": 64, \"sch\": \"d1+d2\", \"second_order\": false}"
+  },
+  {
+   "kind": "accuracy",
+   "scheme": "d1+d2lim",
+   "n": 64,
+   "second_order": true,
+   "drop": true,
+   "max": 0.02935511746293006,
+   "L2": 0.002571972841386302,
+   "L1": 0.0011630343837422917,
+   "job": "{\"kind\": \"accuracy\", \"n\": 64, \"sch\": \"d1+d2lim\", \"second_order\": true}"
+  },
+  {
+   "kind": "accuracy",
+   "scheme": "d1+d2lim",
+   "n": 64,
+   "second_order": false,
+   "drop": true,
+   "max": 0.03398503601809685,
+   "L2": 0.009788011450630203,
+   "L1": 0.008948218220123445,
+   "job": "{\"kind\": \"accuracy\", \"n\": 64, \"sch\": \"d1+d2lim\", \"second_order\": false}"
+  },
+  {
+   "kind": "accuracy",
+   "scheme": "d1+geo",
+   "n": 64,
+   "second_order": true,
+   "drop": true,
+   "max": 0.03962958098360029,
+   "L2": 0.0036307877640041615,
+   "L1": 0.0014676176026145768,
+   "job": "{\"kind\": \"accuracy\", \"n\": 64, \"sch\": \"d1+geo\", \"second_order\": true}"
+  },
+  {
+   "kind": "accuracy",
+   "scheme": "d1+geo",
+   "n": 64,
+   "second_order": false,
+   "drop": true,
+   "max": 0.04229506648568869,
+   "L2": 0.01011987386618425,
+   "L1": 0.009130157262820765,
+   "job": "{\"kind\": \"accuracy\", \"n\": 64, \"sch\": \"d1+geo\", \"second_order\": false}"
+  },
+  {
+   "kind": "accuracy",
+   "scheme": "base",
+   "n": 48,
+   "second_order": true,
+   "drop": true,
+   "max": 0.030479629434265413,
+   "L2": 0.003743957128523414,
+   "L1": 0.002037293253471904,
+   "job": "{\"kind\": \"accuracy\", \"n\": 48, \"sch\": \"base\", \"second_order\": true}"
+  },
+  {
+   "kind": "accuracy",
+   "scheme": "base",
+   "n": 48,
+   "second_order": false,
+   "drop": true,
+   "max": 0.0351284902866852,
+   "L2": 0.012878262761817902,
+   "L1": 0.011757994687053984,
+   "job": "{\"kind\": \"accuracy\", \"n\": 48, \"sch\": \"base\", \"second_order\": false}"
+  },
+  {
+   "kind": "accuracy",
+   "scheme": "d1",
+   "n": 48,
+   "second_order": true,
+   "drop": true,
+   "max": 0.030479629434266065,
+   "L2": 0.003743957128523385,
+   "L1": 0.0020372932534719126,
+   "job": "{\"kind\": \"accuracy\", \"n\": 48, \"sch\": \"d1\", \"second_order\": true}"
+  },
+  {
+   "kind": "accuracy",
+   "scheme": "d1",
+   "n": 48,
+   "second_order": false,
+   "drop": true,
+   "max": 0.035128490286685445,
+   "L2": 0.012878262761817898,
+   "L1": 0.011757994687053994,
+   "job": "{\"kind\": \"accuracy\", \"n\": 48, \"sch\": \"d1\", \"second_order\": false}"
+  },
+  {
+   "kind": "accuracy",
+   "scheme": "d1+d2",
+   "n": 48,
+   "second_order": true,
+   "drop": true,
+   "max": 0.09300823081786715,
+   "L2": 0.011400032385590134,
+   "L1": 0.005579913754717494,
+   "job": "{\"kind\": \"accuracy\", \"n\": 48, \"sch\": \"d1+d2\", \"second_order\": true}"
+  },
+  {
+   "kind": "accuracy",
+   "scheme": "d1+d2",
+   "n": 48,
+   "second_order": false,
+   "drop": true,
+   "max": 0.1093041193804407,
+   "L2": 0.017611804068322433,
+   "L1": 0.014264175705104095,
+   "job": "{\"kind\": \"accuracy\", \"n\": 48, \"sch\": \"d1+d2\", \"second_order\": false}"
+  },
+  {
+   "kind": "accuracy",
+   "scheme": "d1+d2lim",
+   "n": 48,
+   "second_order": true,
+   "drop": true,
+   "max": 0.030479629434266065,
+   "L2": 0.003743957128523385,
+   "L1": 0.0020372932534719126,
+   "job": "{\"kind\": \"accuracy\", \"n\": 48, \"sch\": \"d1+d2lim\", \"second_order\": true}"
+  },
+  {
+   "kind": "accuracy",
+   "scheme": "d1+d2lim",
+   "n": 48,
+   "second_order": false,
+   "drop": true,
+   "max": 0.035128490286685445,
+   "L2": 0.012878262761817898,
+   "L1": 0.011757994687053994,
+   "job": "{\"kind\": \"accuracy\", \"n\": 48, \"sch\": \"d1+d2lim\", \"second_order\": false}"
+  },
+  {
+   "kind": "accuracy",
+   "scheme": "d1+geo",
+   "n": 48,
+   "second_order": true,
+   "drop": true,
+   "max": 0.04218889127961618,
+   "L2": 0.005154026555524349,
+   "L1": 0.0024861578051977007,
+   "job": "{\"kind\": \"accuracy\", \"n\": 48, \"sch\": \"d1+geo\", \"second_order\": true}"
+  },
+  {
+   "kind": "accuracy",
+   "scheme": "d1+geo",
+   "n": 48,
+   "second_order": false,
+   "drop": true,
+   "max": 0.04893799339373134,
+   "L2": 0.013354257608085111,
+   "L1": 0.012034172959565409,
+   "job": "{\"kind\": \"accuracy\", \"n\": 48, \"sch\": \"d1+geo\", \"second_order\": false}"
+  },
+  {
+   "kind": "accuracy",
+   "scheme": "base",
+   "n": 32,
+   "second_order": true,
+   "drop": true,
+   "max": 0.049404758358057174,
+   "L2": 0.006944977560901513,
+   "L1": 0.004708411208738366,
+   "job": "{\"kind\": \"accuracy\", \"n\": 32, \"sch\": \"base\", \"second_order\": true}"
+  },
+  {
+   "kind": "accuracy",
+   "scheme": "base",
+   "n": 32,
+   "second_order": false,
+   "drop": true,
+   "max": 0.05393847891178138,
+   "L2": 0.018952063065167682,
+   "L1": 0.01730756576425184,
+   "job": "{\"kind\": \"accuracy\", \"n\": 32, \"sch\": \"base\", \"second_order\": false}"
+  },
+  {
+   "kind": "accuracy",
+   "scheme": "d1",
+   "n": 32,
+   "second_order": true,
+   "drop": true,
+   "max": 0.049404758358057334,
+   "L2": 0.006944977560901501,
+   "L1": 0.004708411208738351,
+   "job": "{\"kind\": \"accuracy\", \"n\": 32, \"sch\": \"d1\", \"second_order\": true}"
+  },
+  {
+   "kind": "accuracy",
+   "scheme": "d1",
+   "n": 32,
+   "second_order": false,
+   "drop": true,
+   "max": 0.05393847891178174,
+   "L2": 0.01895206306516769,
+   "L1": 0.017307565764251853,
+   "job": "{\"kind\": \"accuracy\", \"n\": 32, \"sch\": \"d1\", \"second_order\": false}"
+  },
+  {
+   "kind": "accuracy",
+   "scheme": "d1+d2",
+   "n": 32,
+   "second_order": true,
+   "drop": true,
+   "max": 0.12239764171352804,
+   "L2": 0.019165873457453856,
+   "L1": 0.011384659051569478,
+   "job": "{\"kind\": \"accuracy\", \"n\": 32, \"sch\": \"d1+d2\", \"second_order\": true}"
+  },
+  {
+   "kind": "accuracy",
+   "scheme": "d1+d2",
+   "n": 32,
+   "second_order": false,
+   "drop": true,
+   "max": 0.12673189396658605,
+   "L2": 0.02738203931387367,
+   "L1": 0.02226947787442691,
+   "job": "{\"kind\": \"accuracy\", \"n\": 32, \"sch\": \"d1+d2\", \"second_order\": false}"
+  },
+  {
+   "kind": "accuracy",
+   "scheme": "d1+d2lim",
+   "n": 32,
+   "second_order": true,
+   "drop": true,
+   "max": 0.049404758358057334,
+   "L2": 0.006944977560901501,
+   "L1": 0.004708411208738351,
+   "job": "{\"kind\": \"accuracy\", \"n\": 32, \"sch\": \"d1+d2lim\", \"second_order\": true}"
+  },
+  {
+   "kind": "accuracy",
+   "scheme": "d1+d2lim",
+   "n": 32,
+   "second_order": false,
+   "drop": true,
+   "max": 0.05393847891178174,
+   "L2": 0.01895206306516769,
+   "L1": 0.017307565764251853,
+   "job": "{\"kind\": \"accuracy\", \"n\": 32, \"sch\": \"d1+d2lim\", \"second_order\": false}"
+  },
+  {
+   "kind": "accuracy",
+   "scheme": "d1+geo",
+   "n": 32,
+   "second_order": true,
+   "drop": true,
+   "max": 0.05671906146108422,
+   "L2": 0.008761186583321704,
+   "L1": 0.005443373511718073,
+   "job": "{\"kind\": \"accuracy\", \"n\": 32, \"sch\": \"d1+geo\", \"second_order\": true}"
+  },
+  {
+   "kind": "accuracy",
+   "scheme": "d1+geo",
+   "n": 32,
+   "second_order": false,
+   "drop": true,
+   "max": 0.05729294488677819,
+   "L2": 0.01972085569857433,
+   "L1": 0.017775454238435746,
+   "job": "{\"kind\": \"accuracy\", \"n\": 32, \"sch\": \"d1+geo\", \"second_order\": false}"
+  }
+ ],
+ "free": [
+  {
+   "kind": "free",
+   "shape": "column",
+   "scheme": "base",
+   "ratio": 1000.0,
+   "U": [
+    1.0,
+    0.0
+   ],
+   "n": 32,
+   "cfl": 0.5,
+   "dt": null,
+   "project": true,
+   "steps": 600,
+   "max_err": 0.07832745562716004,
+   "f_out": 8.198757939226198e-08,
+   "job": "{\"U\": [1.0, 0.0], \"kind\": \"free\", \"name\": \"column\", \"ratio\": 1000.0, \"sch\": \"base\"}"
+  },
+  {
+   "kind": "free",
+   "shape": "column",
+   "scheme": "base",
+   "ratio": 1000.0,
+   "U": [
+    1.0,
+    0.37
+   ],
+   "n": 32,
+   "cfl": 0.5,
+   "dt": null,
+   "project": true,
+   "steps": 600,
+   "max_err": 0.28622520719120703,
+   "f_out": 6.584505366624766e-08,
+   "job": "{\"U\": [1.0, 0.37], \"kind\": \"free\", \"name\": \"column\", \"ratio\": 1000.0, \"sch\": \"base\"}"
+  },
+  {
+   "kind": "free",
+   "shape": "column",
+   "scheme": "base",
+   "ratio": 1000000.0,
+   "U": [
+    1.0,
+    0.0
+   ],
+   "n": 32,
+   "cfl": 0.5,
+   "dt": null,
+   "project": true,
+   "steps": 600,
+   "max_err": 0.05131597183842081,
+   "f_out": 1.8338457419275755e-08,
+   "job": "{\"U\": [1.0, 0.0], \"kind\": \"free\", \"name\": \"column\", \"ratio\": 1000000.0, \"sch\": \"base\"}"
+  },
+  {
+   "kind": "free",
+   "shape": "column",
+   "scheme": "base",
+   "ratio": 1000000.0,
+   "U": [
+    1.0,
+    0.37
+   ],
+   "n": 32,
+   "cfl": 0.5,
+   "dt": null,
+   "project": true,
+   "steps": 600,
+   "max_err": 0.035334261366727626,
+   "f_out": 1.7671986540790385e-08,
+   "job": "{\"U\": [1.0, 0.37], \"kind\": \"free\", \"name\": \"column\", \"ratio\": 1000000.0, \"sch\": \"base\"}"
+  },
+  {
+   "kind": "free",
+   "shape": "square",
+   "scheme": "base",
+   "ratio": 1000.0,
+   "U": [
+    1.0,
+    0.0
+   ],
+   "n": 32,
+   "cfl": 0.5,
+   "dt": null,
+   "project": true,
+   "steps": 600,
+   "max_err": 0.051482051928561146,
+   "f_out": 1.8594896378232306e-07,
+   "job": "{\"U\": [1.0, 0.0], \"kind\": \"free\", \"name\": \"square\", \"ratio\": 1000.0, \"sch\": \"base\"}"
+  },
+  {
+   "kind": "free",
+   "shape": "square",
+   "scheme": "base",
+   "ratio": 1000000.0,
+   "U": [
+    1.0,
+    0.0
+   ],
+   "n": 32,
+   "cfl": 0.5,
+   "dt": null,
+   "project": true,
+   "steps": 600,
+   "max_err": 0.03184668201264827,
+   "f_out": 1.2332682652882454e-08,
+   "job": "{\"U\": [1.0, 0.0], \"kind\": \"free\", \"name\": \"square\", \"ratio\": 1000000.0, \"sch\": \"base\"}"
+  },
+  {
+   "kind": "free",
+   "shape": "square-bubble",
+   "scheme": "base",
+   "ratio": 1000.0,
+   "U": [
+    1.0,
+    0.0
+   ],
+   "n": 32,
+   "cfl": 0.5,
+   "dt": null,
+   "project": true,
+   "steps": 600,
+   "max_err": 0.07601438977134622,
+   "f_out": 1.1874654060051171e-07,
+   "job": "{\"U\": [1.0, 0.0], \"kind\": \"free\", \"name\": \"square-bubble\", \"ratio\": 1000.0, \"sch\": \"base\"}"
+  },
+  {
+   "kind": "free",
+   "shape": "column",
+   "scheme": "base",
+   "ratio": 1000.0,
+   "U": [
+    1.0,
+    0.0
+   ],
+   "n": 32,
+   "cfl": 0.5,
+   "dt": 0.015621875,
+   "project": true,
+   "steps": 116,
+   "max_err": 344.61264190391,
+   "f_out": 0.2945478902141967,
+   "job": "{\"U\": [1.0, 0.0], \"dt\": 0.015621875, \"kind\": \"free\", \"name\": \"column\", \"ratio\": 1000.0, \"sch\": \"base\"}"
+  },
+  {
+   "kind": "free",
+   "shape": "square",
+   "scheme": "base",
+   "ratio": 1000.0,
+   "U": [
+    1.0,
+    0.0
+   ],
+   "n": 32,
+   "cfl": 0.5,
+   "dt": 0.015621875,
+   "project": true,
+   "steps": 600,
+   "max_err": 0.9041776955173091,
+   "f_out": 9.263672851034244e-08,
+   "job": "{\"U\": [1.0, 0.0], \"dt\": 0.015621875, \"kind\": \"free\", \"name\": \"square\", \"ratio\": 1000.0, \"sch\": \"base\"}"
+  },
+  {
+   "kind": "free",
+   "shape": "column",
+   "scheme": "base",
+   "ratio": 1000000.0,
+   "U": [
+    1.0,
+    0.0
+   ],
+   "n": 32,
+   "cfl": 0.5,
+   "dt": 0.015621875,
+   "project": true,
+   "steps": 14,
+   "max_err": 34.463837846644736,
+   "f_out": 6.610619807112528e-08,
+   "job": "{\"U\": [1.0, 0.0], \"dt\": 0.015621875, \"kind\": \"free\", \"name\": \"column\", \"ratio\": 1000000.0, \"sch\": \"base\"}"
+  },
+  {
+   "kind": "free",
+   "shape": "square",
+   "scheme": "base",
+   "ratio": 1000000.0,
+   "U": [
+    1.0,
+    0.0
+   ],
+   "n": 32,
+   "cfl": 0.5,
+   "dt": 0.015621875,
+   "project": true,
+   "steps": 600,
+   "max_err": 3.2930889577377993,
+   "f_out": 6.681109337924873e-05,
+   "job": "{\"U\": [1.0, 0.0], \"dt\": 0.015621875, \"kind\": \"free\", \"name\": \"square\", \"ratio\": 1000000.0, \"sch\": \"base\"}"
+  },
+  {
+   "kind": "free",
+   "shape": "column",
+   "scheme": "base",
+   "ratio": 1000.0,
+   "U": [
+    1.0,
+    0.0
+   ],
+   "n": 32,
+   "cfl": 0.45,
+   "dt": null,
+   "project": true,
+   "steps": 600,
+   "max_err": 1.4584344276813432e-05,
+   "f_out": 7.775300447931954e-08,
+   "job": "{\"U\": [1.0, 0.0], \"cfl\": 0.45, \"kind\": \"free\", \"name\": \"column\", \"ratio\": 1000.0, \"sch\": \"base\"}"
+  },
+  {
+   "kind": "free",
+   "shape": "column",
+   "scheme": "base",
+   "ratio": 1000.0,
+   "U": [
+    1.0,
+    0.0
+   ],
+   "n": 32,
+   "cfl": 0.5,
+   "dt": null,
+   "project": true,
+   "steps": 600,
+   "max_err": 0.08042933213053627,
+   "f_out": 5.544074360589276e-08,
+   "job": "{\"U\": [1.0, 0.0], \"kind\": \"free\", \"name\": \"column\", \"ratio\": 1000.0, \"sch\": \"base\", \"tolerance\": 1e-13}"
+  },
+  {
+   "kind": "free",
+   "shape": "drop",
+   "scheme": "base",
+   "ratio": 1000.0,
+   "U": [
+    1.0,
+    0.37
+   ],
+   "n": 32,
+   "cfl": 0.5,
+   "dt": null,
+   "project": true,
+   "steps": 2000,
+   "max_err": 9.132383738119643e-11,
+   "f_out": 1.2578826869003024e-13,
+   "job": "{\"U\": [1.0, 0.37], \"kind\": \"free\", \"name\": \"drop\", \"ratio\": 1000.0, \"sch\": \"base\", \"steps\": 2000}"
+  },
+  {
+   "kind": "free",
+   "shape": "drop",
+   "scheme": "base",
+   "ratio": 1000000.0,
+   "U": [
+    1.0,
+    0.37
+   ],
+   "n": 32,
+   "cfl": 0.5,
+   "dt": null,
+   "project": true,
+   "steps": 2000,
+   "max_err": 2.2627394291596659e-07,
+   "f_out": 2.90656387846866e-13,
+   "job": "{\"U\": [1.0, 0.37], \"kind\": \"free\", \"name\": \"drop\", \"ratio\": 1000000.0, \"sch\": \"base\", \"steps\": 2000}"
+  },
+  {
+   "kind": "free",
+   "shape": "bubble",
+   "scheme": "base",
+   "ratio": 1000.0,
+   "U": [
+    1.0,
+    0.37
+   ],
+   "n": 32,
+   "cfl": 0.5,
+   "dt": null,
+   "project": true,
+   "steps": 2000,
+   "max_err": 1.544526728736173e-10,
+   "f_out": 1.5754064719430971e-13,
+   "job": "{\"U\": [1.0, 0.37], \"kind\": \"free\", \"name\": \"bubble\", \"ratio\": 1000.0, \"sch\": \"base\", \"steps\": 2000}"
+  },
+  {
+   "kind": "free",
+   "shape": "bubble",
+   "scheme": "base",
+   "ratio": 1000000.0,
+   "U": [
+    1.0,
+    0.37
+   ],
+   "n": 32,
+   "cfl": 0.5,
+   "dt": null,
+   "project": true,
+   "steps": 2000,
+   "max_err": 5.235016642402002e-08,
+   "f_out": 7.416289804496046e-14,
+   "job": "{\"U\": [1.0, 0.37], \"kind\": \"free\", \"name\": \"bubble\", \"ratio\": 1000000.0, \"sch\": \"base\", \"steps\": 2000}"
+  },
+  {
+   "kind": "free",
+   "shape": "small",
+   "scheme": "base",
+   "ratio": 1000.0,
+   "U": [
+    1.0,
+    0.37
+   ],
+   "n": 32,
+   "cfl": 0.5,
+   "dt": null,
+   "project": true,
+   "steps": 2000,
+   "max_err": 3.3365754603664755e-11,
+   "f_out": 7.482903185973555e-14,
+   "job": "{\"U\": [1.0, 0.37], \"kind\": \"free\", \"name\": \"small\", \"ratio\": 1000.0, \"sch\": \"base\", \"steps\": 2000}"
+  },
+  {
+   "kind": "free",
+   "shape": "small",
+   "scheme": "base",
+   "ratio": 1000000.0,
+   "U": [
+    1.0,
+    0.37
+   ],
+   "n": 32,
+   "cfl": 0.5,
+   "dt": null,
+   "project": true,
+   "steps": 2000,
+   "max_err": 3.577253582243145e-08,
+   "f_out": 5.906386491005833e-14,
+   "job": "{\"U\": [1.0, 0.37], \"kind\": \"free\", \"name\": \"small\", \"ratio\": 1000000.0, \"sch\": \"base\", \"steps\": 2000}"
+  },
+  {
+   "kind": "free",
+   "shape": "film",
+   "scheme": "base",
+   "ratio": 1000.0,
+   "U": [
+    1.0,
+    0.37
+   ],
+   "n": 32,
+   "cfl": 0.5,
+   "dt": null,
+   "project": true,
+   "steps": 2000,
+   "max_err": 4.157885409417084e-06,
+   "f_out": 3.217574184866123e-08,
+   "job": "{\"U\": [1.0, 0.37], \"kind\": \"free\", \"name\": \"film\", \"ratio\": 1000.0, \"sch\": \"base\", \"steps\": 2000}"
+  },
+  {
+   "kind": "free",
+   "shape": "film",
+   "scheme": "base",
+   "ratio": 1000000.0,
+   "U": [
+    1.0,
+    0.37
+   ],
+   "n": 32,
+   "cfl": 0.5,
+   "dt": null,
+   "project": true,
+   "steps": 2000,
+   "max_err": 0.04095683249528981,
+   "f_out": 4.4233121619472006e-08,
+   "job": "{\"U\": [1.0, 0.37], \"kind\": \"free\", \"name\": \"film\", \"ratio\": 1000000.0, \"sch\": \"base\", \"steps\": 2000}"
+  },
+  {
+   "kind": "free",
+   "shape": "slant",
+   "scheme": "base",
+   "ratio": 1000.0,
+   "U": [
+    1.0,
+    0.37
+   ],
+   "n": 32,
+   "cfl": 0.5,
+   "dt": null,
+   "project": true,
+   "steps": 2000,
+   "max_err": 2.282618538629322e-13,
+   "f_out": 4.440892098500626e-16,
+   "job": "{\"U\": [1.0, 0.37], \"kind\": \"free\", \"name\": \"slant\", \"ratio\": 1000.0, \"sch\": \"base\", \"steps\": 2000}"
+  },
+  {
+   "kind": "free",
+   "shape": "slant",
+   "scheme": "base",
+   "ratio": 1000000.0,
+   "U": [
+    1.0,
+    0.37
+   ],
+   "n": 32,
+   "cfl": 0.5,
+   "dt": null,
+   "project": true,
+   "steps": 2000,
+   "max_err": 2.686926873218809e-06,
+   "f_out": 2.220446049250313e-16,
+   "job": "{\"U\": [1.0, 0.37], \"kind\": \"free\", \"name\": \"slant\", \"ratio\": 1000000.0, \"sch\": \"base\", \"steps\": 2000}"
+  },
+  {
+   "kind": "free",
+   "shape": "two",
+   "scheme": "base",
+   "ratio": 1000.0,
+   "U": [
+    1.0,
+    0.37
+   ],
+   "n": 32,
+   "cfl": 0.5,
+   "dt": null,
+   "project": true,
+   "steps": 2000,
+   "max_err": 1.1120881993065268e-11,
+   "f_out": 2.7755575615628914e-14,
+   "job": "{\"U\": [1.0, 0.37], \"kind\": \"free\", \"name\": \"two\", \"ratio\": 1000.0, \"sch\": \"base\", \"steps\": 2000}"
+  },
+  {
+   "kind": "free",
+   "shape": "two",
+   "scheme": "base",
+   "ratio": 1000000.0,
+   "U": [
+    1.0,
+    0.37
+   ],
+   "n": 32,
+   "cfl": 0.5,
+   "dt": null,
+   "project": true,
+   "steps": 2000,
+   "max_err": 7.2896143565870375e-09,
+   "f_out": 6.217248937900877e-14,
+   "job": "{\"U\": [1.0, 0.37], \"kind\": \"free\", \"name\": \"two\", \"ratio\": 1000000.0, \"sch\": \"base\", \"steps\": 2000}"
+  },
+  {
+   "kind": "free",
+   "shape": "column",
+   "scheme": "d1",
+   "ratio": 1000.0,
+   "U": [
+    1.0,
+    0.0
+   ],
+   "n": 32,
+   "cfl": 0.5,
+   "dt": null,
+   "project": true,
+   "steps": 600,
+   "max_err": 0.4330926655697349,
+   "f_out": 5.238342781765937e-08,
+   "job": "{\"U\": [1.0, 0.0], \"kind\": \"free\", \"name\": \"column\", \"ratio\": 1000.0, \"sch\": \"d1\"}"
+  },
+  {
+   "kind": "free",
+   "shape": "column",
+   "scheme": "d1",
+   "ratio": 1000.0,
+   "U": [
+    1.0,
+    0.37
+   ],
+   "n": 32,
+   "cfl": 0.5,
+   "dt": null,
+   "project": true,
+   "steps": 600,
+   "max_err": 0.3357794443555677,
+   "f_out": 9.584951210506176e-08,
+   "job": "{\"U\": [1.0, 0.37], \"kind\": \"free\", \"name\": \"column\", \"ratio\": 1000.0, \"sch\": \"d1\"}"
+  },
+  {
+   "kind": "free",
+   "shape": "column",
+   "scheme": "d1",
+   "ratio": 1000000.0,
+   "U": [
+    1.0,
+    0.0
+   ],
+   "n": 32,
+   "cfl": 0.5,
+   "dt": null,
+   "project": true,
+   "steps": 600,
+   "max_err": 0.048432146817579444,
+   "f_out": 1.2051163728044045e-07,
+   "job": "{\"U\": [1.0, 0.0], \"kind\": \"free\", \"name\": \"column\", \"ratio\": 1000000.0, \"sch\": \"d1\"}"
+  },
+  {
+   "kind": "free",
+   "shape": "column",
+   "scheme": "d1",
+   "ratio": 1000000.0,
+   "U": [
+    1.0,
+    0.37
+   ],
+   "n": 32,
+   "cfl": 0.5,
+   "dt": null,
+   "project": true,
+   "steps": 600,
+   "max_err": 0.05734884345809721,
+   "f_out": 9.728212346793441e-08,
+   "job": "{\"U\": [1.0, 0.37], \"kind\": \"free\", \"name\": \"column\", \"ratio\": 1000000.0, \"sch\": \"d1\"}"
+  },
+  {
+   "kind": "free",
+   "shape": "square",
+   "scheme": "d1",
+   "ratio": 1000.0,
+   "U": [
+    1.0,
+    0.0
+   ],
+   "n": 32,
+   "cfl": 0.5,
+   "dt": null,
+   "project": true,
+   "steps": 600,
+   "max_err": 0.11121156959691803,
+   "f_out": 6.103062455409258e-08,
+   "job": "{\"U\": [1.0, 0.0], \"kind\": \"free\", \"name\": \"square\", \"ratio\": 1000.0, \"sch\": \"d1\"}"
+  },
+  {
+   "kind": "free",
+   "shape": "square",
+   "scheme": "d1",
+   "ratio": 1000000.0,
+   "U": [
+    1.0,
+    0.0
+   ],
+   "n": 32,
+   "cfl": 0.5,
+   "dt": null,
+   "project": true,
+   "steps": 600,
+   "max_err": 0.054796203231131435,
+   "f_out": 1.5734848934911838e-07,
+   "job": "{\"U\": [1.0, 0.0], \"kind\": \"free\", \"name\": \"square\", \"ratio\": 1000000.0, \"sch\": \"d1\"}"
+  },
+  {
+   "kind": "free",
+   "shape": "square-bubble",
+   "scheme": "d1",
+   "ratio": 1000.0,
+   "U": [
+    1.0,
+    0.0
+   ],
+   "n": 32,
+   "cfl": 0.5,
+   "dt": null,
+   "project": true,
+   "steps": 600,
+   "max_err": 0.08255226586665798,
+   "f_out": 2.328836796738898e-07,
+   "job": "{\"U\": [1.0, 0.0], \"kind\": \"free\", \"name\": \"square-bubble\", \"ratio\": 1000.0, \"sch\": \"d1\"}"
+  },
+  {
+   "kind": "free",
+   "shape": "column",
+   "scheme": "d1",
+   "ratio": 1000.0,
+   "U": [
+    1.0,
+    0.0
+   ],
+   "n": 32,
+   "cfl": 0.5,
+   "dt": 0.015621875,
+   "project": true,
+   "steps": 600,
+   "max_err": 0.0033580758428103374,
+   "f_out": 1.3240472895859057e-07,
+   "job": "{\"U\": [1.0, 0.0], \"dt\": 0.015621875, \"kind\": \"free\", \"name\": \"column\", \"ratio\": 1000.0, \"sch\": \"d1\"}"
+  },
+  {
+   "kind": "free",
+   "shape": "square",
+   "scheme": "d1",
+   "ratio": 1000.0,
+   "U": [
+    1.0,
+    0.0
+   ],
+   "n": 32,
+   "cfl": 0.5,
+   "dt": 0.015621875,
+   "project": true,
+   "steps": 600,
+   "max_err": 0.3144603906157012,
+   "f_out": 1.2451735642571293e-07,
+   "job": "{\"U\": [1.0, 0.0], \"dt\": 0.015621875, \"kind\": \"free\", \"name\": \"square\", \"ratio\": 1000.0, \"sch\": \"d1\"}"
+  },
+  {
+   "kind": "free",
+   "shape": "column",
+   "scheme": "d1",
+   "ratio": 1000000.0,
+   "U": [
+    1.0,
+    0.0
+   ],
+   "n": 32,
+   "cfl": 0.5,
+   "dt": 0.015621875,
+   "project": true,
+   "steps": 58,
+   "max_err": 2027.7174282241035,
+   "f_out": 2.8857386934477702e-06,
+   "job": "{\"U\": [1.0, 0.0], \"dt\": 0.015621875, \"kind\": \"free\", \"name\": \"column\", \"ratio\": 1000000.0, \"sch\": \"d1\"}"
+  },
+  {
+   "kind": "free",
+   "shape": "square",
+   "scheme": "d1",
+   "ratio": 1000000.0,
+   "U": [
+    1.0,
+    0.0
+   ],
+   "n": 32,
+   "cfl": 0.5,
+   "dt": 0.015621875,
+   "project": true,
+   "steps": 600,
+   "max_err": 2.467878132301402,
+   "f_out": 2.0449848303627505e-07,
+   "job": "{\"U\": [1.0, 0.0], \"dt\": 0.015621875, \"kind\": \"free\", \"name\": \"square\", \"ratio\": 1000000.0, \"sch\": \"d1\"}"
+  },
+  {
+   "kind": "free",
+   "shape": "column",
+   "scheme": "d1",
+   "ratio": 1000.0,
+   "U": [
+    1.0,
+    0.0
+   ],
+   "n": 32,
+   "cfl": 0.45,
+   "dt": null,
+   "project": true,
+   "steps": 600,
+   "max_err": 2.3996649112234536e-10,
+   "f_out": 1.0800987393366768e-07,
+   "job": "{\"U\": [1.0, 0.0], \"cfl\": 0.45, \"kind\": \"free\", \"name\": \"column\", \"ratio\": 1000.0, \"sch\": \"d1\"}"
+  },
+  {
+   "kind": "free",
+   "shape": "column",
+   "scheme": "d1",
+   "ratio": 1000.0,
+   "U": [
+    1.0,
+    0.0
+   ],
+   "n": 32,
+   "cfl": 0.5,
+   "dt": null,
+   "project": true,
+   "steps": 600,
+   "max_err": 0.4866508209430792,
+   "f_out": 8.618525826342704e-08,
+   "job": "{\"U\": [1.0, 0.0], \"kind\": \"free\", \"name\": \"column\", \"ratio\": 1000.0, \"sch\": \"d1\", \"tolerance\": 1e-13}"
+  },
+  {
+   "kind": "free",
+   "shape": "drop",
+   "scheme": "d1",
+   "ratio": 1000.0,
+   "U": [
+    1.0,
+    0.37
+   ],
+   "n": 32,
+   "cfl": 0.5,
+   "dt": null,
+   "project": true,
+   "steps": 2000,
+   "max_err": 1.312283615106935e-13,
+   "f_out": 5.1736392947532295e-14,
+   "job": "{\"U\": [1.0, 0.37], \"kind\": \"free\", \"name\": \"drop\", \"ratio\": 1000.0, \"sch\": \"d1\", \"steps\": 2000}"
+  },
+  {
+   "kind": "free",
+   "shape": "drop",
+   "scheme": "d1",
+   "ratio": 1000000.0,
+   "U": [
+    1.0,
+    0.37
+   ],
+   "n": 32,
+   "cfl": 0.5,
+   "dt": null,
+   "project": true,
+   "steps": 2000,
+   "max_err": 3.4485098110437207e-10,
+   "f_out": 1.0171863351615684e-12,
+   "job": "{\"U\": [1.0, 0.37], \"kind\": \"free\", \"name\": \"drop\", \"ratio\": 1000000.0, \"sch\": \"d1\", \"steps\": 2000}"
+  },
+  {
+   "kind": "free",
+   "shape": "bubble",
+   "scheme": "d1",
+   "ratio": 1000.0,
+   "U": [
+    1.0,
+    0.37
+   ],
+   "n": 32,
+   "cfl": 0.5,
+   "dt": null,
+   "project": true,
+   "steps": 2000,
+   "max_err": 1.360620505153065e-10,
+   "f_out": 2.6134649999676185e-13,
+   "job": "{\"U\": [1.0, 0.37], \"kind\": \"free\", \"name\": \"bubble\", \"ratio\": 1000.0, \"sch\": \"d1\", \"steps\": 2000}"
+  },
+  {
+   "kind": "free",
+   "shape": "bubble",
+   "scheme": "d1",
+   "ratio": 1000000.0,
+   "U": [
+    1.0,
+    0.37
+   ],
+   "n": 32,
+   "cfl": 0.5,
+   "dt": null,
+   "project": true,
+   "steps": 2000,
+   "max_err": 2.425624145985239e-10,
+   "f_out": 6.372680161348399e-14,
+   "job": "{\"U\": [1.0, 0.37], \"kind\": \"free\", \"name\": \"bubble\", \"ratio\": 1000000.0, \"sch\": \"d1\", \"steps\": 2000}"
+  },
+  {
+   "kind": "free",
+   "shape": "small",
+   "scheme": "d1",
+   "ratio": 1000.0,
+   "U": [
+    1.0,
+    0.37
+   ],
+   "n": 32,
+   "cfl": 0.5,
+   "dt": null,
+   "project": true,
+   "steps": 2000,
+   "max_err": 3.697042672001771e-14,
+   "f_out": 4.884981308350689e-14,
+   "job": "{\"U\": [1.0, 0.37], \"kind\": \"free\", \"name\": \"small\", \"ratio\": 1000.0, \"sch\": \"d1\", \"steps\": 2000}"
+  },
+  {
+   "kind": "free",
+   "shape": "small",
+   "scheme": "d1",
+   "ratio": 1000000.0,
+   "U": [
+    1.0,
+    0.37
+   ],
+   "n": 32,
+   "cfl": 0.5,
+   "dt": null,
+   "project": true,
+   "steps": 2000,
+   "max_err": 3.478406451762339e-10,
+   "f_out": 5.728750807065808e-14,
+   "job": "{\"U\": [1.0, 0.37], \"kind\": \"free\", \"name\": \"small\", \"ratio\": 1000000.0, \"sch\": \"d1\", \"steps\": 2000}"
+  },
+  {
+   "kind": "free",
+   "shape": "film",
+   "scheme": "d1",
+   "ratio": 1000.0,
+   "U": [
+    1.0,
+    0.37
+   ],
+   "n": 32,
+   "cfl": 0.5,
+   "dt": null,
+   "project": true,
+   "steps": 2000,
+   "max_err": 3.442397478181647e-10,
+   "f_out": 5.855620462854103e-09,
+   "job": "{\"U\": [1.0, 0.37], \"kind\": \"free\", \"name\": \"film\", \"ratio\": 1000.0, \"sch\": \"d1\", \"steps\": 2000}"
+  },
+  {
+   "kind": "free",
+   "shape": "film",
+   "scheme": "d1",
+   "ratio": 1000000.0,
+   "U": [
+    1.0,
+    0.37
+   ],
+   "n": 32,
+   "cfl": 0.5,
+   "dt": null,
+   "project": true,
+   "steps": 2000,
+   "max_err": 1.2754952649629558e-09,
+   "f_out": 1.377959435444609e-08,
+   "job": "{\"U\": [1.0, 0.37], \"kind\": \"free\", \"name\": \"film\", \"ratio\": 1000000.0, \"sch\": \"d1\", \"steps\": 2000}"
+  },
+  {
+   "kind": "free",
+   "shape": "slant",
+   "scheme": "d1",
+   "ratio": 1000.0,
+   "U": [
+    1.0,
+    0.37
+   ],
+   "n": 32,
+   "cfl": 0.5,
+   "dt": null,
+   "project": true,
+   "steps": 2000,
+   "max_err": 4.3076653355456074e-14,
+   "f_out": 2.220446049250313e-16,
+   "job": "{\"U\": [1.0, 0.37], \"kind\": \"free\", \"name\": \"slant\", \"ratio\": 1000.0, \"sch\": \"d1\", \"steps\": 2000}"
+  },
+  {
+   "kind": "free",
+   "shape": "slant",
+   "scheme": "d1",
+   "ratio": 1000000.0,
+   "U": [
+    1.0,
+    0.37
+   ],
+   "n": 32,
+   "cfl": 0.5,
+   "dt": null,
+   "project": true,
+   "steps": 2000,
+   "max_err": 3.989248931191014e-10,
+   "f_out": 4.440892098500626e-16,
+   "job": "{\"U\": [1.0, 0.37], \"kind\": \"free\", \"name\": \"slant\", \"ratio\": 1000000.0, \"sch\": \"d1\", \"steps\": 2000}"
+  },
+  {
+   "kind": "free",
+   "shape": "two",
+   "scheme": "d1",
+   "ratio": 1000.0,
+   "U": [
+    1.0,
+    0.37
+   ],
+   "n": 32,
+   "cfl": 0.5,
+   "dt": null,
+   "project": true,
+   "steps": 2000,
+   "max_err": 5.551115123125783e-14,
+   "f_out": 1.865174681370263e-14,
+   "job": "{\"U\": [1.0, 0.37], \"kind\": \"free\", \"name\": \"two\", \"ratio\": 1000.0, \"sch\": \"d1\", \"steps\": 2000}"
+  },
+  {
+   "kind": "free",
+   "shape": "two",
+   "scheme": "d1",
+   "ratio": 1000000.0,
+   "U": [
+    1.0,
+    0.37
+   ],
+   "n": 32,
+   "cfl": 0.5,
+   "dt": null,
+   "project": true,
+   "steps": 2000,
+   "max_err": 3.8805070268210784e-10,
+   "f_out": 7.749356711883593e-14,
+   "job": "{\"U\": [1.0, 0.37], \"kind\": \"free\", \"name\": \"two\", \"ratio\": 1000000.0, \"sch\": \"d1\", \"steps\": 2000}"
+  },
+  {
+   "kind": "free",
+   "shape": "column",
+   "scheme": "d1+d2",
+   "ratio": 1000.0,
+   "U": [
+    1.0,
+    0.0
+   ],
+   "n": 32,
+   "cfl": 0.5,
+   "dt": null,
+   "project": true,
+   "steps": 600,
+   "max_err": 2.367859242013992e-10,
+   "f_out": 1.267983495978342e-10,
+   "job": "{\"U\": [1.0, 0.0], \"kind\": \"free\", \"name\": \"column\", \"ratio\": 1000.0, \"sch\": \"d1+d2\"}"
+  },
+  {
+   "kind": "free",
+   "shape": "column",
+   "scheme": "d1+d2",
+   "ratio": 1000.0,
+   "U": [
+    1.0,
+    0.37
+   ],
+   "n": 32,
+   "cfl": 0.5,
+   "dt": null,
+   "project": true,
+   "steps": 600,
+   "max_err": 2.3710278185262723e-10,
+   "f_out": 1.440699877175433e-07,
+   "job": "{\"U\": [1.0, 0.37], \"kind\": \"free\", \"name\": \"column\", \"ratio\": 1000.0, \"sch\": \"d1+d2\"}"
+  },
+  {
+   "kind": "free",
+   "shape": "column",
+   "scheme": "d1+d2",
+   "ratio": 1000000.0,
+   "U": [
+    1.0,
+    0.0
+   ],
+   "n": 32,
+   "cfl": 0.5,
+   "dt": null,
+   "project": true,
+   "steps": 600,
+   "max_err": 4.6093273642355825e-10,
+   "f_out": 1.1024304136242336e-07,
+   "job": "{\"U\": [1.0, 0.0], \"kind\": \"free\", \"name\": \"column\", \"ratio\": 1000000.0, \"sch\": \"d1+d2\"}"
+  },
+  {
+   "kind": "free",
+   "shape": "column",
+   "scheme": "d1+d2",
+   "ratio": 1000000.0,
+   "U": [
+    1.0,
+    0.37
+   ],
+   "n": 32,
+   "cfl": 0.5,
+   "dt": null,
+   "project": true,
+   "steps": 600,
+   "max_err": 4.2207881634226396e-10,
+   "f_out": 1.2711531294229417e-07,
+   "job": "{\"U\": [1.0, 0.37], \"kind\": \"free\", \"name\": \"column\", \"ratio\": 1000000.0, \"sch\": \"d1+d2\"}"
+  },
+  {
+   "kind": "free",
+   "shape": "square",
+   "scheme": "d1+d2",
+   "ratio": 1000.0,
+   "U": [
+    1.0,
+    0.0
+   ],
+   "n": 32,
+   "cfl": 0.5,
+   "dt": null,
+   "project": true,
+   "steps": 600,
+   "max_err": 1.5463408331584105e-10,
+   "f_out": 2.4462406833514194e-07,
+   "job": "{\"U\": [1.0, 0.0], \"kind\": \"free\", \"name\": \"square\", \"ratio\": 1000.0, \"sch\": \"d1+d2\"}"
+  },
+  {
+   "kind": "free",
+   "shape": "square",
+   "scheme": "d1+d2",
+   "ratio": 1000000.0,
+   "U": [
+    1.0,
+    0.0
+   ],
+   "n": 32,
+   "cfl": 0.5,
+   "dt": null,
+   "project": true,
+   "steps": 600,
+   "max_err": 3.727083086602079e-10,
+   "f_out": 1.2526620918329456e-07,
+   "job": "{\"U\": [1.0, 0.0], \"kind\": \"free\", \"name\": \"square\", \"ratio\": 1000000.0, \"sch\": \"d1+d2\"}"
+  },
+  {
+   "kind": "free",
+   "shape": "square-bubble",
+   "scheme": "d1+d2",
+   "ratio": 1000.0,
+   "U": [
+    1.0,
+    0.0
+   ],
+   "n": 32,
+   "cfl": 0.5,
+   "dt": null,
+   "project": true,
+   "steps": 600,
+   "max_err": 2.398657926131172e-10,
+   "f_out": 2.4588373559453203e-07,
+   "job": "{\"U\": [1.0, 0.0], \"kind\": \"free\", \"name\": \"square-bubble\", \"ratio\": 1000.0, \"sch\": \"d1+d2\"}"
+  },
+  {
+   "kind": "free",
+   "shape": "column",
+   "scheme": "d1+d2",
+   "ratio": 1000.0,
+   "U": [
+    1.0,
+    0.0
+   ],
+   "n": 32,
+   "cfl": 0.5,
+   "dt": 0.015621875,
+   "project": true,
+   "steps": 600,
+   "max_err": 5.924150059399835e-13,
+   "f_out": 1.214591101028617e-07,
+   "job": "{\"U\": [1.0, 0.0], \"dt\": 0.015621875, \"kind\": \"free\", \"name\": \"column\", \"ratio\": 1000.0, \"sch\": \"d1+d2\"}"
+  },
+  {
+   "kind": "free",
+   "shape": "square",
+   "scheme": "d1+d2",
+   "ratio": 1000.0,
+   "U": [
+    1.0,
+    0.0
+   ],
+   "n": 32,
+   "cfl": 0.5,
+   "dt": 0.015621875,
+   "project": true,
+   "steps": 600,
+   "max_err": 3.0124946981402445e-10,
+   "f_out": 1.248194148040227e-07,
+   "job": "{\"U\": [1.0, 0.0], \"dt\": 0.015621875, \"kind\": \"free\", \"name\": \"square\", \"ratio\": 1000.0, \"sch\": \"d1+d2\"}"
+  },
+  {
+   "kind": "free",
+   "shape": "column",
+   "scheme": "d1+d2",
+   "ratio": 1000000.0,
+   "U": [
+    1.0,
+    0.0
+   ],
+   "n": 32,
+   "cfl": 0.5,
+   "dt": 0.015621875,
+   "project": true,
+   "steps": 600,
+   "max_err": 5.353051335532655e-10,
+   "f_out": 1.2406393046227038e-07,
+   "job": "{\"U\": [1.0, 0.0], \"dt\": 0.015621875, \"kind\": \"free\", \"name\": \"column\", \"ratio\": 1000000.0, \"sch\": \"d1+d2\"}"
+  },
+  {
+   "kind": "free",
+   "shape": "square",
+   "scheme": "d1+d2",
+   "ratio": 1000000.0,
+   "U": [
+    1.0,
+    0.0
+   ],
+   "n": 32,
+   "cfl": 0.5,
+   "dt": 0.015621875,
+   "project": true,
+   "steps": 600,
+   "max_err": 4.1967351815941356e-10,
+   "f_out": 7.684811853536644e-08,
+   "job": "{\"U\": [1.0, 0.0], \"dt\": 0.015621875, \"kind\": \"free\", \"name\": \"square\", \"ratio\": 1000000.0, \"sch\": \"d1+d2\"}"
+  },
+  {
+   "kind": "free",
+   "shape": "column",
+   "scheme": "d1+d2",
+   "ratio": 1000.0,
+   "U": [
+    1.0,
+    0.0
+   ],
+   "n": 32,
+   "cfl": 0.45,
+   "dt": null,
+   "project": true,
+   "steps": 600,
+   "max_err": 2.5063973119188176e-10,
+   "f_out": 1.1482839323839774e-07,
+   "job": "{\"U\": [1.0, 0.0], \"cfl\": 0.45, \"kind\": \"free\", \"name\": \"column\", \"ratio\": 1000.0, \"sch\": \"d1+d2\"}"
+  },
+  {
+   "kind": "free",
+   "shape": "column",
+   "scheme": "d1+d2",
+   "ratio": 1000.0,
+   "U": [
+    1.0,
+    0.0
+   ],
+   "n": 32,
+   "cfl": 0.5,
+   "dt": null,
+   "project": true,
+   "steps": 600,
+   "max_err": 2.353672812205332e-13,
+   "f_out": 1.681830490736821e-12,
+   "job": "{\"U\": [1.0, 0.0], \"kind\": \"free\", \"name\": \"column\", \"ratio\": 1000.0, \"sch\": \"d1+d2\", \"tolerance\": 1e-13}"
+  },
+  {
+   "kind": "free",
+   "shape": "drop",
+   "scheme": "d1+d2",
+   "ratio": 1000.0,
+   "U": [
+    1.0,
+    0.37
+   ],
+   "n": 32,
+   "cfl": 0.5,
+   "dt": null,
+   "project": true,
+   "steps": 2000,
+   "max_err": 1.2811973704174306e-13,
+   "f_out": 2.8470559243487514e-12,
+   "job": "{\"U\": [1.0, 0.37], \"kind\": \"free\", \"name\": \"drop\", \"ratio\": 1000.0, \"sch\": \"d1+d2\", \"steps\": 2000}"
+  },
+  {
+   "kind": "free",
+   "shape": "drop",
+   "scheme": "d1+d2",
+   "ratio": 1000000.0,
+   "U": [
+    1.0,
+    0.37
+   ],
+   "n": 32,
+   "cfl": 0.5,
+   "dt": null,
+   "project": true,
+   "steps": 2000,
+   "max_err": 3.838143691758944e-10,
+   "f_out": 9.747758156208874e-14,
+   "job": "{\"U\": [1.0, 0.37], \"kind\": \"free\", \"name\": \"drop\", \"ratio\": 1000000.0, \"sch\": \"d1+d2\", \"steps\": 2000}"
+  },
+  {
+   "kind": "free",
+   "shape": "bubble",
+   "scheme": "d1+d2",
+   "ratio": 1000.0,
+   "U": [
+    1.0,
+    0.37
+   ],
+   "n": 32,
+   "cfl": 0.5,
+   "dt": null,
+   "project": true,
+   "steps": 2000,
+   "max_err": 1.744471234133016e-10,
+   "f_out": 5.684341886080802e-14,
+   "job": "{\"U\": [1.0, 0.37], \"kind\": \"free\", \"name\": \"bubble\", \"ratio\": 1000.0, \"sch\": \"d1+d2\", \"steps\": 2000}"
+  },
+  {
+   "kind": "free",
+   "shape": "bubble",
+   "scheme": "d1+d2",
+   "ratio": 1000000.0,
+   "U": [
+    1.0,
+    0.37
+   ],
+   "n": 32,
+   "cfl": 0.5,
+   "dt": null,
+   "project": true,
+   "steps": 2000,
+   "max_err": 2.1578694386903408e-10,
+   "f_out": 5.706546346573305e-14,
+   "job": "{\"U\": [1.0, 0.37], \"kind\": \"free\", \"name\": \"bubble\", \"ratio\": 1000000.0, \"sch\": \"d1+d2\", \"steps\": 2000}"
+  },
+  {
+   "kind": "free",
+   "shape": "small",
+   "scheme": "d1+d2",
+   "ratio": 1000.0,
+   "U": [
+    1.0,
+    0.37
+   ],
+   "n": 32,
+   "cfl": 0.5,
+   "dt": null,
+   "project": true,
+   "steps": 2000,
+   "max_err": 4.3076653355456074e-14,
+   "f_out": 5.639932965095795e-14,
+   "job": "{\"U\": [1.0, 0.37], \"kind\": \"free\", \"name\": \"small\", \"ratio\": 1000.0, \"sch\": \"d1+d2\", \"steps\": 2000}"
+  },
+  {
+   "kind": "free",
+   "shape": "small",
+   "scheme": "d1+d2",
+   "ratio": 1000000.0,
+   "U": [
+    1.0,
+    0.37
+   ],
+   "n": 32,
+   "cfl": 0.5,
+   "dt": null,
+   "project": true,
+   "steps": 2000,
+   "max_err": 3.4211233845837796e-10,
+   "f_out": 4.596323321948148e-14,
+   "job": "{\"U\": [1.0, 0.37], \"kind\": \"free\", \"name\": \"small\", \"ratio\": 1000000.0, \"sch\": \"d1+d2\", \"steps\": 2000}"
+  },
+  {
+   "kind": "free",
+   "shape": "film",
+   "scheme": "d1+d2",
+   "ratio": 1000.0,
+   "U": [
+    1.0,
+    0.37
+   ],
+   "n": 32,
+   "cfl": 0.5,
+   "dt": null,
+   "project": true,
+   "steps": 2000,
+   "max_err": 1.95267579883307e-10,
+   "f_out": 6.3347588519631695e-09,
+   "job": "{\"U\": [1.0, 0.37], \"kind\": \"free\", \"name\": \"film\", \"ratio\": 1000.0, \"sch\": \"d1+d2\", \"steps\": 2000}"
+  },
+  {
+   "kind": "free",
+   "shape": "film",
+   "scheme": "d1+d2",
+   "ratio": 1000000.0,
+   "U": [
+    1.0,
+    0.37
+   ],
+   "n": 32,
+   "cfl": 0.5,
+   "dt": null,
+   "project": true,
+   "steps": 2000,
+   "max_err": 1.2007048688644772e-09,
+   "f_out": 8.595015699164321e-09,
+   "job": "{\"U\": [1.0, 0.37], \"kind\": \"free\", \"name\": \"film\", \"ratio\": 1000000.0, \"sch\": \"d1+d2\", \"steps\": 2000}"
+  },
+  {
+   "kind": "free",
+   "shape": "slant",
+   "scheme": "d1+d2",
+   "ratio": 1000.0,
+   "U": [
+    1.0,
+    0.37
+   ],
+   "n": 32,
+   "cfl": 0.5,
+   "dt": null,
+   "project": true,
+   "steps": 2000,
+   "max_err": 3.730349362740526e-14,
+   "f_out": 2.220446049250313e-16,
+   "job": "{\"U\": [1.0, 0.37], \"kind\": \"free\", \"name\": \"slant\", \"ratio\": 1000.0, \"sch\": \"d1+d2\", \"steps\": 2000}"
+  },
+  {
+   "kind": "free",
+   "shape": "slant",
+   "scheme": "d1+d2",
+   "ratio": 1000000.0,
+   "U": [
+    1.0,
+    0.37
+   ],
+   "n": 32,
+   "cfl": 0.5,
+   "dt": null,
+   "project": true,
+   "steps": 2000,
+   "max_err": 9.028011116463119e-10,
+   "f_out": 4.440892098500626e-16,
+   "job": "{\"U\": [1.0, 0.37], \"kind\": \"free\", \"name\": \"slant\", \"ratio\": 1000000.0, \"sch\": \"d1+d2\", \"steps\": 2000}"
+  },
+  {
+   "kind": "free",
+   "shape": "two",
+   "scheme": "d1+d2",
+   "ratio": 1000.0,
+   "U": [
+    1.0,
+    0.37
+   ],
+   "n": 32,
+   "cfl": 0.5,
+   "dt": null,
+   "project": true,
+   "steps": 2000,
+   "max_err": 5.972999872483342e-14,
+   "f_out": 2.6423307986078726e-14,
+   "job": "{\"U\": [1.0, 0.37], \"kind\": \"free\", \"name\": \"two\", \"ratio\": 1000.0, \"sch\": \"d1+d2\", \"steps\": 2000}"
+  },
+  {
+   "kind": "free",
+   "shape": "two",
+   "scheme": "d1+d2",
+   "ratio": 1000000.0,
+   "U": [
+    1.0,
+    0.37
+   ],
+   "n": 32,
+   "cfl": 0.5,
+   "dt": null,
+   "project": true,
+   "steps": 2000,
+   "max_err": 3.419680094651767e-10,
+   "f_out": 3.7969627442180354e-14,
+   "job": "{\"U\": [1.0, 0.37], \"kind\": \"free\", \"name\": \"two\", \"ratio\": 1000000.0, \"sch\": \"d1+d2\", \"steps\": 2000}"
+  },
+  {
+   "kind": "free",
+   "shape": "column",
+   "scheme": "d1+d2lim",
+   "ratio": 1000.0,
+   "U": [
+    1.0,
+    0.0
+   ],
+   "n": 32,
+   "cfl": 0.5,
+   "dt": null,
+   "project": true,
+   "steps": 600,
+   "max_err": 2.1896406909860389e-10,
+   "f_out": 8.640912141366641e-08,
+   "job": "{\"U\": [1.0, 0.0], \"kind\": \"free\", \"name\": \"column\", \"ratio\": 1000.0, \"sch\": \"d1+d2lim\"}"
+  },
+  {
+   "kind": "free",
+   "shape": "column",
+   "scheme": "d1+d2lim",
+   "ratio": 1000.0,
+   "U": [
+    1.0,
+    0.37
+   ],
+   "n": 32,
+   "cfl": 0.5,
+   "dt": null,
+   "project": true,
+   "steps": 600,
+   "max_err": 2.2227530926954842e-10,
+   "f_out": 1.1777447306293709e-07,
+   "job": "{\"U\": [1.0, 0.37], \"kind\": \"free\", \"name\": \"column\", \"ratio\": 1000.0, \"sch\": \"d1+d2lim\"}"
+  },
+  {
+   "kind": "free",
+   "shape": "column",
+   "scheme": "d1+d2lim",
+   "ratio": 1000000.0,
+   "U": [
+    1.0,
+    0.0
+   ],
+   "n": 32,
+   "cfl": 0.5,
+   "dt": null,
+   "project": true,
+   "steps": 600,
+   "max_err": 4.5196046905005005e-10,
+   "f_out": 1.138354044361023e-07,
+   "job": "{\"U\": [1.0, 0.0], \"kind\": \"free\", \"name\": \"column\", \"ratio\": 1000000.0, \"sch\": \"d1+d2lim\"}"
+  },
+  {
+   "kind": "free",
+   "shape": "column",
+   "scheme": "d1+d2lim",
+   "ratio": 1000000.0,
+   "U": [
+    1.0,
+    0.37
+   ],
+   "n": 32,
+   "cfl": 0.5,
+   "dt": null,
+   "project": true,
+   "steps": 600,
+   "max_err": 5.113360845854231e-10,
+   "f_out": 8.337720075468624e-08,
+   "job": "{\"U\": [1.0, 0.37], \"kind\": \"free\", \"name\": \"column\", \"ratio\": 1000000.0, \"sch\": \"d1+d2lim\"}"
+  },
+  {
+   "kind": "free",
+   "shape": "square",
+   "scheme": "d1+d2lim",
+   "ratio": 1000.0,
+   "U": [
+    1.0,
+    0.0
+   ],
+   "n": 32,
+   "cfl": 0.5,
+   "dt": null,
+   "project": true,
+   "steps": 600,
+   "max_err": 1.317366216113669e-10,
+   "f_out": 1.1164535157481836e-07,
+   "job": "{\"U\": [1.0, 0.0], \"kind\": \"free\", \"name\": \"square\", \"ratio\": 1000.0, \"sch\": \"d1+d2lim\"}"
+  },
+  {
+   "kind": "free",
+   "shape": "square",
+   "scheme": "d1+d2lim",
+   "ratio": 1000000.0,
+   "U": [
+    1.0,
+    0.0
+   ],
+   "n": 32,
+   "cfl": 0.5,
+   "dt": null,
+   "project": true,
+   "steps": 600,
+   "max_err": 4.68534988584679e-10,
+   "f_out": 6.023448340108928e-08,
+   "job": "{\"U\": [1.0, 0.0], \"kind\": \"free\", \"name\": \"square\", \"ratio\": 1000000.0, \"sch\": \"d1+d2lim\"}"
+  },
+  {
+   "kind": "free",
+   "shape": "square-bubble",
+   "scheme": "d1+d2lim",
+   "ratio": 1000.0,
+   "U": [
+    1.0,
+    0.0
+   ],
+   "n": 32,
+   "cfl": 0.5,
+   "dt": null,
+   "project": true,
+   "steps": 600,
+   "max_err": 2.3686166304287513e-10,
+   "f_out": 2.7660767010218024e-07,
+   "job": "{\"U\": [1.0, 0.0], \"kind\": \"free\", \"name\": \"square-bubble\", \"ratio\": 1000.0, \"sch\": \"d1+d2lim\"}"
+  },
+  {
+   "kind": "free",
+   "shape": "column",
+   "scheme": "d1+d2lim",
+   "ratio": 1000.0,
+   "U": [
+    1.0,
+    0.0
+   ],
+   "n": 32,
+   "cfl": 0.5,
+   "dt": 0.015621875,
+   "project": true,
+   "steps": 600,
+   "max_err": 3.914424340223377e-12,
+   "f_out": 9.29654724313167e-08,
+   "job": "{\"U\": [1.0, 0.0], \"dt\": 0.015621875, \"kind\": \"free\", \"name\": \"column\", \"ratio\": 1000.0, \"sch\": \"d1+d2lim\"}"
+  },
+  {
+   "kind": "free",
+   "shape": "square",
+   "scheme": "d1+d2lim",
+   "ratio": 1000.0,
+   "U": [
+    1.0,
+    0.0
+   ],
+   "n": 32,
+   "cfl": 0.5,
+   "dt": 0.015621875,
+   "project": true,
+   "steps": 600,
+   "max_err": 2.5822566307454053e-10,
+   "f_out": 1.2274962646330323e-07,
+   "job": "{\"U\": [1.0, 0.0], \"dt\": 0.015621875, \"kind\": \"free\", \"name\": \"square\", \"ratio\": 1000.0, \"sch\": \"d1+d2lim\"}"
+  },
+  {
+   "kind": "free",
+   "shape": "column",
+   "scheme": "d1+d2lim",
+   "ratio": 1000000.0,
+   "U": [
+    1.0,
+    0.0
+   ],
+   "n": 32,
+   "cfl": 0.5,
+   "dt": 0.015621875,
+   "project": true,
+   "steps": 600,
+   "max_err": 4.379496765238855e-10,
+   "f_out": 2.205586646653046e-07,
+   "job": "{\"U\": [1.0, 0.0], \"dt\": 0.015621875, \"kind\": \"free\", \"name\": \"column\", \"ratio\": 1000000.0, \"sch\": \"d1+d2lim\"}"
+  },
+  {
+   "kind": "free",
+   "shape": "square",
+   "scheme": "d1+d2lim",
+   "ratio": 1000000.0,
+   "U": [
+    1.0,
+    0.0
+   ],
+   "n": 32,
+   "cfl": 0.5,
+   "dt": 0.015621875,
+   "project": true,
+   "steps": 600,
+   "max_err": 3.999742759219771e-10,
+   "f_out": 2.5199870656855694e-07,
+   "job": "{\"U\": [1.0, 0.0], \"dt\": 0.015621875, \"kind\": \"free\", \"name\": \"square\", \"ratio\": 1000000.0, \"sch\": \"d1+d2lim\"}"
+  },
+  {
+   "kind": "free",
+   "shape": "column",
+   "scheme": "d1+d2lim",
+   "ratio": 1000.0,
+   "U": [
+    1.0,
+    0.0
+   ],
+   "n": 32,
+   "cfl": 0.45,
+   "dt": null,
+   "project": true,
+   "steps": 600,
+   "max_err": 2.2700796797892053e-10,
+   "f_out": 1.853908138116367e-10,
+   "job": "{\"U\": [1.0, 0.0], \"cfl\": 0.45, \"kind\": \"free\", \"name\": \"column\", \"ratio\": 1000.0, \"sch\": \"d1+d2lim\"}"
+  },
+  {
+   "kind": "free",
+   "shape": "column",
+   "scheme": "d1+d2lim",
+   "ratio": 1000.0,
+   "U": [
+    1.0,
+    0.0
+   ],
+   "n": 32,
+   "cfl": 0.5,
+   "dt": null,
+   "project": true,
+   "steps": 600,
+   "max_err": 2.020605904817785e-13,
+   "f_out": 1.1303185896795805e-12,
+   "job": "{\"U\": [1.0, 0.0], \"kind\": \"free\", \"name\": \"column\", \"ratio\": 1000.0, \"sch\": \"d1+d2lim\", \"tolerance\": 1e-13}"
+  },
+  {
+   "kind": "free",
+   "shape": "drop",
+   "scheme": "d1+d2lim",
+   "ratio": 1000.0,
+   "U": [
+    1.0,
+    0.37
+   ],
+   "n": 32,
+   "cfl": 0.5,
+   "dt": null,
+   "project": true,
+   "steps": 2000,
+   "max_err": 1.0524914273446484e-13,
+   "f_out": 1.8446355554146976e-13,
+   "job": "{\"U\": [1.0, 0.37], \"kind\": \"free\", \"name\": \"drop\", \"ratio\": 1000.0, \"sch\": \"d1+d2lim\", \"steps\": 2000}"
+  },
+  {
+   "kind": "free",
+   "shape": "drop",
+   "scheme": "d1+d2lim",
+   "ratio": 1000000.0,
+   "U": [
+    1.0,
+    0.37
+   ],
+   "n": 32,
+   "cfl": 0.5,
+   "dt": null,
+   "project": true,
+   "steps": 2000,
+   "max_err": 4.0014641600194523e-10,
+   "f_out": 3.419486915845482e-13,
+   "job": "{\"U\": [1.0, 0.37], \"kind\": \"free\", \"name\": \"drop\", \"ratio\": 1000000.0, \"sch\": \"d1+d2lim\", \"steps\": 2000}"
+  },
+  {
+   "kind": "free",
+   "shape": "bubble",
+   "scheme": "d1+d2lim",
+   "ratio": 1000.0,
+   "U": [
+    1.0,
+    0.37
+   ],
+   "n": 32,
+   "cfl": 0.5,
+   "dt": null,
+   "project": true,
+   "steps": 2000,
+   "max_err": 1.7346479808111326e-10,
+   "f_out": 4.367617378875366e-13,
+   "job": "{\"U\": [1.0, 0.37], \"kind\": \"free\", \"name\": \"bubble\", \"ratio\": 1000.0, \"sch\": \"d1+d2lim\", \"steps\": 2000}"
+  },
+  {
+   "kind": "free",
+   "shape": "bubble",
+   "scheme": "d1+d2lim",
+   "ratio": 1000000.0,
+   "U": [
+    1.0,
+    0.37
+   ],
+   "n": 32,
+   "cfl": 0.5,
+   "dt": null,
+   "project": true,
+   "steps": 2000,
+   "max_err": 2.425624145985239e-10,
+   "f_out": 1.0502709812953981e-13,
+   "job": "{\"U\": [1.0, 0.37], \"kind\": \"free\", \"name\": \"bubble\", \"ratio\": 1000000.0, \"sch\": \"d1+d2lim\", \"steps\": 2000}"
+  },
+  {
+   "kind": "free",
+   "shape": "small",
+   "scheme": "d1+d2lim",
+   "ratio": 1000.0,
+   "U": [
+    1.0,
+    0.37
+   ],
+   "n": 32,
+   "cfl": 0.5,
+   "dt": null,
+   "project": true,
+   "steps": 2000,
+   "max_err": 3.697042672001771e-14,
+   "f_out": 5.950795411990839e-14,
+   "job": "{\"U\": [1.0, 0.37], \"kind\": \"free\", \"name\": \"small\", \"ratio\": 1000.0, \"sch\": \"d1+d2lim\", \"steps\": 2000}"
+  },
+  {
+   "kind": "free",
+   "shape": "small",
+   "scheme": "d1+d2lim",
+   "ratio": 1000000.0,
+   "U": [
+    1.0,
+    0.37
+   ],
+   "n": 32,
+   "cfl": 0.5,
+   "dt": null,
+   "project": true,
+   "steps": 2000,
+   "max_err": 3.519167179888427e-10,
+   "f_out": 4.6629367034256575e-14,
+   "job": "{\"U\": [1.0, 0.37], \"kind\": \"free\", \"name\": \"small\", \"ratio\": 1000000.0, \"sch\": \"d1+d2lim\", \"steps\": 2000}"
+  },
+  {
+   "kind": "free",
+   "shape": "film",
+   "scheme": "d1+d2lim",
+   "ratio": 1000.0,
+   "U": [
+    1.0,
+    0.37
+   ],
+   "n": 32,
+   "cfl": 0.5,
+   "dt": null,
+   "project": true,
+   "steps": 2000,
+   "max_err": 3.5409453147394743e-10,
+   "f_out": 3.278054014638825e-09,
+   "job": "{\"U\": [1.0, 0.37], \"kind\": \"free\", \"name\": \"film\", \"ratio\": 1000.0, \"sch\": \"d1+d2lim\", \"steps\": 2000}"
+  },
+  {
+   "kind": "free",
+   "shape": "film",
+   "scheme": "d1+d2lim",
+   "ratio": 1000000.0,
+   "U": [
+    1.0,
+    0.37
+   ],
+   "n": 32,
+   "cfl": 0.5,
+   "dt": null,
+   "project": true,
+   "steps": 2000,
+   "max_err": 1.3300440748764686e-09,
+   "f_out": 1.377959435444609e-08,
+   "job": "{\"U\": [1.0, 0.37], \"kind\": \"free\", \"name\": \"film\", \"ratio\": 1000000.0, \"sch\": \"d1+d2lim\", \"steps\": 2000}"
+  },
+  {
+   "kind": "free",
+   "shape": "slant",
+   "scheme": "d1+d2lim",
+   "ratio": 1000.0,
+   "U": [
+    1.0,
+    0.37
+   ],
+   "n": 32,
+   "cfl": 0.5,
+   "dt": null,
+   "project": true,
+   "steps": 2000,
+   "max_err": 4.3076653355456074e-14,
+   "f_out": 2.220446049250313e-16,
+   "job": "{\"U\": [1.0, 0.37], \"kind\": \"free\", \"name\": \"slant\", \"ratio\": 1000.0, \"sch\": \"d1+d2lim\", \"steps\": 2000}"
+  },
+  {
+   "kind": "free",
+   "shape": "slant",
+   "scheme": "d1+d2lim",
+   "ratio": 1000000.0,
+   "U": [
+    1.0,
+    0.37
+   ],
+   "n": 32,
+   "cfl": 0.5,
+   "dt": null,
+   "project": true,
+   "steps": 2000,
+   "max_err": 3.989248931191014e-10,
+   "f_out": 4.440892098500626e-16,
+   "job": "{\"U\": [1.0, 0.37], \"kind\": \"free\", \"name\": \"slant\", \"ratio\": 1000000.0, \"sch\": \"d1+d2lim\", \"steps\": 2000}"
+  },
+  {
+   "kind": "free",
+   "shape": "two",
+   "scheme": "d1+d2lim",
+   "ratio": 1000.0,
+   "U": [
+    1.0,
+    0.37
+   ],
+   "n": 32,
+   "cfl": 0.5,
+   "dt": null,
+   "project": true,
+   "steps": 2000,
+   "max_err": 5.917488721252084e-14,
+   "f_out": 2.042810365310288e-14,
+   "job": "{\"U\": [1.0, 0.37], \"kind\": \"free\", \"name\": \"two\", \"ratio\": 1000.0, \"sch\": \"d1+d2lim\", \"steps\": 2000}"
+  },
+  {
+   "kind": "free",
+   "shape": "two",
+   "scheme": "d1+d2lim",
+   "ratio": 1000000.0,
+   "U": [
+    1.0,
+    0.37
+   ],
+   "n": 32,
+   "cfl": 0.5,
+   "dt": null,
+   "project": true,
+   "steps": 2000,
+   "max_err": 3.8805070268210784e-10,
+   "f_out": 1.7763568394002505e-14,
+   "job": "{\"U\": [1.0, 0.37], \"kind\": \"free\", \"name\": \"two\", \"ratio\": 1000000.0, \"sch\": \"d1+d2lim\", \"steps\": 2000}"
+  },
+  {
+   "kind": "free",
+   "shape": "column",
+   "scheme": "d1+geo",
+   "ratio": 1000.0,
+   "U": [
+    1.0,
+    0.0
+   ],
+   "n": 32,
+   "cfl": 0.5,
+   "dt": null,
+   "project": true,
+   "steps": 600,
+   "max_err": 2.0946533396681843e-10,
+   "f_out": 9.322299443503823e-08,
+   "job": "{\"U\": [1.0, 0.0], \"kind\": \"free\", \"name\": \"column\", \"ratio\": 1000.0, \"sch\": \"d1+geo\"}"
+  },
+  {
+   "kind": "free",
+   "shape": "column",
+   "scheme": "d1+geo",
+   "ratio": 1000.0,
+   "U": [
+    1.0,
+    0.37
+   ],
+   "n": 32,
+   "cfl": 0.5,
+   "dt": null,
+   "project": true,
+   "steps": 600,
+   "max_err": 2.3644397550981466e-10,
+   "f_out": 1.2300781659924098e-07,
+   "job": "{\"U\": [1.0, 0.37], \"kind\": \"free\", \"name\": \"column\", \"ratio\": 1000.0, \"sch\": \"d1+geo\"}"
+  },
+  {
+   "kind": "free",
+   "shape": "column",
+   "scheme": "d1+geo",
+   "ratio": 1000000.0,
+   "U": [
+    1.0,
+    0.0
+   ],
+   "n": 32,
+   "cfl": 0.5,
+   "dt": null,
+   "project": true,
+   "steps": 600,
+   "max_err": 4.877851456086546e-10,
+   "f_out": 1.3839880463883958e-07,
+   "job": "{\"U\": [1.0, 0.0], \"kind\": \"free\", \"name\": \"column\", \"ratio\": 1000000.0, \"sch\": \"d1+geo\"}"
+  },
+  {
+   "kind": "free",
+   "shape": "column",
+   "scheme": "d1+geo",
+   "ratio": 1000000.0,
+   "U": [
+    1.0,
+    0.37
+   ],
+   "n": 32,
+   "cfl": 0.5,
+   "dt": null,
+   "project": true,
+   "steps": 600,
+   "max_err": 4.826961053083778e-10,
+   "f_out": 1.508330444988104e-07,
+   "job": "{\"U\": [1.0, 0.37], \"kind\": \"free\", \"name\": \"column\", \"ratio\": 1000000.0, \"sch\": \"d1+geo\"}"
+  },
+  {
+   "kind": "free",
+   "shape": "square",
+   "scheme": "d1+geo",
+   "ratio": 1000.0,
+   "U": [
+    1.0,
+    0.0
+   ],
+   "n": 32,
+   "cfl": 0.5,
+   "dt": null,
+   "project": true,
+   "steps": 600,
+   "max_err": 1.3535750298387939e-10,
+   "f_out": 1.2429875706487792e-07,
+   "job": "{\"U\": [1.0, 0.0], \"kind\": \"free\", \"name\": \"square\", \"ratio\": 1000.0, \"sch\": \"d1+geo\"}"
+  },
+  {
+   "kind": "free",
+   "shape": "square",
+   "scheme": "d1+geo",
+   "ratio": 1000000.0,
+   "U": [
+    1.0,
+    0.0
+   ],
+   "n": 32,
+   "cfl": 0.5,
+   "dt": null,
+   "project": true,
+   "steps": 600,
+   "max_err": 4.1812962086262907e-10,
+   "f_out": 8.06977142886467e-08,
+   "job": "{\"U\": [1.0, 0.0], \"kind\": \"free\", \"name\": \"square\", \"ratio\": 1000000.0, \"sch\": \"d1+geo\"}"
+  },
+  {
+   "kind": "free",
+   "shape": "square-bubble",
+   "scheme": "d1+geo",
+   "ratio": 1000.0,
+   "U": [
+    1.0,
+    0.0
+   ],
+   "n": 32,
+   "cfl": 0.5,
+   "dt": null,
+   "project": true,
+   "steps": 600,
+   "max_err": 2.530511596082613e-10,
+   "f_out": 2.1595313892674994e-07,
+   "job": "{\"U\": [1.0, 0.0], \"kind\": \"free\", \"name\": \"square-bubble\", \"ratio\": 1000.0, \"sch\": \"d1+geo\"}"
+  },
+  {
+   "kind": "free",
+   "shape": "column",
+   "scheme": "d1+geo",
+   "ratio": 1000.0,
+   "U": [
+    1.0,
+    0.0
+   ],
+   "n": 32,
+   "cfl": 0.5,
+   "dt": 0.015621875,
+   "project": true,
+   "steps": 600,
+   "max_err": 1.567190821560871e-12,
+   "f_out": 1.3781738239515562e-07,
+   "job": "{\"U\": [1.0, 0.0], \"dt\": 0.015621875, \"kind\": \"free\", \"name\": \"column\", \"ratio\": 1000.0, \"sch\": \"d1+geo\"}"
+  },
+  {
+   "kind": "free",
+   "shape": "square",
+   "scheme": "d1+geo",
+   "ratio": 1000.0,
+   "U": [
+    1.0,
+    0.0
+   ],
+   "n": 32,
+   "cfl": 0.5,
+   "dt": 0.015621875,
+   "project": true,
+   "steps": 600,
+   "max_err": 3.6235345388775814e-10,
+   "f_out": 1.0649851778232744e-07,
+   "job": "{\"U\": [1.0, 0.0], \"dt\": 0.015621875, \"kind\": \"free\", \"name\": \"square\", \"ratio\": 1000.0, \"sch\": \"d1+geo\"}"
+  },
+  {
+   "kind": "free",
+   "shape": "column",
+   "scheme": "d1+geo",
+   "ratio": 1000000.0,
+   "U": [
+    1.0,
+    0.0
+   ],
+   "n": 32,
+   "cfl": 0.5,
+   "dt": 0.015621875,
+   "project": true,
+   "steps": 600,
+   "max_err": 6.09885475455485e-10,
+   "f_out": 1.521066392839998e-07,
+   "job": "{\"U\": [1.0, 0.0], \"dt\": 0.015621875, \"kind\": \"free\", \"name\": \"column\", \"ratio\": 1000000.0, \"sch\": \"d1+geo\"}"
+  },
+  {
+   "kind": "free",
+   "shape": "square",
+   "scheme": "d1+geo",
+   "ratio": 1000000.0,
+   "U": [
+    1.0,
+    0.0
+   ],
+   "n": 32,
+   "cfl": 0.5,
+   "dt": 0.015621875,
+   "project": true,
+   "steps": 600,
+   "max_err": 4.2227843444209157e-10,
+   "f_out": 1.655672399181185e-07,
+   "job": "{\"U\": [1.0, 0.0], \"dt\": 0.015621875, \"kind\": \"free\", \"name\": \"square\", \"ratio\": 1000000.0, \"sch\": \"d1+geo\"}"
+  },
+  {
+   "kind": "free",
+   "shape": "column",
+   "scheme": "d1+geo",
+   "ratio": 1000.0,
+   "U": [
+    1.0,
+    0.0
+   ],
+   "n": 32,
+   "cfl": 0.45,
+   "dt": null,
+   "project": true,
+   "steps": 600,
+   "max_err": 2.5775204193223544e-10,
+   "f_out": 3.6942227055192234e-11,
+   "job": "{\"U\": [1.0, 0.0], \"cfl\": 0.45, \"kind\": \"free\", \"name\": \"column\", \"ratio\": 1000.0, \"sch\": \"d1+geo\"}"
+  },
+  {
+   "kind": "free",
+   "shape": "column",
+   "scheme": "d1+geo",
+   "ratio": 1000.0,
+   "U": [
+    1.0,
+    0.0
+   ],
+   "n": 32,
+   "cfl": 0.5,
+   "dt": null,
+   "project": true,
+   "steps": 600,
+   "max_err": 2.347011474057581e-13,
+   "f_out": 2.10015567915641e-12,
+   "job": "{\"U\": [1.0, 0.0], \"kind\": \"free\", \"name\": \"column\", \"ratio\": 1000.0, \"sch\": \"d1+geo\", \"tolerance\": 1e-13}"
+  },
+  {
+   "kind": "free",
+   "shape": "drop",
+   "scheme": "d1+geo",
+   "ratio": 1000.0,
+   "U": [
+    1.0,
+    0.37
+   ],
+   "n": 32,
+   "cfl": 0.5,
+   "dt": null,
+   "project": true,
+   "steps": 2000,
+   "max_err": 1.270095140171179e-13,
+   "f_out": 6.006306563222097e-14,
+   "job": "{\"U\": [1.0, 0.37], \"kind\": \"free\", \"name\": \"drop\", \"ratio\": 1000.0, \"sch\": \"d1+geo\", \"steps\": 2000}"
+  },
+  {
+   "kind": "free",
+   "shape": "drop",
+   "scheme": "d1+geo",
+   "ratio": 1000000.0,
+   "U": [
+    1.0,
+    0.37
+   ],
+   "n": 32,
+   "cfl": 0.5,
+   "dt": null,
+   "project": true,
+   "steps": 2000,
+   "max_err": 4.73670880296595e-10,
+   "f_out": 9.303668946358812e-14,
+   "job": "{\"U\": [1.0, 0.37], \"kind\": \"free\", \"name\": \"drop\", \"ratio\": 1000000.0, \"sch\": \"d1+geo\", \"steps\": 2000}"
+  },
+  {
+   "kind": "free",
+   "shape": "bubble",
+   "scheme": "d1+geo",
+   "ratio": 1000.0,
+   "U": [
+    1.0,
+    0.37
+   ],
+   "n": 32,
+   "cfl": 0.5,
+   "dt": null,
+   "project": true,
+   "steps": 2000,
+   "max_err": 1.4797479908068567e-10,
+   "f_out": 7.949196856316121e-14,
+   "job": "{\"U\": [1.0, 0.37], \"kind\": \"free\", \"name\": \"bubble\", \"ratio\": 1000.0, \"sch\": \"d1+geo\", \"steps\": 2000}"
+  },
+  {
+   "kind": "free",
+   "shape": "bubble",
+   "scheme": "d1+geo",
+   "ratio": 1000000.0,
+   "U": [
+    1.0,
+    0.37
+   ],
+   "n": 32,
+   "cfl": 0.5,
+   "dt": null,
+   "project": true,
+   "steps": 2000,
+   "max_err": 2.245605368322856e-10,
+   "f_out": 1.5210055437364645e-13,
+   "job": "{\"U\": [1.0, 0.37], \"kind\": \"free\", \"name\": \"bubble\", \"ratio\": 1000000.0, \"sch\": \"d1+geo\", \"steps\": 2000}"
+  },
+  {
+   "kind": "free",
+   "shape": "small",
+   "scheme": "d1+geo",
+   "ratio": 1000.0,
+   "U": [
+    1.0,
+    0.37
+   ],
+   "n": 32,
+   "cfl": 0.5,
+   "dt": null,
+   "project": true,
+   "steps": 2000,
+   "max_err": 4.340972026284362e-14,
+   "f_out": 5.839773109528323e-14,
+   "job": "{\"U\": [1.0, 0.37], \"kind\": \"free\", \"name\": \"small\", \"ratio\": 1000.0, \"sch\": \"d1+geo\", \"steps\": 2000}"
+  },
+  {
+   "kind": "free",
+   "shape": "small",
+   "scheme": "d1+geo",
+   "ratio": 1000000.0,
+   "U": [
+    1.0,
+    0.37
+   ],
+   "n": 32,
+   "cfl": 0.5,
+   "dt": null,
+   "project": true,
+   "steps": 2000,
+   "max_err": 3.979444551660549e-10,
+   "f_out": 6.306066779870889e-14,
+   "job": "{\"U\": [1.0, 0.37], \"kind\": \"free\", \"name\": \"small\", \"ratio\": 1000000.0, \"sch\": \"d1+geo\", \"steps\": 2000}"
+  },
+  {
+   "kind": "free",
+   "shape": "film",
+   "scheme": "d1+geo",
+   "ratio": 1000.0,
+   "U": [
+    1.0,
+    0.37
+   ],
+   "n": 32,
+   "cfl": 0.5,
+   "dt": null,
+   "project": true,
+   "steps": 2000,
+   "max_err": 3.1532443323101234e-10,
+   "f_out": 1.4013769926608021e-08,
+   "job": "{\"U\": [1.0, 0.37], \"kind\": \"free\", \"name\": \"film\", \"ratio\": 1000.0, \"sch\": \"d1+geo\", \"steps\": 2000}"
+  },
+  {
+   "kind": "free",
+   "shape": "film",
+   "scheme": "d1+geo",
+   "ratio": 1000000.0,
+   "U": [
+    1.0,
+    0.37
+   ],
+   "n": 32,
+   "cfl": 0.5,
+   "dt": null,
+   "project": true,
+   "steps": 2000,
+   "max_err": 1.2711995900360762e-09,
+   "f_out": 9.718592708374274e-09,
+   "job": "{\"U\": [1.0, 0.37], \"kind\": \"free\", \"name\": \"film\", \"ratio\": 1000000.0, \"sch\": \"d1+geo\", \"steps\": 2000}"
+  },
+  {
+   "kind": "free",
+   "shape": "slant",
+   "scheme": "d1+geo",
+   "ratio": 1000.0,
+   "U": [
+    1.0,
+    0.37
+   ],
+   "n": 32,
+   "cfl": 0.5,
+   "dt": null,
+   "project": true,
+   "steps": 2000,
+   "max_err": 3.774758283725532e-14,
+   "f_out": 2.220446049250313e-16,
+   "job": "{\"U\": [1.0, 0.37], \"kind\": \"free\", \"name\": \"slant\", \"ratio\": 1000.0, \"sch\": \"d1+geo\", \"steps\": 2000}"
+  },
+  {
+   "kind": "free",
+   "shape": "slant",
+   "scheme": "d1+geo",
+   "ratio": 1000000.0,
+   "U": [
+    1.0,
+    0.37
+   ],
+   "n": 32,
+   "cfl": 0.5,
+   "dt": null,
+   "project": true,
+   "steps": 2000,
+   "max_err": 5.26370724784897e-10,
+   "f_out": 2.220446049250313e-16,
+   "job": "{\"U\": [1.0, 0.37], \"kind\": \"free\", \"name\": \"slant\", \"ratio\": 1000000.0, \"sch\": \"d1+geo\", \"steps\": 2000}"
+  },
+  {
+   "kind": "free",
+   "shape": "two",
+   "scheme": "d1+geo",
+   "ratio": 1000.0,
+   "U": [
+    1.0,
+    0.37
+   ],
+   "n": 32,
+   "cfl": 0.5,
+   "dt": null,
+   "project": true,
+   "steps": 2000,
+   "max_err": 6.017408793468348e-14,
+   "f_out": 7.083222897108499e-14,
+   "job": "{\"U\": [1.0, 0.37], \"kind\": \"free\", \"name\": \"two\", \"ratio\": 1000.0, \"sch\": \"d1+geo\", \"steps\": 2000}"
+  },
+  {
+   "kind": "free",
+   "shape": "two",
+   "scheme": "d1+geo",
+   "ratio": 1000000.0,
+   "U": [
+    1.0,
+    0.37
+   ],
+   "n": 32,
+   "cfl": 0.5,
+   "dt": null,
+   "project": true,
+   "steps": 2000,
+   "max_err": 4.1068348721751136e-10,
+   "f_out": 3.9745984281580604e-14,
+   "job": "{\"U\": [1.0, 0.37], \"kind\": \"free\", \"name\": \"two\", \"ratio\": 1000000.0, \"sch\": \"d1+geo\", \"steps\": 2000}"
+  },
+  {
+   "kind": "free",
+   "shape": "column",
+   "scheme": "d1+d2lim",
+   "ratio": 1000000.0,
+   "U": [
+    1.0,
+    0.37
+   ],
+   "n": 32,
+   "cfl": 0.5,
+   "dt": null,
+   "project": true,
+   "steps": 600,
+   "max_err": 5.113360845854231e-10,
+   "f_out": 8.337720075468624e-08,
+   "job": "{\"U\": [1.0, 0.37], \"kind\": \"free\", \"name\": \"column\", \"ratio\": 1000000.0, \"sch\": \"d1+d2lim\", \"tolerance\": 1e-10}"
+  },
+  {
+   "kind": "free",
+   "shape": "column",
+   "scheme": "d1+d2lim",
+   "ratio": 1000000.0,
+   "U": [
+    1.0,
+    0.37
+   ],
+   "n": 32,
+   "cfl": 0.5,
+   "dt": null,
+   "project": true,
+   "steps": 600,
+   "max_err": 1.825275486311284e-10,
+   "f_out": 1.0017636520309736e-07,
+   "job": "{\"U\": [1.0, 0.37], \"kind\": \"free\", \"name\": \"column\", \"ratio\": 1000000.0, \"sch\": \"d1+d2lim\", \"tolerance\": 1e-13}"
+  }
+ ],
+ "vortex": [
+  {
+   "kind": "vortex",
+   "scheme": "base",
+   "n": 32,
+   "ratio": 1000.0,
+   "steps": 74,
+   "failed": null,
+   "momentum_change": 8.133395022711745e-13,
+   "mass_change": 7.957117597323637e-13,
+   "f_overshoot": 9.325873406851315e-15,
+   "rho_floor_margin": 1.999999999999312,
+   "rho_lin_vs_clamped_over_rho2": 9.325873406851315e-12,
+   "job": "{\"kind\": \"vortex\", \"n\": 32, \"sch\": \"base\"}"
+  },
+  {
+   "kind": "vortex",
+   "scheme": "base",
+   "n": 64,
+   "ratio": 1000.0,
+   "steps": 147,
+   "failed": null,
+   "momentum_change": 6.426161174779271e-13,
+   "mass_change": 7.460983444862834e-14,
+   "f_overshoot": 1.7930101847696278e-14,
+   "rho_floor_margin": 1.9999999999641758,
+   "rho_lin_vs_clamped_over_rho2": 1.791210409163302e-11,
+   "job": "{\"kind\": \"vortex\", \"n\": 64, \"sch\": \"base\"}"
+  },
+  {
+   "kind": "vortex",
+   "scheme": "base",
+   "n": 64,
+   "ratio": 1000000.0,
+   "steps": 30,
+   "failed": null,
+   "momentum_change": 3.7572920430029215e-16,
+   "mass_change": 0.0,
+   "f_overshoot": 4.440892098500626e-16,
+   "rho_floor_margin": 1.9999999998334665,
+   "rho_lin_vs_clamped_over_rho2": 4.440892098500626e-10,
+   "job": "{\"kind\": \"vortex\", \"n\": 64, \"ratio\": 1000000.0, \"sch\": \"base\", \"t_end\": 0.1}"
+  },
+  {
+   "kind": "vortex",
+   "scheme": "d1",
+   "n": 32,
+   "ratio": 1000.0,
+   "steps": 74,
+   "failed": null,
+   "momentum_change": 8.135002509477513e-13,
+   "mass_change": 7.957117597323637e-13,
+   "f_overshoot": 2.6645352591003757e-15,
+   "rho_floor_margin": 1.9999999999995977,
+   "rho_lin_vs_clamped_over_rho2": 2.6645352591003757e-12,
+   "job": "{\"kind\": \"vortex\", \"n\": 32, \"sch\": \"d1\"}"
+  },
+  {
+   "kind": "vortex",
+   "scheme": "d1",
+   "n": 64,
+   "ratio": 1000.0,
+   "steps": 147,
+   "failed": null,
+   "momentum_change": 6.426161174779271e-13,
+   "mass_change": 7.460983444862834e-14,
+   "f_overshoot": 3.1086244689504383e-15,
+   "rho_floor_margin": 1.9999999999992792,
+   "rho_lin_vs_clamped_over_rho2": 3.1086244689504383e-12,
+   "job": "{\"kind\": \"vortex\", \"n\": 64, \"sch\": \"d1\"}"
+  },
+  {
+   "kind": "vortex",
+   "scheme": "d1",
+   "n": 64,
+   "ratio": 1000000.0,
+   "steps": 30,
+   "failed": null,
+   "momentum_change": 3.7572920430029215e-16,
+   "mass_change": 0.0,
+   "f_overshoot": 4.440892098500626e-16,
+   "rho_floor_margin": 1.9999999997779558,
+   "rho_lin_vs_clamped_over_rho2": 4.440892098500626e-10,
+   "job": "{\"kind\": \"vortex\", \"n\": 64, \"ratio\": 1000000.0, \"sch\": \"d1\", \"t_end\": 0.1}"
+  },
+  {
+   "kind": "vortex",
+   "scheme": "d1+d2",
+   "n": 32,
+   "ratio": 1000.0,
+   "steps": 73,
+   "failed": null,
+   "momentum_change": 5.410386634337682e-13,
+   "mass_change": 4.703182785190057e-13,
+   "f_overshoot": 5.995204332975845e-15,
+   "rho_floor_margin": 1.9999999999995564,
+   "rho_lin_vs_clamped_over_rho2": 5.995204332975845e-12,
+   "job": "{\"kind\": \"vortex\", \"n\": 32, \"sch\": \"d1+d2\"}"
+  },
+  {
+   "kind": "vortex",
+   "scheme": "d1+d2",
+   "n": 64,
+   "ratio": 1000.0,
+   "steps": 146,
+   "failed": null,
+   "momentum_change": 5.179695975745761e-13,
+   "mass_change": 6.636348432535889e-14,
+   "f_overshoot": 2.6867397195928788e-14,
+   "rho_floor_margin": 1.999999999998725,
+   "rho_lin_vs_clamped_over_rho2": 2.6867397195928788e-11,
+   "job": "{\"kind\": \"vortex\", \"n\": 64, \"sch\": \"d1+d2\"}"
+  },
+  {
+   "kind": "vortex",
+   "scheme": "d1+d2",
+   "n": 64,
+   "ratio": 1000000.0,
+   "steps": 30,
+   "failed": null,
+   "momentum_change": 4.075355415235089e-16,
+   "mass_change": 0.0,
+   "f_overshoot": 2.4424906541753444e-15,
+   "rho_floor_margin": 1.9999999998889777,
+   "rho_lin_vs_clamped_over_rho2": 2.4424906541753444e-09,
+   "job": "{\"kind\": \"vortex\", \"n\": 64, \"ratio\": 1000000.0, \"sch\": \"d1+d2\", \"t_end\": 0.1}"
+  },
+  {
+   "kind": "vortex",
+   "scheme": "d1+d2lim",
+   "n": 32,
+   "ratio": 1000.0,
+   "steps": 74,
+   "failed": null,
+   "momentum_change": 8.135002509477513e-13,
+   "mass_change": 7.957117597323637e-13,
+   "f_overshoot": 2.6645352591003757e-15,
+   "rho_floor_margin": 1.9999999999995977,
+   "rho_lin_vs_clamped_over_rho2": 2.6645352591003757e-12,
+   "job": "{\"kind\": \"vortex\", \"n\": 32, \"sch\": \"d1+d2lim\"}"
+  },
+  {
+   "kind": "vortex",
+   "scheme": "d1+d2lim",
+   "n": 64,
+   "ratio": 1000.0,
+   "steps": 147,
+   "failed": null,
+   "momentum_change": 6.426161174779271e-13,
+   "mass_change": 7.460983444862834e-14,
+   "f_overshoot": 3.1086244689504383e-15,
+   "rho_floor_margin": 1.9999999999992792,
+   "rho_lin_vs_clamped_over_rho2": 3.1086244689504383e-12,
+   "job": "{\"kind\": \"vortex\", \"n\": 64, \"sch\": \"d1+d2lim\"}"
+  },
+  {
+   "kind": "vortex",
+   "scheme": "d1+d2lim",
+   "n": 64,
+   "ratio": 1000000.0,
+   "steps": 30,
+   "failed": null,
+   "momentum_change": 3.7572920430029215e-16,
+   "mass_change": 0.0,
+   "f_overshoot": 4.440892098500626e-16,
+   "rho_floor_margin": 1.9999999997779558,
+   "rho_lin_vs_clamped_over_rho2": 4.440892098500626e-10,
+   "job": "{\"kind\": \"vortex\", \"n\": 64, \"ratio\": 1000000.0, \"sch\": \"d1+d2lim\", \"t_end\": 0.1}"
+  },
+  {
+   "kind": "vortex",
+   "scheme": "d1+geo",
+   "n": 32,
+   "ratio": 1000.0,
+   "steps": 74,
+   "failed": null,
+   "momentum_change": 6.453976663474195e-13,
+   "mass_change": 5.647746843510064e-13,
+   "f_overshoot": 1.7763568394002505e-15,
+   "rho_floor_margin": 1.9999999999997784,
+   "rho_lin_vs_clamped_over_rho2": 1.7763568394002505e-12,
+   "job": "{\"kind\": \"vortex\", \"n\": 32, \"sch\": \"d1+geo\"}"
+  },
+  {
+   "kind": "vortex",
+   "scheme": "d1+geo",
+   "n": 64,
+   "ratio": 1000.0,
+   "steps": 147,
+   "failed": null,
+   "momentum_change": 6.836681818188698e-13,
+   "mass_change": 2.2579292004190156e-13,
+   "f_overshoot": 3.212985433265203e-13,
+   "rho_floor_margin": 1.999999999997477,
+   "rho_lin_vs_clamped_over_rho2": 3.2085445411667024e-10,
+   "job": "{\"kind\": \"vortex\", \"n\": 64, \"sch\": \"d1+geo\"}"
+  },
+  {
+   "kind": "vortex",
+   "scheme": "d1+geo",
+   "n": 64,
+   "ratio": 1000000.0,
+   "steps": 30,
+   "failed": null,
+   "momentum_change": 5.763422899716099e-16,
+   "mass_change": 1.9634166960165352e-16,
+   "f_overshoot": 4.440892098500626e-16,
+   "rho_floor_margin": 1.9999999998334665,
+   "rho_lin_vs_clamped_over_rho2": 4.440892098500626e-10,
+   "job": "{\"kind\": \"vortex\", \"n\": 64, \"ratio\": 1000000.0, \"sch\": \"d1+geo\", \"t_end\": 0.1}"
+  }
+ ],
+ "identical": {
+  "base": true,
+  "d1": true,
+  "d1+d2": true,
+  "d1+d2lim": true,
+  "d1+geo": true
+ },
+ "cut_share": {
+  "vortex": {
+   "dropped": 0,
+   "partial": 49048,
+   "share": 0.0
+  },
+  "aligned band": {
+   "dropped": 12528,
+   "partial": 316040,
+   "share": 0.03964055182888242
+  }
+ },
+ "field_differences": {
+  "d1+d2-base N64": 0.018639152296821178,
+  "d1+d2lim-base N64": 7.714251975257289e-16,
+  "d1+geo-base N64": 0.004259132787026591,
+  "d1+d2-base N128": 0.013343455225508994,
+  "d1+d2lim-base N128": 3.726501305653177e-15,
+  "d1+geo-base N128": 0.002882415267314275,
+  "d1+d2-base N256": 0.013752758072200711,
+  "d1+d2lim-base N256": 2.36250401761201e-15,
+  "d1+geo-base N256": 0.0036434108523800525,
+  "base N64-N128": 0.0657815300823777,
+  "base N128-N256": 0.051562383558734624
+ }
+}
