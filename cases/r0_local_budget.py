@@ -120,11 +120,14 @@ def categories(rec):
             "interfacial": (c > 0) & (c < 1)}
 
 
-def summarise(sweeps, rho=(1.0, 1e-3), scale_q=1.0, lin=False):
+def summarise(sweeps, rho=(1.0, 1e-3), scale_q=1.0, lin=None):
     """The worst residuals of L1-L5 over the captured sweeps, L4 / L5 restricted to the special cells, D1's
     signature (faces where the phase's volume moves but its momentum flux is exactly zero), and L6: the mass the
     transport implies, rho1 c + rho2 (1 - c), against the density the velocity is recovered with (clamped unless
-    ``lin``), over rho2, at the end of each step's transport."""
+    measured from the density the solver used at the end of each step's transport, over rho2 (``lin`` is ignored:
+    kept for old calls). Budgets at round-off do not mean that the face values are right or that a free stream is
+    kept (audit on #173: a face value changed consistently in the flux and the update passes L1-L5; D2 is not seen
+    either): L1-L6 check the bookkeeping of the fluxes, not their accuracy."""
     worst = {"L1": 0.0, "L2": 0.0, "L3": 0.0, "L4": 0.0, "L5": 0.0, "L6": 0.0}
     zero_flux_faces = 0
     where = {}
@@ -142,11 +145,12 @@ def summarise(sweeps, rho=(1.0, 1e-3), scale_q=1.0, lin=False):
         for k, Fq in enumerate(sw["Fq"]):
             Fk = sw["F"] if sw["phase"][k] == 0 else sw["un"] - sw["F"]
             zero_flux_faces += int(((np.abs(Fk) > 0) & (np.asarray(Fq) == 0.0) & (np.asarray(sw["ff"][k]) != 0.0)).sum())
-        if s % 2:
+        if s % 2 and "rho_used" in rec:
+            # L6 (measured, audit on #173): the transported mass rho1 c + rho2 (1 - c) against the density the
+            # solver actually recovered the velocity with: (q1 + q2) - rho_lin(c) u = (rho_used - rho_lin(c)) u
             c = rec["c1"]
             rl = rho[0] * c + rho[1] * (1 - c)
-            rc = rho[0] * np.clip(c, 0, 1) + rho[1] * (1 - np.clip(c, 0, 1))
-            worst["L6"] = max(worst["L6"], 0.0 if lin else float(np.abs(rl - rc).max() / rho[1]))
+            worst["L6"] = max(worst["L6"], float(np.abs(rl - np.asarray(rec["rho_used"])).max() / rho[1]))
         # L5 on the special cells: the dilation consistency at c = 1/2 and in the absent cells
         for name, mask in categories(rec).items():
             for k in range(len(sw["Fq"])):

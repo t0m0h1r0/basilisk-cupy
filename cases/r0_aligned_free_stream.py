@@ -110,6 +110,8 @@ _VOF_EDITS = [
      "            qs.append((q1, q2))\n"),
     ("        rho = self.rho(self.f.interior)\n        for u, (q1, q2) in zip(ns.u.components, qs):\n",
      "        rho = _rho_lin(self) if _D[0] in (True, 'lin') else self.rho(self.f.interior)\n"
+     "        if _CAP[0]:  # A-8: the density the velocity is recovered with (L6, measured)\n"
+     "            _CAP[0][-1]['rho_used'] = rho.copy()\n"
      "        for u, (q1, q2) in zip(ns.u.components, qs):\n"),
 ]
 _GHOST_EDITS = [
