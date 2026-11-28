@@ -25,10 +25,12 @@ def test_solver_at_rest_with_the_planes_ghosts():
     assert m > 1e-4 and p < 1e-12
 
 
-def test_round_off_slivers_move_the_heights_away_from_walls():
+def test_no_slivers_away_from_walls_with_a_step_bound():
+    """#193 (correction 2 of docs/notes/120): with the step bound DT = 0.5 / N no sliver appears in a periodic band and
+    the heights stay on the lines; the first version's jumps came from a run without a bound (dt grew to ~4e13)."""
     from cases.r0p2_corner import sliver_periodic
 
-    quiet = sliver_periodic((1, 2), 0.0137, 32, steps=10, noise=0.0)
-    noisy = sliver_periodic((1, 2), 0.0137, 32, steps=10)
-    assert quiet["devmax_cells"] < 1e-12 and quiet["slivers_max"] == 0
-    assert noisy["slivers_max"] > 0 and noisy["devmax_cells"] > 1.0
+    bounded = sliver_periodic((1, 2), 0.0137, 32, steps=200)
+    assert bounded["slivers_max"] == 0 and bounded["devmax_cells"] < 1e-12
+    unbounded = sliver_periodic((1, 2), 0.0137, 32, steps=10, dt_max=None)        # the artefact, kept as such
+    assert unbounded["dt_last"] > 1e10 and unbounded["slivers_max"] > 0

@@ -1488,8 +1488,8 @@ densities, have the interface reaching a wall within one cell of a corner), and 
 with the grid). No new pressure correction was needed for these two conditions. The unbalanced cases come from two limits of the height
 functions (`docs/notes/120_r0p2_corner.md`, corrected after the audit of PR #165): the slip walls mirror f, which
 bends an oblique plane meeting the wall (not only near corners), and round-off slivers of f (1e-22) change the
-height functions' exact 0 / 1 tests, which moves the position of real interfacial cells by up to half the band's
-period even in a periodic band far from any wall. A plane at rest meeting a wall at any angle is an exact static
+height functions' exact 0 / 1 tests, which moves the position of real interfacial cells near walls (a first claim that this
+also happens in a periodic band far from walls was an artefact of a run without a step bound, #193). A plane at rest meeting a wall at any angle is an exact static
 solution without surface tension: this is a limit of the discretisation, not of the test.
 
 Audit #162, a free stream carrying an interface on grid faces (`docs/notes/118_aligned_free_stream.md`): the

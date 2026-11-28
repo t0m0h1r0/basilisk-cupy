@@ -152,12 +152,14 @@ def balance(th, off, n, ghosts="mirror", t_end=1.0, samples=(0.01, 0.1, 0.25, 0.
     return o
 
 
-def sliver_periodic(nv=(1, 2), off=0.0137, n=32, steps=40, noise=1e-16):
+def sliver_periodic(nv=(1, 2), off=0.0137, n=32, steps=40, noise=1e-16, dt_max="cfl"):
     """Audit on PR #165 (its point 3): away from walls. A periodic oblique band (two plane interfaces), no force,
     a round-off velocity: do round-off f-slivers (0 < f < 1e-12 or 1 - 1e-12 < f < 1) appear, and does the height
     functions' position of the REAL interfacial cells (1e-6 < f < 1 - 1e-6) leave the exact lines? Returned: the
     largest distance (in cells) of a real interfacial cell's position from the nearest exact interface, at t = 0 and
-    over the run, and the largest number of sliver cells."""
+    over the run, and the largest number of sliver cells. Correction (#193, audit on #178): the first version had no
+    step bound (``dt_max=None``): with a round-off velocity the CFL step grew to 3e13 and the noise's CFL number
+    passed 1/2, which made the slivers and the jumps; with ``DT = 0.5 / n`` (the default now) neither appears."""
     import warnings
 
     warnings.filterwarnings("ignore")
@@ -172,6 +174,8 @@ def sliver_periodic(nv=(1, 2), off=0.0137, n=32, steps=40, noise=1e-16):
     r = math.hypot(a, b)
     grid = CartesianGrid((n, n))
     ns = CenteredNS(grid, periodic=(0, 1), tolerance=1e-10)
+    if dt_max == "cfl":  # #193: a step bound (0.5 h, as the other runs); None reproduces the first version
+        ns.DT = 0.5 / n
 
     def phi(x, y):
         z = (a * x + b * y - off) % 1.0
@@ -201,7 +205,7 @@ def sliver_periodic(nv=(1, 2), off=0.0137, n=32, steps=40, noise=1e-16):
         if first is None and d > 0.1:
             first = k + 1
         dm = max(dm, d)
-    return {"n": list(nv), "offset": off, "N": n, "dev0_cells": d0, "devmax_cells": dm, "first_step_over_0.1": first,
+    return {"n": list(nv), "offset": off, "N": n, "dt_max": dt_max, "dt_last": float(ns.clock.dt), "dev0_cells": d0, "devmax_cells": dm, "first_step_over_0.1": first,
             "slivers_max": sl, "half_period_cells": 0.25 / r * n}
 
 
