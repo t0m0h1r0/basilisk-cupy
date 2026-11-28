@@ -46,3 +46,10 @@ def test_rule_before_160_is_detected_at_half_cells():
     r = summarise(_run("half, rule before #160", "base")[0], scale_q=2.5)
     assert r["L5_special"]["c=1/2"] > 1e-8
     assert summarise(_run("half", "base")[0], scale_q=2.5)["L5_special"]["c=1/2"] < 1e-15
+
+
+def test_l6_is_measured_from_the_density_the_solver_used():
+    # audit on #173: L6 compares the transported mass with the density actually used to recover the velocity
+    base = summarise(_run("free-stream", "base")[0])["worst"]["L6"]
+    full = summarise(_run("free-stream", "full")[0])["worst"]["L6"]
+    assert base > 1e-6 and 0 < full < 1e-12
