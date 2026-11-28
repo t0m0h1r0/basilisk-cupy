@@ -152,6 +152,59 @@ def balance(th, off, n, ghosts="mirror", t_end=1.0, samples=(0.01, 0.1, 0.25, 0.
     return o
 
 
+def sliver_periodic(nv=(1, 2), off=0.0137, n=32, steps=40, noise=1e-16):
+    """Audit on PR #165 (its point 3): away from walls. A periodic oblique band (two plane interfaces), no force,
+    a round-off velocity: do round-off f-slivers (0 < f < 1e-12 or 1 - 1e-12 < f < 1) appear, and does the height
+    functions' position of the REAL interfacial cells (1e-6 < f < 1 - 1e-6) leave the exact lines? Returned: the
+    largest distance (in cells) of a real interfacial cell's position from the nearest exact interface, at t = 0 and
+    over the run, and the largest number of sliver cells."""
+    import warnings
+
+    warnings.filterwarnings("ignore")
+    from basilisk_cupy import BoundaryConditions, CartesianGrid, CellField
+    from basilisk_cupy.backend import to_numpy
+    from basilisk_cupy.interface.fractions import fraction
+    from basilisk_cupy.interface.two_phase import TwoPhase
+    from basilisk_cupy.time.basilisk_centered import CenteredNS
+
+    H = _H()
+    a, b = nv
+    r = math.hypot(a, b)
+    grid = CartesianGrid((n, n))
+    ns = CenteredNS(grid, periodic=(0, 1), tolerance=1e-10)
+
+    def phi(x, y):
+        z = (a * x + b * y - off) % 1.0
+        return np.where(z < 0.5, np.minimum(z, 0.5 - z), -np.minimum(z - 0.5, 1 - z)) / r
+
+    f0 = to_numpy(fraction(grid, phi, refine=8))
+    tp = TwoPhase(ns, CellField.from_interior(grid, f0, BoundaryConditions.periodic(2)), rho1=1.0, rho2=1e-3,
+                  conserving=True)
+    rng = np.random.default_rng(0)
+    for c in ns.u.components:
+        c.interior = noise * rng.standard_normal((n, n))
+
+    def dev():
+        f = to_numpy(tp.f.interior)
+        p = to_numpy(H.position(tp.f.interior, tp.f.bc, grid, (a, b), (0.0, 0.0)))     # a x_I + b y_I
+        ok = (p < H.NODATA / 2) & (f > 1e-6) & (f < 1 - 1e-6)
+        d = ((p - off + 0.25) % 0.5) - 0.25
+        return float(np.abs(np.where(ok, d, 0.0)).max()) / r * n
+
+    d0, dm, sl, first = dev(), 0.0, 0, None
+    ns.start()
+    for k in range(steps):
+        ns.step()
+        f = to_numpy(tp.f.interior)
+        sl = max(sl, int(((f > 0) & (f < 1e-12)).sum() + ((f < 1) & (f > 1 - 1e-12)).sum()))
+        d = dev()
+        if first is None and d > 0.1:
+            first = k + 1
+        dm = max(dm, d)
+    return {"n": list(nv), "offset": off, "N": n, "dev0_cells": d0, "devmax_cells": dm, "first_step_over_0.1": first,
+            "slivers_max": sl, "half_period_cells": 0.25 / r * n}
+
+
 def _job(a):
     os.environ.setdefault("OMP_NUM_THREADS", "1")
     return balance(*a[0], **a[1])
@@ -165,7 +218,9 @@ def main() -> None:
           for gh in ("mirror", "plane")]
     with mp.get_context("spawn").Pool(len(J)) as pool:
         bal = pool.map(_job, J)
-    res = {"census": census(),
+    res = {"sliver_periodic": [sliver_periodic(nv, off, n) for nv in ((1, 1), (1, 2), (2, 1))
+                               for off in (0.0137, 0.1171) for n in (32, 64)],
+           "census": census(),
            "ghosts": [potential(th, off, n, m) for th, off, n in FAILING
                       for m in ("mirror", "exact", "exact corners only")],
            "balance": bal}

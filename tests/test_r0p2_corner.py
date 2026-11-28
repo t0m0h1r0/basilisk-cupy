@@ -23,3 +23,12 @@ def test_solver_at_rest_with_the_planes_ghosts():
     m = balance(45.0, 0.0137, 32, "mirror", t_end=0.1, samples=(0.1,))["history"][-1]["cells"]
     p = balance(45.0, 0.0137, 32, "plane", t_end=0.1, samples=(0.1,))["history"][-1]["cells"]
     assert m > 1e-4 and p < 1e-12
+
+
+def test_round_off_slivers_move_the_heights_away_from_walls():
+    from cases.r0p2_corner import sliver_periodic
+
+    quiet = sliver_periodic((1, 2), 0.0137, 32, steps=10, noise=0.0)
+    noisy = sliver_periodic((1, 2), 0.0137, 32, steps=10)
+    assert quiet["devmax_cells"] < 1e-12 and quiet["slivers_max"] == 0
+    assert noisy["slivers_max"] > 0 and noisy["devmax_cells"] > 1.0
