@@ -53,3 +53,8 @@ def test_momentum_budget_closes_with_the_walls_pressure_force():
     o = wall_budget("smooth", 32, t_end=0.25)
     assert o["budget_residual"] < 1e-9 and o["wall_impulse"] > 1e-3          # closes, and is not trivially zero
     assert wall_budget("gfm", 32, t_end=0.25)["budget_residual"] > 1e-3      # recorded: not with the GFM coefficient
+
+
+def test_total_momentum_is_not_conserved_with_filtered_face_densities():
+    # audit on PR #157: FILTERED makes the face density a mean of the smoothed f, not of the cells' densities
+    assert momentum("smooth-filtered", True, 32, t_end=0.25, samples=(0.25,))["momentum_change"] > 1e-3

@@ -44,8 +44,8 @@ def _two_phase(ns, f, kind, ratio, conserving):
     from basilisk_cupy.interface.two_phase import TwoPhase
     from basilisk_cupy.interface.vof_jump import TwoPhaseVOFJump
 
-    if kind == "smooth":
-        return TwoPhase(ns, f, rho1=1.0, rho2=1.0 / ratio, conserving=conserving)
+    if kind in ("smooth", "smooth-filtered"):   # "smooth-filtered": two-phase.h's FILTERED (audit, PR #157)
+        return TwoPhase(ns, f, rho1=1.0, rho2=1.0 / ratio, conserving=conserving, filtered=kind == "smooth-filtered")
     return TwoPhaseVOFJump(ns, f, rho1=1.0, rho2=1.0 / ratio, conserving=conserving, cell_coefficient=kind)
 
 
@@ -237,6 +237,19 @@ def hydrostatic(kind, theta_deg=0.0, gravity="plain", n=32, ratio=1000.0, t_end=
     except Exception as exc:  # noqa: BLE001
         out["failed"] = repr(exc)[:200]
     return out
+
+
+def filtered(ns_=(32, 64, 128)):
+    """Audit on PR #157: with two-phase.h's FILTERED (the face densities from the vertex-averaged f, while the
+    momentum counts f itself) the face density is no longer the mean of the two cells' densities (section B), so the
+    total momentum is not conserved. Adds "momentum_filtered" to docs/figures/r0p2_pressure_momentum.json."""
+    import multiprocessing as mp
+
+    path = "docs/figures/r0p2_pressure_momentum.json"
+    res = json.load(open(path))
+    with mp.get_context("spawn").Pool(len(ns_)) as pool:
+        res["momentum_filtered"] = pool.starmap(momentum, [("smooth-filtered", True, n) for n in ns_])
+    json.dump(res, open(path, "w"), indent=1, default=float)
 
 
 def _job(a):
