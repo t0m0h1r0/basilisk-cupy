@@ -498,3 +498,36 @@ def main3() -> None:
     with open(out, "w") as fh:
         json.dump(list(done.values()), fh, indent=1, default=float)
     print("wrote", out)
+
+
+def plot() -> None:
+    """docs/figures/r0_trials.png: (a) E3's band form against kappa_L; (b) the D2 threshold 3 against 1 (condition 6)."""
+    import matplotlib
+
+    matplotlib.use("Agg")
+    import matplotlib.pyplot as plt
+
+    R = json.load(open(os.path.join("docs", "figures", "r0_trials.json")))
+    fig, ax = plt.subplots(1, 2, figsize=(11, 4.2))
+    for c, mk in (("base-lib", "o"), ("E3cn", "x"), ("E3band1", "s"), ("E3band2", "^")):
+        rows = sorted((r for r in R if r["kind"] == "kappa" and r["conf"] == c), key=lambda r: r["kappa"])
+        ax[0].loglog([r["kappa"] for r in rows], [max(r["max_err"], 1e-16) for r in rows], marker=mk, label=c)
+    ax[0].set_xlabel("kappa_L = mu_L dt / (rho_L h^2)")
+    ax[0].set_ylabel("max |u - U| (moving drop, 600 steps)")
+    ax[0].set_title("(a) E3: band form grows at kappa_L >= 10")
+    ax[0].legend()
+    th = {(r["conf"], r["N"]): r for r in R if r["kind"] == "theta" and "N" in r}
+    c6 = json.load(open(os.path.join("docs", "figures", "r0_combined_c6.json")))
+    one = {(r["conf"], r["N"]): r for r in c6 if r["cfl"] == 0.5}
+    NS = sorted({n for (_, n) in th})
+    for m, mk in (("L1", "o"), ("L2", "s")):
+        ax[1].semilogx(NS, [th[("d1+d2lim", n)][m] / th[("d1", n)][m] for n in NS], "-", marker=mk, label="%s, theta 3" % m)
+        ax[1].semilogx(NS, [one[("d1+d2lim", n)][m] / one[("d1", n)][m] for n in NS], "--", marker=mk,
+                       label="%s, theta 1" % m)
+    ax[1].axhline(1.2, color="tab:red", lw=1)
+    ax[1].set_xlabel("N")
+    ax[1].set_ylabel("error ratio D1 + D2 limited / D1")
+    ax[1].set_title("(b) condition 6 with the threshold 3")
+    ax[1].legend(fontsize=7)
+    fig.tight_layout()
+    fig.savefig(os.path.join("docs", "figures", "r0_trials.png"), dpi=130)
