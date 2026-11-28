@@ -1503,3 +1503,13 @@ exceed 1 keeps every free-stream case of the audit below 1.3e-9, conserves the m
 the base scheme wherever it does not cut: it provably never cuts at the density ratio 1, and it did not cut once in
 a drop in a vortex at the ratio 1000 (4 % of the partial faces in a band on faces at the CFL bound). Hooks only
 (`cases/r0_d2_forms.py`).
+
+R0's required test, the oblique two-layer shear flow with a Galilean boost (`docs/notes/121_r0_shear.md`,
+`cases/r0_shear.py`): the exact solution as closed-form eigenmodes (transfer matrices) with exact cell averages
+(second differences of the second antiderivative), equal to the audit's independent spectral-element reference to
+5e-11. Before the R0 changes the library's velocity error is first order in every orientation (L2 slopes 0.99-1.03,
+density ratio 1000; the arithmetic mean of the face viscosity at the interface dominates, not the time step: the
+error does not change with the CFL number, and a harmonic mean makes the grid-parallel case nearly second order),
+with mass and momentum kept to round-off once the first face velocity is divergence-free (the
+library's start interpolates the cell averages without a projection, which moves 1e-4 of the mass in the first
+step for the slope 1:2).
