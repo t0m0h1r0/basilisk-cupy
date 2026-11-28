@@ -3,16 +3,17 @@ phi = G.(x_I - Z) の界面の位置（ライブラリの ``heights.position``�
 
 候補（どれも f と輸送に触れない。高さ関数に渡す「写し」と、高さの後処理だけ）
   B-1  判定用の写し：c <= eps を 0、c >= 1 - eps を 1 に丸めた写しから、高さ・界面のセル・ポテンシャルを作る
-  ゴーストセル：A-1・A-2 とも、壁のゴーストセルを鏡像ではなく壁に接するセルの値の定数延長にして高さを作る
-        （壁を横切る列は完成しない -> その高さは使われない）
-  A-1  標準の規則（|h| <= 1 の高さ）で位置が決まらない界面のセルで、PLIC の重心に落ちる前に、|h| <= 2.5 の高さと、
-       その高さの傾き（同じ向きの隣の列との差。片側しか無ければ片側差分）で作る直線を、セルの中へ辿った点を使う（平面で厳密）
-  A-2  欠けた高さを、同じ向きの隣の 2 列の高さの線形外挿で埋める（平面で厳密。隣の列にも高さが無いと埋まらない）
+  A-1  壁で閉じた列：壁のゴーストセルを、鏡像ではなく「壁に接するセルの、壁の側の相」（0 か 1）で埋めて高さを作る。
+       界面が壁と交わるセル（接触のセル：壁に沿った両隣で壁の側の相が違う部分的なセル、箱の角の部分的なセル）の
+       壁に垂直な向きの高さは捨て、壁に沿った隣の列の高さの線形外挿（h = 2 h1 - h2、埋めた値を次に使う）で埋める
+  A-2  高さの線の規則：標準の規則（|h| <= 1 の高さ）で位置が決まらない界面のセルで、PLIC の重心に落ちる前に、
+       |h| <= 2.5 の高さとその傾きで作る直線を、セルの中へ辿った点を使う
+  （第 1 版の A-1・A-2〔定数延長 + 線の規則、隣の 2 列の外挿〕は、監修の走査で 56 配置が残った：設計の 3 節）
 
 確かめること（合成の配列だけ。走査はしない：1850 配置の走査は、設計の 5.2 節の E-A1 として A の実験）
   1. 周期の斜めの帯（壁なし）に、界面の隣のセルへ薄片（1e-22、1 - 1e-16）を入れたときの、面の力 |phi_f (f_r - f_l)|
      （薄片のセルが phi を持つ経路の確認と、B-1 でそれが消えること）
-  2. 閉じた箱の平面の 9 配置（ノート120 と監修の不成立の配置を含む）で、t = 0 の max|phi|：候補が平面で厳密か
+  2. 閉じた箱の平面の 15 配置（ノート120 と監修の不成立の配置、監修の反例の型を含む）で、t = 0 の max|phi|：候補が平面で厳密か
 
 実行：PYTHONPATH=. python design/checks/178_heights.py        （numpy。数十秒）
 """
@@ -51,30 +52,83 @@ def _pad_constant(arr, bc, width):
     return out
 
 
-def _extrapolate(hs, c, bc):
-    """Fill the missing heights of interfacial cells from the two neighbouring columns of the same axis (linear).
-    Heights are decoded (no HSHIFT); only |h| <= 1.5 neighbours are used; non-periodic sides do not wrap."""
+def _wall_phase(c0, c1):
+    """The phase on the wall side of the interface in a wall cell (c0: the wall cell, c1: the next cell inwards):
+    1 if phase 1 fills the wall side, 0 otherwise. Pure cells keep their value."""
+    return np.where(c0 >= 1.0, 1.0, np.where(c0 <= 0.0, 0.0,
+                    np.where(c1 < c0, 1.0, np.where(c1 > c0, 0.0, np.round(c0)))))
+
+
+def _pad_closed(arr, bc, width):
+    """pad_bc with the walls' ghosts filled with the wall-side phase (0 or 1) of each wall cell: a column that
+    crosses the wall is closed by the wall instead of reading mirrored fluid."""
+    out = arr
+    for ax in range(arr.ndim):
+        if bc.get(ax, 0).periodic:
+            out = np.concatenate([out.take(range(-width, 0), ax), out, out.take(range(0, width), ax)], axis=ax)
+            continue
+        lo = _wall_phase(out.take([0], ax), out.take([1], ax))
+        hi = _wall_phase(out.take([-1], ax), out.take([-2], ax))
+        out = np.concatenate([np.repeat(lo, width, ax), out, np.repeat(hi, width, ax)], axis=ax)
+    return out
+
+
+def _contact_cells(c, bc):
+    """Wall cells where the interface meets the wall inside the cell: partial cells in a wall row whose two
+    neighbours along the wall have different wall-side phases. Returned per axis (the axis normal to the wall):
+    the closed column of such a cell is truncated by the wall and its height is not the interface's."""
+    out = []
+    for ax in range(2):
+        m = np.zeros(c.shape, dtype=bool)
+        if not bc.get(ax, 0).periodic:
+            t = 1 - ax
+            for side, (i0, i1) in enumerate(((0, 1), (-1, -2))):
+                c0, c1 = c.take(i0, ax), c.take(i1, ax)
+                ph = _wall_phase(c0, c1)
+                left = np.concatenate([ph[:1], ph[:-1]])
+                right = np.concatenate([ph[1:], ph[-1:]])
+                if bc.get(t, 0).periodic:
+                    left, right = np.roll(ph, 1), np.roll(ph, -1)
+                contact = (c0 > 0.0) & (c0 < 1.0) & (left != right)
+                if not bc.get(t, 0).periodic:               # a partial cell in a corner of the box: both walls
+                    contact[0] = (c0[0] > 0.0) & (c0[0] < 1.0)
+                    contact[-1] = (c0[-1] > 0.0) & (c0[-1] < 1.0)
+                idx = [slice(None)] * 2
+                idx[ax] = i0
+                m[tuple(idx)] = contact
+        out.append(m)
+    return out
+
+
+def _extrapolate_all(hs, c, bc, invalid=None, passes=64):
+    """A-2 iterated: missing (or invalidated) heights of interfacial cells from the two nearest filled columns of
+    the same axis on one side (h = 2 h1 - h2), repeated so that filled values propagate along the wall."""
     out = []
     real = (c > 0.0) & (c < 1.0)
     for ax in range(2):
         h = H.height(np.asarray(hs[ax]), np)
         h = np.where(np.abs(h) > 5.6, np.nan, h)
-        t = 1 - ax                                          # the columns of axis ax are indexed along t
+        if invalid is not None:
+            h = np.where(invalid[ax], np.nan, h)
+        t = 1 - ax
         per = bc.get(t, 0).periodic
-        fill = np.full(h.shape, np.nan)
-        for s in (1, -1):
-            h1, h2 = np.roll(h, -s, t), np.roll(h, -2 * s, t)
-            if not per:                                     # no wrap-around at a wall
-                idx = [slice(None)] * 2
-                idx[t] = slice(-2, None) if s == 1 else slice(0, 2)
-                h1 = h1.copy(); h2 = h2.copy()
-                h2[tuple(idx)] = np.nan
-                idx[t] = slice(-1, None) if s == 1 else slice(0, 1)
-                h1[tuple(idx)] = np.nan
-            cand = 2.0 * h1 - h2
-            fill = np.where(np.isnan(fill) & np.isfinite(cand), cand, fill)
-        missing = real & (np.isnan(h) | (np.abs(h) > 1.0))
-        h = np.where(missing & np.isfinite(fill), fill, h)
+        for _ in range(passes):
+            fill = np.full(h.shape, np.nan)
+            for s in (1, -1):
+                h1, h2 = np.roll(h, -s, t), np.roll(h, -2 * s, t)
+                if not per:
+                    idx = [slice(None)] * 2
+                    idx[t] = slice(-2, None) if s == 1 else slice(0, 2)
+                    h1 = h1.copy(); h2 = h2.copy()
+                    h2[tuple(idx)] = np.nan
+                    idx[t] = slice(-1, None) if s == 1 else slice(0, 1)
+                    h1[tuple(idx)] = np.nan
+                cand = 2.0 * h1 - h2
+                fill = np.where(np.isnan(fill) & np.isfinite(cand), cand, fill)
+            todo = real & np.isnan(h) & np.isfinite(fill)
+            if not todo.any():
+                break
+            h = np.where(todo, fill, h)
         out.append(np.where(np.isnan(h), H.NODATA, h))
     return out
 
@@ -110,18 +164,20 @@ def _line_points(hs, c, bc):
 
 
 def position(c, bc, grid, G, Z, variant="library", eps=None):
-    """variant: "library" (mirror ghosts); "ghost" (constant ghosts only); "A-1" (constant ghosts + the line rule);
-    "A-2" (constant ghosts + extrapolated heights); "A-1+A-2"."""
+    """variant: "library" (mirror ghosts); "ghost" (constant ghosts, nothing else: a control);
+    "A-1" (wall-closed columns + contact cells extrapolated); "A-1+A-2" (and the line rule)."""
     ce = snap(c, eps) if eps else c
     saved = H.pad_bc
     try:
-        if variant != "library":
+        if variant == "ghost":
             H.pad_bc = _pad_constant
+        elif variant != "library":
+            H.pad_bc = _pad_closed
         hs = H.heights(ce, bc)
-        if "A-2" in variant:
-            hs = _extrapolate(hs, ce, bc)
+        if variant.startswith("A-1"):
+            hs = _extrapolate_all(hs, ce, bc, invalid=_contact_cells(ce, bc))
         p = np.asarray(to_numpy(H.position(ce, bc, grid, G, Z, hs=hs)))
-        if "A-1" not in variant:
+        if "A-2" not in variant:
             return p
         # cells where the standard rule found no height (the library falls back to the PLIC centroid there)
         hh = [H.height(np.asarray(h), np) for h in hs]
@@ -228,20 +284,22 @@ if __name__ == "__main__":
             print("   n = (%d, %d) N = %-3d 薄片なし %.1e   薄片あり：ライブラリ %.1e   B-1 %.1e" % (a, b, n, f0, f1, f2))
     assert worst["library"] > 1e-2 and worst["B-1"] < 1e-12
 
-    print("2. 閉じた箱の平面（theta, delta, N）：t = 0 の max|phi|（薄片なし。最後の列は、壁の近くの界面の隣に薄片を入れて B-1 も掛けた場合）")
+    print("2. 閉じた箱の平面（theta, delta, N）：t = 0 の max|phi|（最後の列は、界面の隣に薄片を入れて B-1 も掛けた場合）")
     bcw = BoundaryConditions()
-    SAMPLES = ((45.0, 0.0137, 32), (26.565, 0.2313, 32), (37.5, 0.45, 64), (30.0, 0.40, 64), (60.0, 0.40, 64),
-               (37.5, 0.0, 64), (10.0, 0.3, 32), (80.0, -0.2, 64), (0.0, 0.0137, 32))
+    SAMPLES = ((45.0, 0.0137, 32), (45.0, 0.0137, 64), (26.565, 0.2313, 32),            # note 120
+               (37.5, 0.45, 64), (30.0, 0.40, 64), (60.0, 0.40, 64),                    # the audit on PR #165
+               (5.0, -0.45, 32), (12.5, -0.45, 32), (7.5, 0.47, 64), (22.5, 0.45, 64),  # the audit's counter-example type
+               (37.5, 0.0, 64), (63.435, -0.3, 32), (10.0, 0.3, 32), (85.0, 0.2, 32), (0.0, 0.0137, 32))
     for th, off, n in SAMPLES:
         grid, c, G, Z = plane(n, th, off)
         row = []
-        for var in ("library", "ghost", "A-1", "A-2", "A-1+A-2"):
+        for var in ("library", "ghost", "A-1", "A-1+A-2"):
             p = position(c, bcw, grid, G, Z, variant=var)
             row.append(float(np.abs(np.where(p < H.NODATA / 2, p, 0.0)).max()))
         c2 = with_slivers(c, rng, periodic=False)
         p = position(c2, bcw, grid, G, Z, variant="A-1+A-2", eps=EPS)
         last = float(np.abs(np.where(p < H.NODATA / 2, p, 0.0)).max())
-        print("   (%6.3f, %+.4f, %2d)  library %.1e  ghost %.1e  A-1 %.1e  A-2 %.1e  A-1+A-2 %.1e   薄片 + B-1 %.1e" % (th, off, n, *row, last))
-        assert row[4] < 1e-12 and last < 1e-12, (th, off, n)
+        print("   (%6.3f, %+.4f, %2d)  library %.1e  ghost %.1e  A-1 %.1e  A-1+A-2 %.1e   薄片 + B-1 %.1e" % (th, off, n, *row, last))
+        assert row[3] < 1e-12 and last < 1e-12, (th, off, n)
         assert abs(row[0] - row[1]) <= 1e-12 + 1e-6 * row[0]     # constant ghosts alone change nothing
     print("ok")
