@@ -74,6 +74,25 @@ _SWEEP_EDITS = [
      "            ff = xp.where(ci > 1e-10, ff, upwind(_pad(absent(), periodic, xp)))\n"
      "        tfluxes.append(ff * cf1 * u if absent is not None else xp.where(ci > 1e-10, ff * cf1 * u, 0.0))\n"),
 ]
+_SWEEP_EDITS += [  # A-8 (docs/notes/122): capture the sweep's fluxes for the local-budget verifier (off: _CAP[0] None)
+    ("    tfluxes = []\n", "    tfluxes = []\n    _ffs = []\n"),
+    ("        tfluxes.append(ff * cf1 * u if absent is not None else xp.where(ci > 1e-10, ff * cf1 * u, 0.0))\n",
+     "        tfluxes.append(ff * cf1 * u if absent is not None else xp.where(ci > 1e-10, ff * cf1 * u, 0.0))\n"
+     "        _ffs.append((ff, cf1, ci))\n"),
+    ("    n = grid.n[axis]\n",
+     "    if _CAP[0] is not None:\n"
+     "        _CAP[0].append({'axis': axis, 'dt': dt, 'h': h, 'u': u.copy(), 'flux': flux.copy(), 'cc': cc,\n"
+     "                        'tfluxes': [t.copy() for t in tfluxes], 'ffs': _ffs, 'tcs': tcs,\n"
+     "                        'c0': c.interior.copy(), 't0': [tr.field.interior.copy() for tr in interface.tracers],\n"
+     "                        'inverse': [tr.inverse for tr in interface.tracers], 'periodic': periodic})\n"
+     "    n = grid.n[axis]\n"),
+    ("    return cfl\n",
+     "    if _CAP[0] is not None:\n"
+     "        _CAP[0][-1]['c1'] = c.interior.copy()\n"
+     "        _CAP[0][-1]['t1'] = [tr.field.interior.copy() for tr in interface.tracers]\n"
+     "    return cfl\n"),
+]
+CAPTURE = [None]  # a list to append the sweeps to (cases/r0_local_budget.py), None: off
 _VOF_EDITS = [
     ("        fc = xp.minimum(xp.maximum(self.f.interior, 0.0), 1.0)\n        tracers = []\n",
      "        fc = xp.minimum(xp.maximum(self.f.interior, 0.0), 1.0)\n        if _D[0] in (True, 'lin'):\n"
@@ -104,11 +123,17 @@ _D = [False, False]
 COUNT = [0, 0]  # "limited": faces whose slope was dropped, faces with a partial donor (both phases, all sweeps)
 
 
+FLOOR = [0]  # cells (and calls) where rho_lin's floor was reached (docs/notes/119: count it, B on PR #164)
+
+
 def _rho_lin(tp, f=None):  # the absent-phase value uses it in every D1 variant
-    """f rho1 + (1 - f) rho2 of the unclamped f, bounded below by half the smaller density (never reached here)."""
+    """f rho1 + (1 - f) rho2 of the unclamped f, bounded below by half the smaller density (counted in FLOOR)."""
     xp = tp.f.grid.xp
     f = tp.f.interior if f is None else f
-    return xp.maximum(f * (tp.rho1 - tp.rho2) + tp.rho2, 0.5 * min(tp.rho1, tp.rho2))
+    r = f * (tp.rho1 - tp.rho2) + tp.rho2
+    lo = 0.5 * min(tp.rho1, tp.rho2)
+    FLOOR[0] += int((r < lo).sum())
+    return xp.maximum(r, lo)
 
 
 def _rho_lin_f(density, f):
@@ -136,7 +161,7 @@ def scheme(d1: bool, d2: bool):
     library's code unchanged in behaviour)."""
     from basilisk_cupy.interface import two_phase, vof
 
-    extra = {"_D": _D, "_rho_lin": _rho_lin, "_rho_lin_f": _rho_lin_f, "_COUNT": COUNT}
+    extra = {"_D": _D, "_rho_lin": _rho_lin, "_rho_lin_f": _rho_lin_f, "_COUNT": COUNT, "_CAP": CAPTURE}
     saved = (vof._sweep, two_phase.TwoPhase._vof, two_phase._MomentumField.fill_ghosts)
     sweep = _patched(saved[0], _SWEEP_EDITS, extra)
     tvof = _patched(saved[1], _VOF_EDITS, extra)
@@ -196,6 +221,13 @@ def shape(name, grid):
         return (((i >= 3 * n // 8) & (i < 5 * n // 8)) & ((j >= 3 * n // 8) & (j < 5 * n // 8))).astype(float)
     if name == "square-bubble":
         return 1.0 - shape("square", grid)
+    if name == "half":                                     # the band with c = 1/2 exactly in its edge cells (#156)
+        f = ((i >= n // 4) & (i < n // 2)).astype(float)
+        f[n // 4 - 1, :] = 0.5
+        f[n // 2, :] = 0.5
+        return f
+    if name == "band2":                                    # docs/notes/117's oblique band (x + 2 y)
+        return fr(lambda x, y: 0.2 - abs(((x + 2.0 * y) % 1.0) - 0.4))
     if name == "drop":
         return fr(disc(0.15, 0.5, 0.5))
     if name == "bubble":
@@ -213,7 +245,7 @@ def shape(name, grid):
 
 @in_scheme
 def free_stream(name, sch, ratio, U=(1.0, 0.0), n=32, cfl=0.5, steps=600, dt=None, tolerance=1e-10, every=None,
-                project=True):
+                project=True, mu=(0.0, 0.0)):
     """max |u - U| over ``steps`` steps of a uniform flow carrying ``shape(name)``, periodic. ``dt``: a fixed step
     (otherwise the CFL-ramped step of the solver, as audit #162)."""
     from basilisk_cupy import BoundaryConditions, CartesianGrid, CellField
@@ -222,10 +254,10 @@ def free_stream(name, sch, ratio, U=(1.0, 0.0), n=32, cfl=0.5, steps=600, dt=Non
     from basilisk_cupy.time.basilisk_centered import CenteredNS
 
     grid = CartesianGrid((n, n))
-    ns = CenteredNS(grid, periodic=(0, 1), tolerance=tolerance)
+    ns = CenteredNS(grid, periodic=(0, 1), tolerance=tolerance, mu=(max(mu) if max(mu) > 0 else None))
     f0 = shape(name, grid)
     tp = TwoPhase(ns, CellField.from_interior(grid, f0, BoundaryConditions.periodic(2)), rho1=1.0, rho2=1.0 / ratio,
-                  conserving=True)
+                  mu1=mu[0], mu2=mu[1], conserving=True)
     ns.cfl = cfl
     for k in range(2):
         ns.u[k].interior = U[k] + 0.0 * ns.u[k].interior
