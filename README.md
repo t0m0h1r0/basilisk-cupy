@@ -1490,3 +1490,11 @@ absent; no slope in partial cells) every configuration of the audit and every sh
 below 1.2e-9, proportional to the pressure tolerance; without an interface the fields are bit-identical. D2 changes
 the two-phase solution (a first-order face value at the interface); its effect on the order is not measured yet.
 Hooks only (`cases/r0_aligned_free_stream.py`).
+
+The form of the D2 fix (`docs/notes/119_d2_forms.md`, A-1 of issue #145): dropping the slope in every partial cell
+triples the error of a passive drop in an exact Taylor-Green flow (3.5 x), and the centroid form of note 77 costs
+1.4-1.6 x. Dropping it only on the faces where (D2)'s gain rho_k out (1 - C) / 2 over the mass the donor keeps would
+exceed 1 keeps every free-stream case of the audit below 1.3e-9, conserves the momentum to 8e-13 and is identical to
+the base scheme wherever it does not cut: it provably never cuts at the density ratio 1, and it did not cut once in
+a drop in a vortex at the ratio 1000 (4 % of the partial faces in a band on faces at the CFL bound). Hooks only
+(`cases/r0_d2_forms.py`).
